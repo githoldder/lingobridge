@@ -1,0 +1,12 @@
+{
+  "name": "MandarinFlow - Language Learning Platform",
+  "description": "A high-fidelity educational platform prototype for learning Chinese, featuring a student dashboard, course management, and interactive homework modules.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "AI-powered learning",
+    "Interactive classrooms"
+  ]
+}
