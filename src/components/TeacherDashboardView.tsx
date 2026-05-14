@@ -27,9 +27,9 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
   ];
 
   const upcomingClasses = [
-    { time: '10:00 AM', title: 'Beginner HSK 1 - Unit 4', level: 'Level 1', students: 12 },
-    { time: '02:30 PM', title: 'Business Chinese Prep', level: 'Level 4', students: 8 },
-    { time: '04:00 PM', title: 'Interactive Workshop', level: 'Mixed', students: 25 },
+    { time: '10:00 AM', title: t('course.hsk1_unit4'), level: t('course.level1'), students: 12 },
+    { time: '02:30 PM', title: t('course.business_prep'), level: t('course.level4'), students: 8 },
+    { time: '04:00 PM', title: t('course.workshop'), level: t('course.mixed'), students: 25 },
   ];
 
   return (
@@ -104,7 +104,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
                 <div className="flex items-center justify-between w-full sm:w-auto gap-4 self-stretch sm:self-auto border-t sm:border-t-0 pt-4 sm:pt-0">
                   <div className="flex -space-x-2">
                     {[1, 2, 3].map((n) => (
-                      <div key={n} className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600">S{n}</div>
+                      <div key={n} className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600 truncate px-1">S{n}</div>
                     ))}
                   </div>
                   <ChevronRight size={20} className="text-gray-300 group-hover:text-[#0056D2]" />
@@ -117,11 +117,11 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
         {/* Sidebar: Analytics & Notifications */}
         <div className="space-y-8">
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 font-noto">Weekly Engagement</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-6 font-noto">{t('teacher.weekly_engagement')}</h3>
             <div className="space-y-6">
               <div>
                 <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                  <span>Quiz Completion</span>
+                   <span>{t('teacher.quiz_completion')}</span>
                   <span className="text-gray-900">92%</span>
                 </div>
                 <div className="w-full bg-gray-50 h-3 rounded-full overflow-hidden border border-gray-100">
@@ -130,7 +130,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
               </div>
               <div>
                 <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                  <span>Student Satisfaction</span>
+                  <span>{t('teacher.student_satisfaction')}</span>
                   <span className="text-gray-900">4.9/5.0</span>
                 </div>
                 <div className="w-full bg-gray-50 h-3 rounded-full overflow-hidden border border-gray-100">
@@ -141,20 +141,20 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
 
             <div className="mt-12 bg-red-50 p-6 rounded-3xl border border-red-100">
               <div className="flex items-start justify-between mb-4">
-                <div className="text-xs font-black text-red-600 uppercase tracking-widest">Action Needed</div>
+                <div className="text-xs font-black text-red-600 uppercase tracking-widest">{t('teacher.action_needed')}</div>
                 <ArrowUpRight size={18} className="text-red-400" />
               </div>
               <p className="text-sm font-bold text-red-900 leading-snug font-noto">
-                8 Students have not completed their Unit 3 Homework.
+                {t('teacher.homework_reminder')}
               </p>
               <button className="mt-4 text-xs font-black text-red-600 hover:underline">
-                REMIND ALL STUDENTS
+                {t('teacher.remind_all')}
               </button>
             </div>
           </div>
 
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-6">Recent Activity</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-6">{t('teacher.recent_activity')}</h3>
             <div className="space-y-5">
               {[
                 { type: 'submission', user: 'Anna Zhang', task: 'HSK 3 Quiz', time: '10 min ago' },
@@ -168,7 +168,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
                   }`} />
                   <div>
                     <p className="text-sm text-gray-800">
-                      <span className="font-bold">{activity.user}</span> {activity.type === 'submission' ? 'submitted' : activity.type === 'enrollment' ? 'enrolled in' : 'messaged about'} <span className="font-medium text-gray-500">{activity.task}</span>
+                      <span className="font-bold">{activity.user}</span> {activity.type === 'submission' ? t('teacher.activity_submitted') : activity.type === 'enrollment' ? t('teacher.activity_enrolled') : t('teacher.activity_messaged')} <span className="font-medium text-gray-500">{activity.task}</span>
                     </p>
                     <span className="text-[10px] font-bold text-gray-400 uppercase">{activity.time}</span>
                   </div>
@@ -176,7 +176,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
               ))}
             </div>
             <button className="w-full mt-6 py-3 border border-gray-100 rounded-xl text-xs font-bold text-gray-400 hover:bg-gray-50 transition-colors uppercase tracking-widest">
-              View Audit Log
+              {t('teacher.view_audit')}
             </button>
           </div>
         </div>

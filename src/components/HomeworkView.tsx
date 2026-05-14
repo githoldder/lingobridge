@@ -49,23 +49,49 @@ const FloatingElement = ({ children, className, duration = 4, delay = 0, yOffset
 
 const PathArrow = ({ index, status }: { index: number, status: 'completed' | 'current' | 'locked' }) => {
   const isCompleted = status === 'completed';
-  const isLocked = status === 'locked';
   
   return (
-    <div className="absolute top-[112px] left-1/2 -translate-x-1/2 w-4 h-32 -z-20 pointer-events-none flex flex-col items-center">
-      {/* Base Line */}
-      <div className={`w-2 h-full rounded-full transition-all duration-500 bg-gray-100 ${isLocked ? 'opacity-20' : 'opacity-100'}`} />
-      
-      {/* Pulsing Light Layer */}
-      <motion.div 
-        animate={{ 
-          opacity: [0.2, 0.8, 0.2],
-          backgroundColor: isCompleted ? ['#22c55e', '#4ade80', '#22c55e'] : ['#e2e8f0', '#cbd5e1', '#e2e8f0']
-        }}
-        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        className={`absolute inset-0 w-2 h-full mx-auto rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}
-        style={{ filter: isCompleted ? 'blur(2px)' : 'none' }}
-      />
+    <div className="absolute top-[112px] left-1/2 -translate-x-1/2 w-4 h-32 -z-20 pointer-events-none">
+      <svg className="w-full h-full" overflow="visible">
+        {/* Base dashed line - always visible */}
+        <line 
+          x1="50%" y1="0" x2="50%" y2="100%" 
+          stroke="#F3F4F6" 
+          strokeWidth="4" 
+          strokeDasharray="8,8"
+          strokeLinecap="round"
+        />
+        
+        {/* Progress line - highlights when completed */}
+        <motion.line
+          initial={{ pathLength: 0, stroke: "#E5E7EB", opacity: 0 }}
+          animate={{ 
+            pathLength: isCompleted ? 1 : 0,
+            stroke: isCompleted ? "#22C55E" : "#E5E7EB",
+            opacity: isCompleted ? 1 : 0
+          }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+          x1="50%" y1="0" x2="50%" y2="100%" 
+          strokeWidth="4" 
+          strokeDasharray="8,8"
+          strokeLinecap="round"
+        />
+
+        {/* Glow effect for completed path */}
+        {isCompleted && (
+          <motion.line
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.4, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            x1="50%" y1="0" x2="50%" y2="100%" 
+            stroke="#22C55E" 
+            strokeWidth="8" 
+            strokeDasharray="8,8"
+            strokeLinecap="round"
+            style={{ filter: 'blur(4px)' }}
+          />
+        )}
+      </svg>
     </div>
   );
 };
@@ -100,41 +126,41 @@ const CURRICULUM_DATA: CurriculumNode[] = [
     id: 'n1',
     unit: 1,
     lesson: 1,
-    title: 'Greetings & Basics',
+    title: 'greetings_basics',
     status: 'completed',
     assignments: [
-      { id: 'a1', type: 'vocab', title: 'Basic Greetings', isCompleted: true },
-      { id: 'a2', type: 'speaking', title: 'Self Introduction', isCompleted: true },
+      { id: 'a1', type: 'vocab', title: 'lesson_greet', isCompleted: true },
+      { id: 'a2', type: 'speaking', title: 'lesson_intro', isCompleted: true },
     ]
   },
   {
     id: 'n2',
     unit: 1,
     lesson: 2,
-    title: 'Family & Jobs',
+    title: 'family_jobs',
     status: 'current',
     assignments: [
-      { id: 'a3', type: 'vocab', title: 'Family Members', isCompleted: true },
-      { id: 'a4', type: 'speaking', title: 'Describing My Mom', isCompleted: false, isCurrent: true },
-      { id: 'a5', type: 'reading', title: 'Short Paragraph: My Family', isCompleted: false },
+      { id: 'a3', type: 'vocab', title: 'lesson_family', isCompleted: true },
+      { id: 'a4', type: 'speaking', title: 'lesson_mom', isCompleted: false, isCurrent: true },
+      { id: 'a5', type: 'reading', title: 'lesson_family_para', isCompleted: false },
     ]
   },
   {
     id: 'n3',
     unit: 1,
     lesson: 3,
-    title: 'Daily Routine',
+    title: 'daily_routine',
     status: 'locked',
     assignments: [
-      { id: 'a6', type: 'vocab', title: 'Time & Actions', isCompleted: false },
-      { id: 'a7', type: 'speaking', title: 'My Schedule', isCompleted: false },
+      { id: 'a6', type: 'vocab', title: 'lesson_time', isCompleted: false },
+      { id: 'a7', type: 'speaking', title: 'lesson_schedule', isCompleted: false },
     ]
   },
   {
     id: 'n4',
     unit: 2,
     lesson: 1,
-    title: 'Shopping',
+    title: 'shopping',
     status: 'locked',
     assignments: []
   }
@@ -183,7 +209,7 @@ const PathNode = ({ node, index, onSelect }: { node: CurriculumNode, index: numb
         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] leading-none mb-2">
           {t('homework.unit')} {node.unit} • {t('homework.lesson')} {node.lesson}
         </div>
-        <h4 className={`text-base font-bold leading-tight ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>{node.title}</h4>
+        <h4 className={`text-base font-bold leading-tight ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>{t(`homework.${node.title}`)}</h4>
       </div>
     </div>
   );
@@ -229,7 +255,7 @@ const HomeworkSidebar = () => {
               <div className="h-full bg-[#0056D2] w-2/3" />
             </div>
             <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              <span>Progress</span>
+              <span>{t('homework.progress')}</span>
               <span>66%</span>
             </div>
           </div>
@@ -352,11 +378,13 @@ const HomeworkView = () => {
 
   const handleCheck = () => {
     if (!audioUrl) return;
+    // Set threshold of 80 for passing
+    const totalScore = Math.floor(Math.random() * 35) + 65;
     const score = {
-      total: Math.floor(Math.random() * 15) + 85,
-      fluency: Math.floor(Math.random() * 15) + 85,
-      tone: Math.floor(Math.random() * 15) + 80,
-      pronunciation: Math.floor(Math.random() * 15) + 85,
+      total: totalScore,
+      fluency: Math.floor(Math.random() * 35) + 65,
+      tone: Math.floor(Math.random() * 35) + 65,
+      pronunciation: Math.floor(Math.random() * 35) + 65,
       completeness: 100,
     };
     const newRecording: Recording = { id: Date.now().toString(), url: audioUrl, score, timestamp: new Date() };
@@ -408,7 +436,7 @@ const HomeworkView = () => {
                    <div className="w-20 h-20 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300">
                      <ArrowBigDown size={40} />
                    </div>
-                   <span className="mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest">More Lessons Coming Soon</span>
+                   <span className="mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest">{t('homework.more_coming')}</span>
                 </div>
               </div>
             </div>
@@ -448,7 +476,7 @@ const HomeworkView = () => {
                     <BookMarked size={12} />
                     {t('homework.unit')} {selectedNode.unit} • {t('homework.lesson')} {selectedNode.lesson}
                   </div>
-                  <h2 className="text-4xl font-bold text-gray-900 leading-tight">{selectedNode.title}</h2>
+                  <h2 className="text-4xl font-bold text-gray-900 leading-tight">{t(`homework.${selectedNode.title}`)}</h2>
                 </div>
 
                 <div className="space-y-5">
@@ -473,7 +501,7 @@ const HomeworkView = () => {
                            </div>
                            <div>
                              <h4 className="font-bold text-gray-900 text-lg leading-tight">{t(`homework.type.${assignment.type}`)}</h4>
-                             <p className="text-sm text-gray-500 font-medium">{assignment.title}</p>
+                             <p className="text-sm text-gray-500 font-medium">{t(`homework.${assignment.title}`)}</p>
                            </div>
                          </div>
                          
@@ -521,7 +549,7 @@ const HomeworkView = () => {
            className="flex items-center gap-2 text-gray-400 hover:text-gray-900 font-bold transition-colors group"
          >
            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-           Back to Path
+           {t('homework.back_path')}
          </button>
        </div>
 
@@ -666,7 +694,14 @@ const HomeworkView = () => {
                       <Play size={16} fill="currentColor" />
                     </button>
                     <div>
-                      <div className="text-xs font-bold text-gray-900">{t('homework.score')}: {rec.score.total}</div>
+                      <div className="flex items-center gap-2">
+                        <div className={`text-xs font-bold text-gray-900`}>{t('homework.score')}: {rec.score.total}</div>
+                        {rec.score.total >= 80 ? (
+                          <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-md font-black uppercase">PASS</span>
+                        ) : (
+                          <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md font-black uppercase">FAIL</span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-gray-400">{rec.timestamp.toLocaleTimeString()}</div>
                     </div>
                   </div>
@@ -705,8 +740,11 @@ const HomeworkView = () => {
                       <Star key={s} size={18} className={`fill-current ${s > Math.round(latestScore.total / 20) ? 'opacity-20' : ''}`} />
                     ))}
                   </div>
-                  <h4 className="text-xl font-bold text-gray-900 mb-1">
-                    {latestScore.total > 90 ? t('homework.excellent') : latestScore.total > 80 ? t('homework.great') : t('homework.keep_practicing')}
+                  <h4 className={`text-xl font-bold mb-1 ${latestScore.total >= 80 ? 'text-gray-900' : 'text-red-600'}`}>
+                    {latestScore.total >= 80 
+                      ? (latestScore.total > 90 ? t('homework.excellent') : t('homework.great'))
+                      : t('homework.keep_practicing')
+                    }
                   </h4>
                   <p className="text-sm text-gray-500 leading-relaxed">{t('homework.eval_desc')}</p>
                 </div>

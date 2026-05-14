@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole } from './App.tsx';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import Logo from './Logo.tsx';
 
 import LanguageSwitcher from './LanguageSwitcher.tsx';
 
@@ -51,6 +52,7 @@ const SidebarItem = ({ icon: Icon, label, id, active, onClick }: any) => (
 export default function Layout({ children, activeTab, setActiveTab, role }: LayoutProps) {
   const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const studentItems = [
     { id: 'dashboard', label: t('nav.home'), icon: LayoutDashboard },
@@ -74,17 +76,26 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
     setSidebarOpen(false);
   };
 
+  const notifications = [
+    { id: 1, text: 'New assignment: HSK 3 Grammar', time: '2m ago', unread: true },
+    { id: 2, text: 'Live session starting in 15m', time: '10m ago', unread: true },
+    { id: 3, text: 'Quiz results are out', time: '2h ago', unread: false },
+  ];
+
   return (
     <div id="master-layout" className="flex min-h-screen bg-[#F8F9FA]">
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
-        {sidebarOpen && (
+        {(sidebarOpen || dropdownOpen) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 bg-black/40 z-[45] lg:hidden backdrop-blur-sm"
+            onClick={() => {
+              setSidebarOpen(false);
+              setDropdownOpen(false);
+            }}
+            className="fixed inset-0 bg-black/5 z-[40] backdrop-blur-[1px]"
           />
         )}
       </AnimatePresence>
@@ -96,15 +107,20 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div id="sidebar-logo" className="h-[70px] flex items-center justify-between px-6 border-b border-[#E5E7EB]">
+        <div id="sidebar-logo" className="h-[100px] flex items-center justify-between px-6 border-b border-[#E5E7EB]">
           <button 
             onClick={() => navigateTo('landing')}
-            className="flex flex-col hover:opacity-80 transition-opacity"
+            className="flex items-center gap-4 hover:opacity-80 transition-opacity text-left"
           >
-            <span className="text-xl font-bold text-[#E31E24]">HanBridge</span>
-            <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">
-              {role === 'teacher' ? 'Instructor Portal' : 'Student Portal'}
-            </span>
+            <div className="w-16 h-16 flex items-center justify-center">
+              <Logo size={64} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold text-gray-900 leading-none">LingoBridge</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1.5">
+                {role === 'teacher' ? t('nav.teachers') : t('nav.students')}
+              </span>
+            </div>
           </button>
           <button 
             onClick={() => setSidebarOpen(false)}
@@ -137,7 +153,7 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
             className="flex items-center gap-3 px-4 py-2 w-full text-gray-500 hover:text-red-600 text-sm transition-colors mt-1"
           >
             <LogOut size={18} />
-            <span>{t('classroom.leave')}</span>
+            <span>{t('nav.login')}</span>
           </button>
         </div>
       </aside>
@@ -147,7 +163,7 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
         {/* Header */}
         <header 
           id="app-header"
-          className="h-[70px] bg-white border-b border-[#E5E7EB] sticky top-0 px-4 md:px-8 flex items-center justify-between z-30"
+          className="h-[70px] bg-white border-b border-[#E5E7EB] sticky top-0 px-4 md:px-8 flex items-center justify-between z-[41]"
         >
           <div className="flex items-center gap-4">
             <button 
@@ -168,10 +184,50 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
 
           <div id="header-actions" className="flex items-center gap-2 md:gap-6">
             <LanguageSwitcher />
-            <button className="p-2 text-gray-400 hover:text-gray-900 relative">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className={`p-2 rounded-xl transition-colors relative ${dropdownOpen ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-900'}`}
+              >
+                <Bell size={20} />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+              </button>
+
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl shadow-gray-200/50 py-2 z-50"
+                  >
+                    <div className="px-4 py-2 border-b border-gray-50 flex justify-between items-center">
+                      <h4 className="font-bold text-gray-900 text-sm">{t('notification.title')}</h4>
+                      <button className="text-[10px] text-blue-600 font-bold hover:underline">{t('notification.mark_all')}</button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.map((n) => (
+                        <button 
+                          key={n.id} 
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex gap-3 items-start"
+                        >
+                          <div className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${n.unread ? 'bg-blue-600' : 'bg-transparent'}`} />
+                          <div>
+                            <p className="text-xs text-gray-700 leading-tight mb-1">{n.text}</p>
+                            <span className="text-[10px] text-gray-400">{n.time}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-4 py-2 border-t border-gray-50">
+                      <button className="w-full py-1.5 text-xs text-gray-500 font-medium hover:text-gray-900 transition-colors">
+                        {t('notification.view_all')}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             
             <div id="user-profile" className="flex items-center gap-3 border-l border-gray-200 pl-4 md:pl-6 ml-2">
               <div className="text-right hidden sm:block">

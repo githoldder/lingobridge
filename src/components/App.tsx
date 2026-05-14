@@ -16,6 +16,8 @@ import TeacherClassroomView from './TeacherClassroomView.tsx';
 import StudentClassroomView from './StudentClassroomView.tsx';
 import TeacherStudentsView from './TeacherStudentsView.tsx';
 import TeacherReportsView from './TeacherReportsView.tsx';
+import LoginView from './LoginView.tsx';
+import RegisterView from './RegisterView.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { LanguageProvider } from '../context/LanguageContext.tsx';
@@ -48,6 +50,10 @@ export default function App() {
     switch (activeTab) {
       case 'landing':
         return <HomeView onNavigate={handleNavigate} />;
+      case 'login':
+        return <LoginView onNavigate={handleNavigate} />;
+      case 'register':
+        return <RegisterView onNavigate={handleNavigate} />;
       case 'dashboard':
         return <DashboardView onNavigate={handleNavigate} />;
       case 'schedule':
@@ -74,10 +80,11 @@ export default function App() {
   };
 
   const isClassroom = activeTab === 'teacher-classroom' || activeTab === 'student-classroom';
+  const isFullScreen = activeTab === 'landing' || activeTab === 'login' || activeTab === 'register' || isClassroom;
 
   return (
     <LanguageProvider>
-      {activeTab === 'landing' || isClassroom ? (
+      {isFullScreen ? (
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

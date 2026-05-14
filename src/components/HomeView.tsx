@@ -19,12 +19,15 @@ import { motion } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import LanguageSwitcher from './LanguageSwitcher.tsx';
 
+import Logo from './Logo.tsx';
+
 interface HomeViewProps {
   onNavigate: (target: string) => void;
 }
 
 const HomeView = ({ onNavigate }: HomeViewProps) => {
   const { t } = useLanguage();
+  const [activeIndex, setActiveIndex] = React.useState(0);
 
   const showcaseItems = [
     {
@@ -56,15 +59,24 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
     }
   ];
 
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % showcaseItems.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [showcaseItems.length]);
+
   return (
     <div id="home-view" className="min-h-screen bg-white text-gray-900 font-sans selection:bg-red-100 selection:text-red-600">
       {/* Navigation */}
-      <header id="home-nav" className="fixed top-0 w-full z-50 bg-white border-b border-gray-100 h-20 px-6 md:px-12 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Globe className="text-[#E31E24]" size={32} />
+      <header id="home-nav" className="fixed top-0 w-full z-50 bg-white border-b border-gray-100 h-24 px-6 md:px-12 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <div className="w-24 h-24 flex items-center justify-center">
+            <Logo size={96} />
+          </div>
           <div>
-            <div className="text-xl font-bold leading-none tracking-tight">{t('app.logo.title')}</div>
-            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-widest mt-1">{t('app.logo.subtitle')}</div>
+            <div className="text-2xl font-bold leading-none tracking-tight">{t('app.logo.title')}</div>
+            <div className="text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">{t('app.logo.subtitle')}</div>
           </div>
         </div>
 
@@ -77,8 +89,16 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
           
           <div className="flex items-center gap-4 border-l border-gray-100 pl-8">
             <LanguageSwitcher />
-            <button className="text-sm font-bold text-gray-700 hover:text-[#E31E24] transition-colors">{t('nav.login')}</button>
-            <button className="bg-[#E31E24] text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-red-200 transition-all active:scale-95">
+            <button 
+              onClick={() => onNavigate('login')}
+              className="text-sm font-bold text-gray-700 hover:text-[#E31E24] transition-colors"
+            >
+              {t('nav.login')}
+            </button>
+            <button 
+              onClick={() => onNavigate('register')}
+              className="bg-[#E31E24] text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-red-200 transition-all active:scale-95"
+            >
               {t('nav.register')}
             </button>
           </div>
@@ -122,7 +142,7 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
             </div>
             
             <p className="text-gray-400 text-sm font-medium">
-              {t('hero.login_prompt')} <a href="#" className="text-gray-900 font-bold hover:underline">{t('nav.login')}</a>
+              {t('hero.login_prompt')} <button onClick={() => onNavigate('login')} className="text-gray-900 font-bold hover:underline">{t('nav.login')}</button>
             </p>
           </motion.div>
 
@@ -140,7 +160,7 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
               {/* Phone Content Mockup */}
               <div className="p-6 pt-12 flex flex-col h-full bg-white">
                 <div className="flex justify-between items-center mb-10 text-gray-900">
-                  <span className="text-xs font-bold text-gray-400">Lesson 1</span>
+                  <span className="text-xs font-bold text-gray-400">{t('showcase.lesson_label')}</span>
                   <div className="flex gap-1">
                     <div className="w-5 h-1.5 bg-[#0056D2] rounded-full" />
                     <div className="w-5 h-1.5 bg-gray-100 rounded-full" />
@@ -151,18 +171,18 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
                 <div className="flex-1 flex flex-col items-center justify-center text-center">
                   <div className="text-7xl font-bold text-gray-900 mb-4 font-noto">妈妈</div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-2xl font-medium text-gray-400 italic">mā ma</span>
+                    <span className="text-2xl font-medium text-gray-400 italic">{t('showcase.phonetic')}</span>
                     <div className="p-2 bg-blue-50 text-[#0056D2] rounded-full">
                       <Volume2 size={18} />
                     </div>
                   </div>
-                  <div className="text-2xl font-bold text-gray-600">Mother</div>
+                  <div className="text-2xl font-bold text-gray-600">{t('showcase.meaning')}</div>
                 </div>
 
                 <div className="mt-auto space-y-6">
                   <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 text-gray-900">
-                    <p className="text-sm font-bold mb-1 font-noto">Zhè shì wǒ māma.</p>
-                    <p className="text-xs text-gray-500 italic">"This is my mother."</p>
+                    <p className="text-sm font-bold mb-1 font-noto">{t('showcase.example_zh')}</p>
+                    <p className="text-xs text-gray-500 italic">{t('showcase.example_en')}</p>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3">
@@ -182,115 +202,128 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
         </div>
       </section>
 
-      {/* Product Showcase - INTERLEAVED LAYOUT with Device Frames */}
+      {/* Product Showcase - Horizontal Carousel */}
       <section className="py-32 px-6 md:px-12 bg-white overflow-hidden">
-        <div className="max-w-7xl mx-auto space-y-32">
-          {showcaseItems.map((item, index) => (
-            <div key={item.id} className={`flex flex-col lg:flex-row items-center gap-16 ${index % 2 === 1 ? 'lg:flex-row-reverse' : ''}`}>
-              <motion.div 
-                initial={{ opacity: 0, x: index % 2 === 0 ? -50 : 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="flex-[1.2] space-y-8"
-              >
-                <div className={`w-16 h-16 ${item.color} text-white rounded-2xl flex items-center justify-center shadow-2xl`}>
-                  <item.icon size={32} />
-                </div>
-                <div className="space-y-4">
-                  <h2 className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tight leading-[1.1]">
-                    {item.title}
-                  </h2>
-                  <p className="text-lg text-gray-500 leading-relaxed max-w-lg font-medium">
-                    {item.desc}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {['AI Core', 'Low Latency', 'Multi-Language'].map((tag, i) => (
-                    <span key={i} className="px-4 py-1.5 bg-gray-50 text-gray-500 rounded-full text-xs font-bold uppercase tracking-wider">{tag}</span>
-                  ))}
-                </div>
-              </motion.div>
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-4xl font-extrabold text-gray-900 font-jakarta">{t('nav.methodology')}</h2>
+            <p className="text-gray-500 max-w-2xl mx-auto">{t('showcase.optimized_desc')}</p>
+          </div>
 
-              <motion.div 
-                initial={{ opacity: 0, y: 50 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="flex-[1.5] relative flex justify-center w-full"
-              >
-                {/* Device Frame Simulation */}
-                {item.device === 'mac' && (
-                  <div className="relative w-full max-w-2xl transform hover:scale-[1.02] transition-transform duration-500">
-                    <div className="relative bg-[#252526] rounded-t-[2.5rem] p-4 shadow-2xl border-t border-x border-gray-100/10">
-                      <div className="bg-[#1e1e1e] rounded-t-[2rem] overflow-hidden aspect-[16/10] relative border border-white/5">
-                         <img src={item.image} className="w-full h-full object-cover opacity-90 scale-105" alt={item.title} />
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                         <div className="absolute bottom-6 left-8 flex items-center gap-4">
-                            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20">
-                              <PlayCircle size={24} />
-                            </div>
-                            <div className="text-white">
-                              <div className="text-xs font-bold uppercase tracking-wider opacity-60">Now Live</div>
-                              <div className="text-sm font-bold">Evening HSK Intensive</div>
-                            </div>
-                         </div>
-                      </div>
-                    </div>
-                    <div className="h-6 bg-[#323233] rounded-b-2xl shadow-2xl w-[108%] -ml-[4%] relative z-10 border-b-4 border-gray-400/20" />
-                  </div>
-                )}
-
-                {item.device === 'iphone' && (
-                  <div className="relative w-[300px] h-[620px] bg-[#1a1a1a] rounded-[3.5rem] p-4 shadow-2xl border-4 border-gray-800/50 transform rotate-[-2deg] hover:rotate-0 transition-transform duration-500">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-[#1a1a1a] rounded-b-3xl z-20 flex items-center justify-center">
-                       <div className="w-12 h-1 bg-gray-800 rounded-full" />
-                    </div>
-                    <div className="w-full h-full bg-white rounded-[2.8rem] overflow-hidden relative border border-white/10">
-                      <img src={item.image} className="w-full h-full object-cover" alt={item.title} />
-                      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-[85%] bg-black/80 backdrop-blur-xl p-6 rounded-3xl border border-white/20 text-white shadow-2xl">
-                        <div className="flex justify-between items-center mb-4">
-                           <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{t('classroom.recording')}</span>
-                           <div className="flex gap-1">
-                              {[1,2,3,4,5].map(i => <div key={i} className="w-0.5 h-3 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: `${i * 0.1}s` }} />)}
-                           </div>
+          <div className="relative">
+             <div className="flex overflow-hidden">
+                <motion.div 
+                  className="flex"
+                  animate={{ x: `-${activeIndex * 100}%` }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                >
+                  {showcaseItems.map((item) => (
+                    <div key={item.id} className="min-w-full px-4">
+                      <div className="grid lg:grid-cols-2 items-center gap-8 lg:gap-16 bg-gray-50/50 rounded-[3rem] p-6 lg:p-10 border border-gray-100 min-h-[500px] lg:min-h-[580px] overflow-hidden">
+                        <div className="space-y-6 lg:pl-6">
+                          <div className={`w-14 h-14 ${item.color} text-white rounded-2xl flex items-center justify-center shadow-2xl`}>
+                            <item.icon size={28} />
+                          </div>
+                          <div className="space-y-3">
+                            <h2 className="text-3xl lg:text-5xl font-black text-gray-900 tracking-tight leading-[1.1]">
+                              {item.title}
+                            </h2>
+                            <p className="text-base lg:text-lg text-gray-500 leading-relaxed max-w-md font-medium">
+                              {item.desc}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            <span className="px-3 py-1 bg-white text-gray-500 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-wider">{t('showcase.ai_core')}</span>
+                            <span className="px-3 py-1 bg-white text-gray-500 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-wider">{t('showcase.low_latency')}</span>
+                            <span className="px-3 py-1 bg-white text-gray-500 border border-gray-100 rounded-full text-[10px] font-bold uppercase tracking-wider">{t('showcase.multi_lang')}</span>
+                          </div>
                         </div>
-                        <div className="text-xl font-bold font-noto mb-1">明天见 (Míngtiān jiàn)</div>
-                        <div className="text-sm font-medium text-gray-400 italic">"See you tomorrow"</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
-                {item.device === 'ipad' && (
-                  <div className="relative w-full max-w-[580px] aspect-[4/3] bg-[#1a1a1a] rounded-[3rem] p-5 shadow-2xl border-4 border-gray-800/50 transform rotate-[1deg] hover:rotate-0 transition-transform duration-500 ring-1 ring-white/10">
-                    <div className="w-full h-full bg-indigo-950 rounded-[2rem] overflow-hidden relative border border-white/10 shadow-inner">
-                      <img src={item.image} className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt={item.title} />
-                      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-900/60 via-transparent to-transparent" />
-                      <div className="absolute top-8 left-8 flex items-center gap-3">
-                         <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl shadow-lg border border-white/20 flex items-center justify-center text-white">
-                            <Monitor size={24} />
-                         </div>
-                         <div className="text-white">
-                            <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-50">{t('showcase.multi_device.title')}</div>
-                            <div className="text-sm font-bold">Cloud Presence: Active</div>
-                         </div>
-                      </div>
-                      <div className="absolute bottom-8 right-8">
-                         <button className="px-6 py-3 bg-[#E31E24] text-white rounded-2xl shadow-xl shadow-red-600/20 font-bold text-sm flex items-center gap-2 hover:bg-red-500 transition-all hover:-translate-x-1 active:scale-95">
-                            {t('dashboard.continue')}
-                            <ArrowRight size={18} />
-                         </button>
-                      </div>
-                      <div className="absolute top-10 right-10 flex gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                        <div className="relative flex justify-center items-center w-full px-4 lg:px-0">
+                          {/* Device Frames */}
+                          {item.device === 'mac' && (
+                            <div className="relative w-full max-w-[580px] transform transition-transform duration-700 hover:scale-[1.02]">
+                              <div className="relative bg-[#252526] rounded-t-[2rem] p-3 shadow-2xl border-t border-x border-gray-100/10">
+                                <div className="bg-[#1e1e1e] rounded-t-[1.5rem] overflow-hidden aspect-[16/10] relative border border-white/5">
+                                   <img src={item.image} className="w-full h-full object-cover opacity-90" alt={item.title} />
+                                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                   <div className="absolute bottom-4 left-6 flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20">
+                                        <PlayCircle size={20} />
+                                      </div>
+                                      <div className="text-white">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider opacity-60">{t('showcase.now_live')}</div>
+                                        <div className="text-xs font-bold">{t('showcase.lesson_title')}</div>
+                                      </div>
+                                   </div>
+                                </div>
+                              </div>
+                              <div className="h-4 bg-[#323233] rounded-b-xl shadow-2xl w-full relative z-10 border-b-2 border-gray-400/20" />
+                            </div>
+                          )}
+
+                          {item.device === 'iphone' && (
+                            <div className="relative w-[240px] h-[480px] bg-[#1a1a1a] rounded-[3rem] p-3.5 shadow-2xl border-4 border-gray-800/50 transform -rotate-1 hover:rotate-0 transition-transform duration-700">
+                              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-6 bg-[#1a1a1a] rounded-b-2xl z-20 flex items-center justify-center">
+                                 <div className="w-10 h-1 bg-gray-800 rounded-full" />
+                              </div>
+                              <div className="w-full h-full bg-white rounded-[2.5rem] overflow-hidden relative border border-white/10">
+                                <img src={item.image} className="w-full h-full object-cover" alt={item.title} />
+                                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] bg-black/90 backdrop-blur-xl p-4 rounded-3xl border border-white/10 text-white shadow-2xl">
+                                  <div className="flex justify-between items-center mb-2">
+                                     <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-60">{t('classroom.recording')}</span>
+                                     <div className="flex gap-1">
+                                        {[1,2,3].map(i => <div key={i} className="w-0.5 h-2 bg-blue-400 rounded-full animate-pulse" />)}
+                                     </div>
+                                  </div>
+                                  <div className="text-base font-bold font-noto mb-0.5">明天见 (Míngtiān jiàn)</div>
+                                  <div className="text-[10px] font-medium text-gray-400 italic">"See you tomorrow"</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {item.device === 'ipad' && (
+                            <div className="relative w-full max-w-[440px] aspect-[4/3] bg-[#1a1a1a] rounded-[2.5rem] p-4 shadow-2xl border-4 border-gray-800/50 ring-1 ring-white/10 transform rotate-1 hover:rotate-0 transition-transform duration-700">
+                              <div className="w-full h-full bg-indigo-950 rounded-[1.8rem] overflow-hidden relative border border-white/10 shadow-inner">
+                                <img src={item.image} className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt={item.title} />
+                                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-900/60 via-transparent to-transparent" />
+                                <div className="absolute top-6 left-6 flex items-center gap-3">
+                                   <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl shadow-lg border border-white/20 flex items-center justify-center text-white">
+                                      <Monitor size={20} />
+                                   </div>
+                                   <div className="text-white">
+                                      <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-50">{t('showcase.multi_device.title')}</div>
+                                      <div className="text-xs font-bold">{t('showcase.cloud_presence')}</div>
+                                   </div>
+                                </div>
+                                <div className="absolute bottom-6 right-6">
+                                   <button className="px-5 py-2.5 bg-[#E31E24] text-white rounded-xl shadow-xl shadow-red-600/20 font-bold text-xs flex items-center gap-2 hover:bg-red-500 transition-all active:scale-95">
+                                      {t('dashboard.continue')}
+                                      <ArrowRight size={16} />
+                                   </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          ))}
+                  ))}
+                </motion.div>
+             </div>
+
+             {/* Carousel Controls */}
+             <div className="flex justify-center gap-4 mt-12">
+                {showcaseItems.map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setActiveIndex(i)}
+                    className={`h-2.5 rounded-full transition-all duration-300 ${activeIndex === i ? 'w-12 bg-[#E31E24]' : 'w-2.5 bg-gray-200 hover:bg-gray-300'}`}
+                  />
+                ))}
+             </div>
+          </div>
         </div>
       </section>
 
@@ -405,9 +438,11 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
       <footer className="pt-32 pb-12 px-6 md:px-12 bg-white border-t border-gray-50 text-gray-900">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 mb-24">
           <div className="space-y-6 text-gray-900">
-            <div className="flex items-center gap-2">
-              <Globe className="text-[#E31E24]" size={28} />
-              <span className="text-lg font-bold tracking-tight">{t('app.logo.title')}</span>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 flex items-center justify-center">
+                <Logo size={80} />
+              </div>
+              <span className="text-xl font-bold tracking-tight">{t('app.logo.title')}</span>
             </div>
             <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
               {t('footer.desc')}
@@ -446,7 +481,7 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
              <LanguageSwitcher />
           </div>
           <div className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">
-            © 2024 HanBridge Learning Systems. All Rights Reserved.
+            {t('footer.rights')}
           </div>
         </div>
       </footer>

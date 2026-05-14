@@ -21,6 +21,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
   const [isSyncing, setIsSyncing] = useState(false);
   const [synced, setSynced] = useState(false);
+  const [activeTab, setActiveTab] = useState<'agenda' | 'replays'>('agenda');
+  const [selectedDay, setSelectedDay] = useState(30);
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -31,34 +33,21 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   };
 
   const scheduleItems = [
-    {
-      id: 1,
-      title: 'Basic Chinese (Part 1)',
-      time: '10:00 AM - 11:30 AM',
-      date: 'Today',
-      instructor: 'Teacher Li',
-      isLive: true,
-      color: 'blue'
-    },
-    {
-      id: 2,
-      title: 'HSK 3 Vocabulary Review',
-      time: '02:00 PM - 03:00 PM',
-      date: 'Today',
-      instructor: 'Teacher Wang',
-      isLive: false,
-      color: 'orange'
-    },
-    {
-      id: 3,
-      title: 'Chinese Culture & History',
-      time: '10:00 AM - 11:00 AM',
-      date: 'Tomorrow',
-      instructor: 'Teacher Chen',
-      isLive: true,
-      color: 'purple'
-    }
+    { id: 1, day: 30, title: t('course.basic'), time: '10:00 AM - 11:30 AM', instructor: 'Li', isLive: true },
+    { id: 2, day: 30, title: t('course.vocab'), time: '02:00 PM - 03:00 PM', instructor: 'Wang', isLive: false },
+    { id: 3, day: 31, title: t('course.culture'), time: '10:00 AM - 11:00 AM', instructor: 'Chen', isLive: true },
+    { id: 4, day: 28, title: 'Tone Mastery', time: '09:00 AM - 10:30 AM', instructor: 'Li', isLive: false },
   ];
+
+  const recordings = [
+    { id: 'rec1', title: t('course.basic') + ' - Review', date: '5/10/2026', day: 10, url: '#' },
+    { id: 'rec2', title: t('course.culture') + ' - History', date: '5/08/2026', day: 8, url: '#' },
+    { id: 'rec3', title: 'Tone Mastery Workshop', date: '5/12/2026', day: 12, url: '#' },
+    { id: 'rec4', title: 'Introduction to Pinyin', date: '5/08/2026', day: 8, url: '#' },
+  ];
+
+  const filteredAgenda = scheduleItems.filter(item => item.day === selectedDay);
+  const filteredRecordings = recordings.filter(rec => rec.day === selectedDay);
 
   return (
     <div id="schedule-view" className="space-y-8 pb-12">
@@ -77,7 +66,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
           }`}
         >
           <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-          {isSyncing ? 'Syncing...' : synced ? 'Synced with Google Calendar' : 'Sync Google Calendar'}
+          {isSyncing ? t('schedule.syncing') : synced ? t('schedule.synced') : t('schedule.sync')}
         </button>
       </div>
 
@@ -85,39 +74,47 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
         {/* Weekly Calendar Preview */}
         <div className="lg:col-span-1 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-900">April 2026</h3>
+            <h3 className="font-bold text-gray-900">{t('schedule.month_year')}</h3>
             <div className="flex gap-2">
               <button className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft size={16} /></button>
               <button className="p-1 hover:bg-gray-100 rounded-lg"><ChevronRight size={16} /></button>
             </div>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+            {t('schedule.days_short').split(' ').map((day, i) => (
+              <span key={i}>{day}</span>
+            ))}
           </div>
           <div className="grid grid-cols-7 gap-2">
-            {[...Array(30)].map((_, i) => {
+            {[...Array(31)].map((_, i) => {
               const day = i + 1;
-              const isToday = day === 30;
+              const isSelected = day === selectedDay;
+              const hasEvents = day === 30 || day === 31 || day === 28;
+              
               return (
-                <button 
-                  key={i}
-                  className={`aspect-square flex items-center justify-center rounded-xl text-xs font-bold transition-all ${
-                    isToday ? 'bg-[#0056D2] text-white shadow-lg' : 'hover:bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  {day}
-                </button>
+              <button
+                key={i}
+                onClick={() => setSelectedDay(day)}
+                className={`aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all relative ${
+                  isSelected ? 'bg-primary-blue text-white shadow-lg' : 'hover:bg-gray-50 text-gray-600'
+                }`}
+              >
+                {day}
+                {hasEvents && !isSelected && (
+                  <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary-blue" />
+                )}
+              </button>
               );
             })}
           </div>
           <div className="pt-6 border-t border-gray-100">
-             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Deadlines</h4>
+             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{t('schedule.deadlines')}</h4>
              <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5" />
                   <div>
-                    <p className="text-xs font-bold text-gray-900">Vocabulary Quiz</p>
-                    <p className="text-[10px] text-gray-500">Today, 23:59</p>
+                    <p className="text-xs font-bold text-gray-900">{t('course.quiz')}</p>
+                    <p className="text-[10px] text-gray-500">{t('homework.today')}, 23:59</p>
                   </div>
                 </div>
              </div>
@@ -127,70 +124,128 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
         {/* Detailed Agenda */}
         <div className="lg:col-span-3 space-y-6">
            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Upcoming Live Sessions</h3>
+              <h3 className="text-lg font-bold text-gray-900">{activeTab === 'agenda' ? t('schedule.upcoming') : t('schedule.replays')}</h3>
               <div className="flex bg-white rounded-lg p-1 border border-gray-100">
-                <button className="px-4 py-1.5 rounded-md bg-gray-900 text-white text-xs font-bold shadow-md">Agenda</button>
-                <button className="px-4 py-1.5 rounded-md text-gray-500 text-xs font-bold hover:bg-gray-50 transition-colors">Week</button>
+                <button 
+                  onClick={() => setActiveTab('agenda')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'agenda' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  {t('schedule.agenda')}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('replays')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'replays' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  {t('schedule.replays')}
+                </button>
               </div>
            </div>
 
            <div className="space-y-4">
-              {scheduleItems.map((item) => (
-                <motion.div 
-                  key={item.id}
-                  layout
-                  className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 group hover:border-[#0056D2] transition-colors"
-                >
-                  <div className="flex items-center gap-6">
-                    <div className={`px-4 py-3 rounded-2xl text-center border transition-colors ${
-                      item.isLive ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'
-                    }`}>
-                      <CalendarIcon size={20} className={item.isLive ? 'text-[#0056D2]' : 'text-gray-400'} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-bold text-gray-900">{item.title}</h4>
-                        {item.isLive && (
-                          <span className="flex items-center gap-1.5 bg-green-50 text-green-600 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
-                            <div className="w-1 h-1 rounded-full bg-green-600 animate-pulse" />
-                            Live
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
-                        <span className="flex items-center gap-1.5"><Clock size={14} /> {item.time}</span>
-                        <span className="flex items-center gap-1.5">Instructor: {item.instructor}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
-                    {item.isLive ? (
-                      <button 
-                        onClick={() => onNavigate?.('student-classroom')}
-                        className="flex-1 md:flex-none px-6 py-2.5 bg-[#0056D2] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 hover:shadow-lg shadow-blue-100 transition-all"
+              {activeTab === 'agenda' ? (
+                <>
+                  {filteredAgenda.length > 0 ? (
+                    filteredAgenda.map((item) => (
+                      <motion.div 
+                        key={item.id}
+                        layout
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 group hover:border-[#0056D2] transition-colors"
                       >
-                        <Video size={18} />
-                        Join Live Class
-                      </button>
-                    ) : (
-                      <button className="flex-1 md:flex-none px-6 py-2.5 bg-gray-50 text-gray-500 rounded-xl text-sm font-bold border border-gray-100 hover:bg-gray-100 transition-all">
-                        Details
-                      </button>
-                    )}
-                    <button className="p-2.5 text-gray-400 hover:text-gray-900 border border-gray-100 rounded-xl hover:bg-gray-50">
-                      <MoreVertical size={20} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-              
-              <button 
-                className="w-full py-4 border-2 border-dashed border-gray-200 rounded-[2rem] text-gray-400 font-bold text-sm hover:border-[#0056D2] hover:text-[#0056D2] transition-all flex items-center justify-center gap-2 group"
-              >
-                <Plus size={20} className="group-hover:rotate-90 transition-transform" />
-                Add Personal Schedule
-              </button>
+                        <div className="flex items-center gap-6">
+                          <div className={`px-4 py-3 rounded-2xl text-center border transition-colors ${
+                            item.isLive ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'
+                          }`}>
+                            <CalendarIcon size={20} className={item.isLive ? 'text-[#0056D2]' : 'text-gray-400'} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-bold text-gray-900">{item.title}</h4>
+                              {item.isLive && (
+                                <span className="flex items-center gap-1.5 bg-green-50 text-green-600 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">
+                                  <div className="w-1 h-1 rounded-full bg-green-600 animate-pulse" />
+                                  {t('schedule.live_badge')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
+                              <span className="flex items-center gap-1.5"><Clock size={14} /> {item.time}</span>
+                              <span className="flex items-center gap-1.5">{t('schedule.instr')}: {item.instructor}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
+                          {item.isLive ? (
+                            <button 
+                              onClick={() => onNavigate?.('student-classroom')}
+                              className="flex-1 md:flex-none px-6 py-2.5 bg-primary-blue text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 hover:shadow-lg shadow-blue-100 transition-all"
+                            >
+                              <Video size={18} />
+                              {t('schedule.join_class')}
+                            </button>
+                          ) : (
+                            <button className="flex-1 md:flex-none px-6 py-2.5 bg-gray-50 text-gray-500 rounded-xl text-sm font-bold border border-gray-100 hover:bg-gray-100 transition-all">
+                              {t('schedule.details')}
+                            </button>
+                          )}
+                          <button className="p-2.5 text-gray-400 hover:text-gray-900 border border-gray-100 rounded-xl hover:bg-gray-50">
+                            <MoreVertical size={20} />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="py-20 text-center bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200">
+                       <CalendarIcon size={48} className="mx-auto mb-4 text-gray-200" />
+                       <p className="text-gray-400 font-bold">No classes scheduled for this day.</p>
+                    </div>
+                  )}
+                  
+                  <button 
+                    className="w-full py-4 border-2 border-dashed border-gray-200 rounded-[2rem] text-gray-400 font-bold text-sm hover:border-[#0056D2] hover:text-[#0056D2] transition-all flex items-center justify-center gap-2 group"
+                  >
+                    <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+                    {t('schedule.add_personal')}
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {filteredRecordings.length > 0 ? (
+                    filteredRecordings.map((rec: any) => (
+                      <motion.div 
+                        key={rec.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-500 transition-all"
+                      >
+                         <div className="flex items-center gap-6">
+                            <div className="w-16 h-10 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
+                               <img src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=200&auto=format&fit=crop" className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
+                            </div>
+                            <div>
+                               <h4 className="font-bold text-gray-900">{rec.title}</h4>
+                               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{rec.date}</p>
+                            </div>
+                         </div>
+                         <button 
+                           onClick={() => window.open(rec.url, '_blank')}
+                           className="px-6 py-2 bg-blue-50 text-[#0056D2] rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors"
+                         >
+                            {t('schedule.view_replay')}
+                         </button>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="py-20 text-center bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200">
+                       <Video size={48} className="mx-auto mb-4 text-gray-200" />
+                       <p className="text-gray-400 font-bold">No recordings available for this day.</p>
+                       <p className="text-xs text-gray-400 mt-1">Class recordings will appear here after they are saved by the teacher.</p>
+                    </div>
+                  )}
+                </div>
+              )}
            </div>
         </div>
       </div>

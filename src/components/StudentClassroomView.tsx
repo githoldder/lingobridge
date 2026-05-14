@@ -75,7 +75,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
       const id = Date.now() + Math.random();
       const text = messages[Math.floor(Math.random() * messages.length)];
       setDanmaku(prev => [...prev, { id, text, top: Math.random() * 40 + 10, duration: 8 + Math.random() * 4 }]);
-      setChatMessages(prev => [...prev.slice(-15), { id, user: 'Student', text }]);
+      setChatMessages(prev => [...prev.slice(-15), { id, user: t('students.table_student'), text }]);
       setTimeout(() => setDanmaku(prev => prev.filter(d => d.id !== id)), 12000);
     }, 6000);
 
@@ -157,18 +157,22 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
     if (!isMicOn) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setLocalStream(prev => {
-          if (prev) {
-             stream.getAudioTracks().forEach(t => prev.addTrack(t));
-             return prev;
-          }
-          return stream;
-        });
+        if (localStream) {
+          stream.getAudioTracks().forEach(track => localStream.addTrack(track));
+        } else {
+          setLocalStream(stream);
+        }
         setIsMicOn(true);
       } catch (err) {
         console.error("Mic access denied", err);
       }
     } else {
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.stop();
+          localStream.removeTrack(track);
+        });
+      }
       setIsMicOn(false);
     }
   };
@@ -178,18 +182,22 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
     if (!isCamOn) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        setLocalStream(prev => {
-            if (prev) {
-                stream.getVideoTracks().forEach(t => prev.addTrack(t));
-                return prev;
-            }
-            return stream;
-        });
+        if (localStream) {
+          stream.getVideoTracks().forEach(track => localStream.addTrack(track));
+        } else {
+          setLocalStream(stream);
+        }
         setIsCamOn(true);
       } catch (err) {
         console.error("Camera access denied", err);
       }
     } else {
+      if (localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.stop();
+          localStream.removeTrack(track);
+        });
+      }
       setIsCamOn(false);
     }
   };
@@ -214,20 +222,20 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <AlertCircle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Leave Classroom?</h3>
-              <p className="text-gray-500 text-sm mb-8">Are you sure you want to end your learning session?</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{t('classroom.leave_confirm_title')}</h3>
+              <p className="text-gray-500 text-sm mb-8">{t('classroom.leave_confirm_desc')}</p>
               <div className="flex gap-4">
                 <button 
                   onClick={() => setShowExitConfirm(false)}
                   className="flex-1 py-3 px-6 rounded-xl font-bold text-gray-400 hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {t('classroom.cancel')}
                 </button>
                 <button 
                   onClick={onExit}
                   className="flex-1 py-3 px-6 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
                 >
-                  Leave
+                  {t('classroom.leave')}
                 </button>
               </div>
             </motion.div>
@@ -247,7 +255,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           <div className="h-4 w-[1px] bg-gray-800" />
           <div className="flex items-center gap-2 text-xs font-bold text-green-500">
              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-             Live Stream
+             {t('classroom.live_stream')}
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -298,7 +306,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
                 <p className="text-2xl md:text-4xl text-gray-400 font-medium italic">Dàjiā hǎo!</p>
                 
                 <div className="mt-16 bg-gray-50 p-8 rounded-[2rem] border border-gray-100 w-full max-w-lg shadow-sm text-left">
-                  <h3 className="text-xl font-bold mb-6 border-b border-gray-200 pb-4 text-gray-500 uppercase tracking-widest text-xs">Today's Key Vocabulary</h3>
+                  <h3 className="text-xl font-bold mb-6 border-b border-gray-200 pb-4 text-gray-500 uppercase tracking-widest text-xs">{t('classroom.key_vocab')}</h3>
                   <div className="space-y-6">
                     <div className="flex justify-between items-center group">
                       <div className="flex items-center gap-4">
@@ -315,7 +323,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           {/* Teacher Picture-in-Picture */}
           <div className="absolute bottom-32 right-8 w-48 h-32 md:w-64 md:h-44 bg-gray-800 rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500 z-40 transition-all hover:scale-105">
              <img src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=600&auto=format&fit=crop" className="w-full h-full object-cover" alt="Teacher speaking" />
-             <div className="absolute bottom-2 left-2 bg-blue-600 px-2 py-0.5 rounded text-[10px] font-bold shadow-lg">LIVE • Teacher Li</div>
+             <div className="absolute bottom-2 left-2 bg-blue-600 px-2 py-0.5 rounded text-[10px] font-bold shadow-lg">LIVE • {t('classroom.instructor')} Li</div>
              <div className="absolute top-2 right-2 flex gap-1">
                 {[1,2,3].map(i => <div key={i} className="w-1 h-3 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: `${i*0.2}s` }} />)}
              </div>
@@ -339,10 +347,10 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
                    }}
                    className="w-full h-full object-cover scale-x-[-1]"
                  />
-                 <div className="absolute bottom-2 left-2 bg-green-600 px-2 py-0.5 rounded text-[10px] font-bold shadow-lg uppercase tracking-tighter">YOU • On Stage</div>
+                 <div className="absolute bottom-2 left-2 bg-green-600 px-2 py-0.5 rounded text-[10px] font-bold shadow-lg uppercase tracking-tighter">{t('classroom.you_on_stage')}</div>
                  <div className="absolute top-2 right-2 flex gap-1 items-center">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[8px] font-bold text-white shadow-sm">REC</span>
+                    <span className="text-[8px] font-bold text-white shadow-sm">{t('classroom.rec')}</span>
                  </div>
               </motion.div>
             )}
@@ -369,12 +377,10 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
              <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800 bg-white/5">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 tracking-tighter uppercase">
                    <Languages size={12} className="text-blue-400" />
-                   AI Real-time Translation Log
+                   {t('classroom.transcript_title')}
                 </div>
                 <div className="flex gap-4">
-                  <span className="text-[10px] font-bold text-gray-500">ZH-CN</span>
-                  <div className="w-3 h-[1px] bg-gray-700 self-center" />
-                  <span className="text-[10px] font-bold text-blue-400 font-mono tracking-tighter uppercase whitespace-nowrap">Russian (RU)</span>
+                  <span className="text-[10px] font-bold text-gray-500">{t('classroom.cn_ru_active')}</span>
                 </div>
              </div>
              <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-3">
@@ -389,7 +395,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
                 ))}
                 {!transcript.length && (
                   <div className="h-full flex items-center justify-center text-gray-600 text-xs italic">
-                    Listening for speech and translating...
+                    {t('classroom.system_ready')}
                   </div>
                 )}
              </div>
@@ -406,7 +412,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
               className="bg-[#0F172A] border-l border-gray-800 flex flex-col overflow-hidden"
             >
               <div className="h-16 px-6 border-b border-gray-800 flex items-center justify-between shrink-0">
-                <h4 className="font-bold text-sm">Live Discussion</h4>
+                <h4 className="font-bold text-sm">{t('classroom.live_discussion')}</h4>
                 <button onClick={() => setShowChat(false)} className="text-gray-500 hover:text-white">
                   <X size={18} />
                 </button>
@@ -414,7 +420,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
               <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
                  {chatMessages.map(msg => (
                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={msg.id} className={`flex flex-col gap-1 ${msg.isSelf ? 'items-end' : 'items-start'}`}>
-                      <span className={`text-[10px] font-bold ${msg.isSelf ? 'text-blue-400' : 'text-gray-400'}`}>{msg.user} {msg.isSelf && '(You)'}</span>
+                      <span className={`text-[10px] font-bold ${msg.isSelf ? 'text-blue-400' : 'text-gray-400'}`}>{msg.user} {msg.isSelf && `(${t('classroom.you')})`}</span>
                       <div className={`text-xs p-3 rounded-2xl border ${
                         msg.isSelf ? 'bg-blue-600/20 border-blue-500/20 rounded-tr-none' : 'bg-white/5 border-white/5 rounded-tl-none text-white'
                       }`}>
@@ -424,7 +430,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
                  ))}
                  {!chatMessages.length && (
                     <div className="h-full flex items-center justify-center text-gray-500 text-xs italic text-center px-4">
-                       Start a conversation. Your message will also appear as a bullet comment!
+                       {t('classroom.start_conversation')}
                     </div>
                  )}
               </div>
@@ -434,7 +440,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
                        type="text" 
                        value={inputText}
                        onChange={(e) => setInputText(e.target.value)}
-                       placeholder="Say something..." 
+                       placeholder={t('classroom.say_something')} 
                        className="flex-1 bg-white/5 border border-gray-800 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 transition-all text-white"
                     />
                     <button type="submit" className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
@@ -463,7 +469,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           >
             <Mic size={22} />
             <span className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-800 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              {!isConnected ? 'Hand raise required' : isMicOn ? 'Mute Mic' : 'Unmute Mic'}
+              {!isConnected ? t('classroom.hand_raise_required') : isMicOn ? t('classroom.mute_mic') : t('classroom.unmute_mic')}
             </span>
           </button>
           
@@ -480,7 +486,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           >
             <Video size={22} />
             <span className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-800 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              {!isConnected ? 'Hand raise required' : isCamOn ? 'Stop Video' : 'Start Video'}
+              {!isConnected ? t('classroom.hand_raise_required') : isCamOn ? t('classroom.stop_video') : t('classroom.start_video')}
             </span>
           </button>
 
@@ -496,7 +502,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           >
             {isConnected ? <Users size={22} /> : <Hand size={22} />}
             <span className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-800 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-normal">
-              {isConnected ? 'On Stage' : isHandRaised ? 'Waiting for Teacher...' : 'Raise Hand'}
+              {isConnected ? t('classroom.on_stage') : isHandRaised ? t('classroom.waiting_teacher') : t('classroom.raise_hand')}
             </span>
           </button>
           
@@ -506,7 +512,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           >
             <div className={`w-3 h-3 rounded-full bg-red-600 mr-1 ${isRecording ? 'animate-pulse' : ''}`} />
             <span className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-800 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              {isRecording ? 'Stop Recording' : 'Record Lesson'}
+              {isRecording ? t('classroom.stop_recording') : t('classroom.record_lesson')}
             </span>
           </button>
         </div>
@@ -519,19 +525,19 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${showChat ? 'bg-blue-400/20' : 'hover:bg-white/5'}`}>
               <MessageSquare size={20} />
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-widest">Chat</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest">{t('classroom.chat')}</span>
           </button>
           <button className="flex flex-col items-center gap-1 group text-gray-500">
              <div className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white/5 transition-all">
                 <Languages size={20} />
              </div>
-             <span className="text-[9px] font-bold uppercase tracking-widest">Translate</span>
+             <span className="text-[9px] font-bold uppercase tracking-widest">{t('classroom.translate')}</span>
           </button>
-          <button className="flex flex-col items-center gap-1 group text-gray-500">
+          <button className="flex flex-col items-center gap-1 group text-gray-500" onClick={() => alert("Simulation: Results visible to all students")}>
              <div className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white/5 transition-all">
                 <BarChart2 size={20} />
              </div>
-             <span className="text-[9px] font-bold uppercase tracking-widest">Poll</span>
+             <span className="text-[9px] font-bold uppercase tracking-widest">{t('classroom.poll')}</span>
           </button>
         </div>
 
@@ -542,7 +548,7 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) =
           >
             {isFullscreen ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
             <span className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-800 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              {isFullscreen ? t('classroom.exit_fullscreen') : t('classroom.fullscreen')}
             </span>
           </button>
           <button className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-center transition-all group relative text-gray-400">

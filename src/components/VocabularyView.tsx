@@ -60,7 +60,7 @@ const VocabularyCard = ({ word, onStudy }: { word: any, onStudy: (w: any) => voi
           word.status === 'Mastered' ? 'bg-green-100 text-green-700' : 
           word.status === 'Learning' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-[#0056D2]'
         }`}>
-          {word.status}
+          {word.status === 'Mastered' ? t('vocab.mastered') : word.status === 'Learning' ? t('vocab.learning') : t('vocab.new')}
         </div>
       </div>
       
@@ -188,17 +188,17 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
         <div className="w-24 h-24 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-8">
           <Trophy size={48} />
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Session Complete!</h2>
-        <p className="text-gray-500 mb-8">You mastered {score} questions in this {groupName || 'random'} burst.</p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">{t('vocab.session_complete')}</h2>
+        <p className="text-gray-500 mb-8">{t('vocab.session_desc').replace('{score}', score.toString())}</p>
         
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
             <div className="text-2xl font-bold text-[#0056D2]">{Math.round((score / questions.length) * 100)}%</div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Accuracy</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.accuracy')}</div>
           </div>
           <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
             <div className="text-2xl font-bold text-[#0056D2]">+{score * 10}</div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Exp Gained</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.exp_gained')}</div>
           </div>
         </div>
 
@@ -308,7 +308,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
                   <div className={`absolute inset-0 rounded-full animate-ping bg-[#0056D2] opacity-20 ${!isRecording ? 'hidden' : ''}`} />
                   <Mic size={40} className="relative z-10" />
                 </button>
-                <div className="text-gray-400 font-bold text-sm uppercase tracking-widest">Hold to Speak</div>
+                <div className="text-gray-400 font-bold text-sm uppercase tracking-widest">{t('vocab.hold_speak')}</div>
               </div>
             )}
           </div>
@@ -337,8 +337,8 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
               </h4>
               <p className={`text-sm ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
                 {isCorrect 
-                  ? (lastScore !== null ? 'Great pronunciation!' : 'Well done! Moving to next.') 
-                  : (lastScore !== null ? `Score ${lastScore} is below the 80 threshold. Try again!` : `Correct is: ${currentQ.correctAnswer}`)}
+                  ? (lastScore !== null ? t('vocab.pron_great') : t('vocab.pron_well')) 
+                  : (lastScore !== null ? t('vocab.pron_low') : `${t('vocab.correct_is')} ${currentQ.correctAnswer}`)}
               </p>
             </div>
           </div>
@@ -420,15 +420,15 @@ const VocabularyView = () => {
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-10">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold text-gray-900">{t('nav.vocabulary')}</h1>
-          <p className="text-sm text-gray-500 font-medium">Your personalized repository of 286 Chinese terms.</p>
+          <p className="text-sm text-gray-500 font-medium">{t('vocab.repo_desc')}</p>
           <div className="flex gap-4 pt-2">
              <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-[#0056D2] rounded-full text-xs font-bold border border-blue-100">
                <Sparkles size={14} />
-               Spaced Repetition Active
+               {t('vocab.spaced_active')}
              </div>
              <div className="flex items-center gap-2 px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold border border-green-100">
                <Trophy size={14} />
-               92 Mastered
+               92 {t('vocab.mastered')}
              </div>
           </div>
         </div>
@@ -450,7 +450,7 @@ const VocabularyView = () => {
             <Sparkles size={22} className="text-amber-500" />
             {t('vocab.phonetic_group')}
           </h2>
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Based on finals & rhyme</span>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.rhyme')}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {phoneticGroups.map(([rhyme, list], idx) => (
@@ -459,8 +459,8 @@ const VocabularyView = () => {
               className="bg-white border-2 border-gray-100 rounded-3xl p-6 hover:border-blue-200 transition-all group relative overflow-hidden"
             >
               <div className="absolute -top-4 -right-4 w-16 h-16 bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="text-blue-600 font-mono text-sm font-bold mb-2">Rhyme: -{rhyme}</div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">{list.length} Word Cluster</h3>
+              <div className="text-blue-600 font-mono text-sm font-bold mb-2">{t('vocab.rhyme')}: -{rhyme}</div>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">{list.length} {t('vocab.cluster')}</h3>
               <div className="flex gap-1 mb-6">
                 {list.slice(0, 3).map((w, i) => (
                   <span key={i} className="text-xl font-noto bg-gray-50 px-2 py-1 rounded-lg">{w.char}</span>
@@ -471,7 +471,7 @@ const VocabularyView = () => {
                 onClick={() => startSession(list, `Rhyme -${rhyme}`)}
                 className="w-full py-2.5 bg-blue-50 text-[#0056D2] font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#0056D2] hover:text-white transition-all flex items-center justify-center gap-2"
               >
-                Launch <ChevronRight size={14} />
+                {t('vocab.launch')} <ChevronRight size={14} />
               </button>
             </div>
           ))}
@@ -489,7 +489,7 @@ const VocabularyView = () => {
                 filter === f ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'
               }`}
             >
-              {f}
+              {f === 'All' ? 'All' : f === 'Mastered' ? t('vocab.mastered') : f === 'Learning' ? t('vocab.learning') : t('vocab.new')}
             </button>
           ))}
         </div>
@@ -519,7 +519,7 @@ const VocabularyView = () => {
           <div className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center group-hover:border-[#0056D2] transition-colors">
             <Plus size={24} />
           </div>
-          <span className="font-bold uppercase tracking-widest text-xs">Add Word</span>
+          <span className="font-bold uppercase tracking-widest text-xs">{t('vocab.add_word')}</span>
         </button>
       </div>
 
@@ -532,15 +532,15 @@ const VocabularyView = () => {
           <div className="max-w-xl text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest mb-6">
               <Sparkles size={14} className="text-yellow-300" />
-              Recommended for you
+              {t('vocab.recommended')}
             </div>
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">Master 15 New Words with Spaced Repetition</h2>
-            <p className="text-blue-100 text-lg mb-8 opacity-90 leading-relaxed font-medium">Our AI analyzed your recent mistakes. Today's review focus: <span className="text-white underline underline-offset-4 decoration-yellow-400 font-bold">Rhymes ending in -uo and -ie.</span></p>
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">{t('vocab.master_title')}</h2>
+            <p className="text-blue-100 text-lg mb-8 opacity-90 leading-relaxed font-medium">{t('vocab.ai_analyze')} <span className="text-white underline underline-offset-4 decoration-yellow-400 font-bold">Rhymes ending in -uo and -ie.</span></p>
             <button 
               onClick={() => startSession(INITIAL_WORDS.filter(w => w.status !== 'Mastered').slice(0, 5), 'Spaced Repetition')}
               className="px-10 py-5 bg-white text-[#0056D2] font-bold rounded-[1.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 mx-auto lg:mx-0 group text-lg"
             >
-              Start AI Review
+              {t('vocab.start_ai')}
               <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
@@ -558,12 +558,12 @@ const VocabularyView = () => {
       <div className="flex justify-center items-center gap-8 py-8 border-t border-gray-100">
         <div className="flex items-center gap-2 text-gray-400 group cursor-help">
           <Calendar size={18} />
-          <span className="text-sm font-bold uppercase tracking-widest">Next Review: Tomorrow</span>
+          <span className="text-sm font-bold uppercase tracking-widest">{t('vocab.next_review')}</span>
         </div>
         <div className="w-1 h-1 bg-gray-300 rounded-full" />
         <div className="flex items-center gap-2 text-gray-400 group cursor-help">
           <Trophy size={18} />
-          <span className="text-sm font-bold uppercase tracking-widest">Weekly Rank: #12</span>
+          <span className="text-sm font-bold uppercase tracking-widest">{t('vocab.weekly_rank')}</span>
         </div>
       </div>
     </div>

@@ -2,6 +2,11 @@
 
 @theme {
   --color-primary-blue: #0056D2;
+  --color-primary: #E31E24;
+  --color-secondary: #0F172A;
+  --color-surface: #F8FAFC;
+  --color-on-surface: #0F172A;
+  --color-on-surface-variant: #64748B;
   --radius-card: 12px;
 }
 
