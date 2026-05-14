@@ -431,7 +431,7 @@
       "phase": "P1-deploy",
       "owner": "deployment-worker",
       "title": "Tencent Cloud public test deployment",
-      "status": "todo",
+      "status": "assets_completed_pending_vm",
       "depends_on": ["T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09"],
       "acceptance": [
         "Deployment env example exists without real secrets",
@@ -441,14 +441,14 @@
         "Public /api/v1/health returns OK"
       ],
       "agent_prompt": "Create minimal deployment assets and checklist for Tencent Cloud IP-based MVP test. Prefer Docker Compose; PM2 fallback is acceptable. Never include real secrets.",
-      "progress_note": "Not started. Local build/test/API smoke passed; public deployment remains next major phase."
+      "progress_note": "Dockerfile, docker-compose.yml, nginx.conf, PM2 ecosystem.cjs, deploy/seed/healthcheck scripts created and locally reviewed. Actual Tencent Cloud VM deploy and public health verification are still pending."
     },
     {
       "id": "T11",
       "phase": "P1-audit",
       "owner": "auditor",
       "title": "MVP acceptance audit against PRD v2.0",
-      "status": "pending_e2e",
+      "status": "code_audited_pending_e2e_and_vm",
       "depends_on": ["T10"],
       "acceptance": [
         "A1 PPT upload checked",
@@ -462,7 +462,7 @@
         "Known v1.0 gaps documented"
       ],
       "agent_prompt": "Run a code and manual-flow audit against PRD v2.0 only. Report pass/fail for A1-A7 plus the explicit media permission bug. Block if the core loop is still mock-only.",
-      "progress_note": "Unit/type/build/API smoke passed. Playwright/browser E2E prompt added at docs/03-testing-deployment/e2e-agent-prompt.md."
+      "progress_note": "Acceptance report created at tests/acceptance/mvp-acceptance-report.md. Unit/type/build/backend smoke checks pass. Browser E2E, media permission indicator verification, and Tencent Cloud public URL verification remain pending."
     }
   ],
   "audit_gates": [
