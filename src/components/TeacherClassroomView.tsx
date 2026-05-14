@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import Logo from './Logo.tsx';
+import { lecturesApi } from '../services/apiClient.ts';
 
 interface TeacherClassroomViewProps {
   onExit: () => void;
@@ -37,8 +38,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   const [showChat, setShowChat] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isRecording, setIsRecording] = useState(true);
-  const [isScreenSharing, setIsScreenSharing] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [camPosition, setCamPosition] = useState({ x: 32, y: 120 });
   const [isPPTLocked, setIsPPTLocked] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -59,9 +60,49 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   const [pdfFile, setPdfFile] = useState<string | null>(null);
   const [pdfPage, setPdfPage] = useState(1);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const recordingStartedAtRef = React.useRef<number>(0);
+  const localStreamRef = React.useRef<MediaStream | null>(null);
+  const screenStreamRef = React.useRef<MediaStream | null>(null);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
+
+  const stopTracks = (stream: MediaStream | null) => {
+    stream?.getTracks().forEach((track) => track.stop());
+  };
+
+  const cleanupMedia = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    stopTracks(localStreamRef.current);
+    stopTracks(screenStreamRef.current);
+    setLocalStream(null);
+    setScreenStream(null);
+    setIsMicOn(false);
+    setIsCamOn(false);
+    setIsScreenSharing(false);
+    setIsRecording(false);
+  };
+
+  React.useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
+  React.useEffect(() => {
+    screenStreamRef.current = screenStream;
+  }, [screenStream]);
+
+  React.useEffect(() => {
+    mediaRecorderRef.current = mediaRecorder;
+  }, [mediaRecorder]);
+
+  React.useEffect(() => {
+    return () => {
+      cleanupMedia();
+    };
+  }, []);
 
   // Subtitles Simulation
   React.useEffect(() => {
@@ -219,20 +260,23 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
         const recorder = new MediaRecorder(stream);
         const chunks: Blob[] = [];
         recorder.ondataavailable = (e) => chunks.push(e.data);
-        recorder.onstop = () => {
+        recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          const recordings = JSON.parse(localStorage.getItem('lingobridge_recordings') || '[]');
-          recordings.push({
-            id: Date.now(),
-            url,
-            date: new Date().toLocaleDateString(),
-            title: t('course.basic') + ' - ' + new Date().toLocaleTimeString()
-          });
-          localStorage.setItem('lingobridge_recordings', JSON.stringify(recordings));
-          alert("Recording saved! You can view it in the schedule history.");
+          try {
+            await lecturesApi.upload({
+              courseId: 'course-1',
+              title: t('course.basic') + ' - ' + new Date().toLocaleTimeString(),
+              blob,
+              durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
+            });
+            alert("Recording uploaded! Students can view it in schedule replays.");
+          } catch (error: any) {
+            console.error("Failed to upload recording", error);
+            alert(error.message || "Recording stopped, but upload failed. Is the backend running?");
+          }
         };
         recorder.start();
+        recordingStartedAtRef.current = Date.now();
         setMediaRecorder(recorder);
         setIsRecording(true);
       } catch (err) {
@@ -266,7 +310,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
 
   const stopScreenShare = () => {
     if (screenStream) {
-      screenStream.getTracks().forEach(track => track.stop());
+      stopTracks(screenStream);
       setScreenStream(null);
     }
     setIsScreenSharing(false);
@@ -357,7 +401,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                   {t('classroom.cancel')}
                 </button>
                 <button 
-                  onClick={onExit}
+                  onClick={() => {
+                    cleanupMedia();
+                    onExit();
+                  }}
                   className="flex-1 py-3 px-6 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
                 >
                   {t('classroom.end_btn')}

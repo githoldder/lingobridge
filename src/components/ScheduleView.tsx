@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Calendar as CalendarIcon, 
   Clock, 
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { lecturesApi, mediaUrl, type Lecture } from '../services/apiClient.ts';
 
 interface ScheduleViewProps {
   onNavigate?: (target: string) => void;
@@ -23,6 +24,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   const [synced, setSynced] = useState(false);
   const [activeTab, setActiveTab] = useState<'agenda' | 'replays'>('agenda');
   const [selectedDay, setSelectedDay] = useState(30);
+  const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [replayMessage, setReplayMessage] = useState('');
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -39,15 +42,22 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
     { id: 4, day: 28, title: 'Tone Mastery', time: '09:00 AM - 10:30 AM', instructor: 'Li', isLive: false },
   ];
 
-  const recordings = [
-    { id: 'rec1', title: t('course.basic') + ' - Review', date: '5/10/2026', day: 10, url: '#' },
-    { id: 'rec2', title: t('course.culture') + ' - History', date: '5/08/2026', day: 8, url: '#' },
-    { id: 'rec3', title: 'Tone Mastery Workshop', date: '5/12/2026', day: 12, url: '#' },
-    { id: 'rec4', title: 'Introduction to Pinyin', date: '5/08/2026', day: 8, url: '#' },
-  ];
+  useEffect(() => {
+    lecturesApi.list('course-1')
+      .then(setLectures)
+      .catch((error) => setReplayMessage(error.message || 'Unable to load replays.'));
+  }, []);
 
   const filteredAgenda = scheduleItems.filter(item => item.day === selectedDay);
-  const filteredRecordings = recordings.filter(rec => rec.day === selectedDay);
+  const filteredRecordings = lectures
+    .map((lecture) => ({
+      id: lecture.id,
+      title: lecture.title,
+      date: new Date(lecture.createdAt).toLocaleDateString(),
+      day: new Date(lecture.createdAt).getDate(),
+      url: mediaUrl(lecture.videoUrl)
+    }))
+    .filter(rec => rec.day === selectedDay);
 
   return (
     <div id="schedule-view" className="space-y-8 pb-12">
@@ -241,7 +251,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
                     <div className="py-20 text-center bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200">
                        <Video size={48} className="mx-auto mb-4 text-gray-200" />
                        <p className="text-gray-400 font-bold">No recordings available for this day.</p>
-                       <p className="text-xs text-gray-400 mt-1">Class recordings will appear here after they are saved by the teacher.</p>
+                       <p className="text-xs text-gray-400 mt-1">{replayMessage || 'Class recordings will appear here after they are saved by the teacher.'}</p>
                     </div>
                   )}
                 </div>

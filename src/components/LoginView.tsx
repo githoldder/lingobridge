@@ -2,20 +2,31 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, LogIn, ChevronLeft, Globe } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { authApi } from '../services/apiClient.ts';
 
 interface LoginViewProps {
-  onNavigate: (view: 'landing' | 'register' | 'dashboard') => void;
+  onNavigate: (view: string) => void;
 }
 
 const LoginView = ({ onNavigate }: LoginViewProps) => {
   const { t } = useLanguage();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('student_a@test.com');
+  const [password, setPassword] = useState('Test@123456');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login
-    onNavigate('dashboard');
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const { user } = await authApi.login(email, password);
+      onNavigate(user.role === 'teacher' ? 'teacher-dashboard' : 'dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Use teacher@test.com or student_a@test.com with Test@123456.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,11 +98,13 @@ const LoginView = ({ onNavigate }: LoginViewProps) => {
 
             <button 
               type="submit"
+              disabled={isSubmitting}
               className="w-full bg-secondary text-white font-bold py-4 rounded-2xl hover:bg-blue-600 active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group"
             >
-              <span>{t('nav.login')}</span>
+              <span>{isSubmitting ? 'Signing in...' : t('nav.login')}</span>
               <LogIn size={20} className="group-hover:translate-x-1 transition-transform" />
             </button>
+            {error && <p className="text-sm text-red-600 font-bold text-center">{error}</p>}
           </form>
 
           <div className="relative my-10 flex items-center">

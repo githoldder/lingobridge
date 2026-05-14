@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "backend:dev": "tsx backend/src/server.ts",
+    "backend:test": "tsx --test backend/tests/*.test.ts",
+    "test": "npm run backend:test",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

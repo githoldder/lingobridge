@@ -1,0 +1,72 @@
+# LingoBridge Current Context Snapshot
+
+Date: 2026-05-14
+Workspace: `/Users/caolei/Desktop/LingoBridge`
+Source PRD: `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md`
+
+## Current Commit Scope
+
+This checkpoint saves the first MVP backend/frontend API integration slice plus the light project-structure refactor.
+
+## Project Structure
+
+- Added AI/project-management folders: `.agent/`, `context/`, `docs/`, `drafts/`, `prds/`, `prompts/`, `templates/`, `analysis/`.
+- Added engineering placeholders: `backend/`, `tests/`, `docker/`, `scripts/`.
+- Existing Vite frontend is still at repo root: `src/`, `public/`, `package.json`, `vite.config.ts`.
+- PRD execution files live in `prds/prd.md` and `prds/prd.json`.
+
+## Implemented MVP Slice
+
+Backend:
+
+- Express MVP API in `backend/src/app.ts`.
+- Local JSON metadata store in `backend/data/` (ignored by git).
+- Local file storage under `backend/storage/` (ignored by git).
+- Routes:
+  - `GET /api/v1/health`
+  - `POST /api/v1/auth/login`
+  - `GET /api/v1/users/me`
+  - `GET/POST /api/v1/courses`
+  - `GET /api/v1/courses/:id/pages`
+  - `POST /api/v1/coursewares`
+  - `GET /api/v1/exercises`
+  - `GET /api/v1/tts`
+  - `POST/GET/DELETE /api/v1/recordings`
+  - `POST/GET/DELETE /api/v1/lectures`
+- Courseware upload currently uses base64 JSON for MVP speed, not multipart.
+- PPTX/PDF parsing is a fallback generator, not real Office/PDF page extraction yet.
+- Excel import is a fallback generator, not real spreadsheet parsing yet.
+- TTS route is a facade returning browser-fallback metadata unless a provider is added later.
+
+Frontend:
+
+- Added `src/services/apiClient.ts`.
+- Updated `src/services/ttsService.ts` to call backend TTS first and browser fallback second.
+- Updated `LoginView` to call backend demo login.
+- Rebuilt `TeacherCoursesView` for API-backed course creation and PPTX/PDF/XLSX upload.
+- Rebuilt `StudentClassroomView` for course pages, TTS, recording upload/list/play/download/delete, and Excel-derived practice display.
+- Updated `TeacherClassroomView` to upload teacher replay and stop media tracks on cleanup/toggle paths.
+- Updated `ScheduleView` to read replay history from lecture API.
+
+## Verification Completed
+
+- `npm install` completed after network sandbox escalation.
+- `npm run backend:test`: passed, 3 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- API smoke with local backend:
+  - `/api/v1/health`: OK.
+  - `/api/v1/auth/login`: OK.
+  - `/api/v1/courses`: OK.
+
+## Not Yet Verified
+
+- Playwright/browser E2E has not been run.
+- Camera/mic/screen indicator cleanup needs real browser verification.
+- Tencent Cloud public deployment has not started.
+- Real PPTX/PDF parsing, real Excel parsing, MinIO/OSS, and Tencent TTS provider are still future hardening tasks.
+
+## E2E Delegation
+
+Use `docs/03-testing-deployment/e2e-agent-prompt.md` for browser pass-through testing.
+

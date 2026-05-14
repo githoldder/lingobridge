@@ -1,0 +1,496 @@
+{
+  "version": "2026-05-14-prd-v2-execution-control",
+  "source_of_truth": {
+    "path": "/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md",
+    "status": "user-reviewed-approved",
+    "date": "2026-05-06"
+  },
+  "delivery_date": "2026-05-15",
+  "project": {
+    "name": "LingoBridge",
+    "github": "https://github.com/githoldder/lingobridge",
+    "local_path": "/Users/caolei/Desktop/LingoBridge",
+    "positioning": "哈萨克斯坦留学生的中文学习工具网站，跟着老师PPT走，课后能练发音。",
+    "not_mvp": [
+      "课程管理系统",
+      "在线编辑器",
+      "社交平台",
+      "SaaS多租户平台",
+      "国际支付系统"
+    ],
+    "current_state": {
+      "frontend": "Vite + React 19 + TypeScript prototype",
+      "backend": "Express MVP API scaffold implemented with local JSON metadata and local file storage",
+      "deployment": "Vercel prototype only; Tencent Cloud public test pending",
+      "critical_mock_surfaces": [
+        "PPTX/PDF page extraction uses fallback-generated pages",
+        "Excel parsing uses fallback-generated exercises",
+        "TTS provider uses browser fallback when cloud credentials are absent",
+        "TeacherStudentsView hardcoded students",
+        "Dashboards and reports remain visual mocks"
+      ]
+    }
+  },
+  "implementation_status": {
+    "last_updated": "2026-05-14",
+    "summary": "First MVP vertical slice implemented: backend scaffold, API client, demo login, teacher course upload, student course practice/TTS/recording loop, teacher replay upload, schedule replay loading, and E2E delegation prompt.",
+    "verification": {
+      "backend_test": "passed: npm run backend:test, 3 tests",
+      "typescript": "passed: npm run lint",
+      "frontend_build": "passed: npm run build",
+      "api_smoke": "passed: health, login, courses"
+    },
+    "open_items": [
+      "Run Playwright/browser E2E using docs/03-testing-deployment/e2e-agent-prompt.md",
+      "Verify camera/mic/screen indicator cleanup in a real browser",
+      "Deploy Tencent Cloud public test",
+      "Replace fallback PPTX/PDF/Excel handling with real parsers/converters when demo time allows",
+      "Add real object storage and cloud TTS providers after MVP path is stable"
+    ]
+  },
+  "mvp_core_loop": [
+    "teacher_uploads_ppt_or_pdf",
+    "system_generates_course_pages",
+    "student_enters_practice",
+    "student_clicks_chinese_tts",
+    "student_records_local_audio",
+    "audio_uploads_to_cloud_storage",
+    "student_can_play_delete_download_own_recordings"
+  ],
+  "okrts": {
+    "objective": "Make the PRD v2.0 MVP demonstrable by 2026-05-15: teacher courseware upload, student course practice, TTS, recording storage/management, teacher replay, and Tencent Cloud public test.",
+    "key_results": [
+      {
+        "id": "KR1",
+        "name": "MVP core learning loop works",
+        "acceptance": "PPT/PDF upload -> course page -> TTS -> student record -> upload -> play/delete/download."
+      },
+      {
+        "id": "KR2",
+        "name": "Teacher courseware upload works",
+        "acceptance": "Teacher can upload .pptx, .pdf, .xlsx; .pptx/.pdf become course pages; .xlsx syncs as practice/homework data."
+      },
+      {
+        "id": "KR3",
+        "name": "Student practice page works",
+        "acceptance": "Course pages support navigation, Chinese TTS, recording, and own recording list."
+      },
+      {
+        "id": "KR4",
+        "name": "Recording storage is real",
+        "acceptance": "Audio is uploaded to backend/storage abstraction and linked to student/course/page."
+      },
+      {
+        "id": "KR5",
+        "name": "Teacher recording and replay works",
+        "acceptance": "Teacher screen/camera recording is saved; students can find replay by date in schedule/history."
+      },
+      {
+        "id": "KR6",
+        "name": "Live mode demo works",
+        "acceptance": "Teacher can choose local screen share mode or uploaded/existing PDF mode with PDF page and canvas drawing."
+      },
+      {
+        "id": "KR7",
+        "name": "Camera and microphone permission bug is fixed",
+        "acceptance": "Toggling off or exiting stops all media tracks and browser camera indicator closes."
+      },
+      {
+        "id": "KR8",
+        "name": "Three-language UI remains usable",
+        "acceptance": "Chinese/Russian/Kazakh switching works on demo-critical pages."
+      },
+      {
+        "id": "KR9",
+        "name": "Tencent Cloud public test works",
+        "acceptance": "Public frontend opens and /api/v1/health returns OK."
+      }
+    ],
+    "risks": [
+      {
+        "id": "R1",
+        "level": "P0",
+        "risk": "Scope expands into full LMS or SaaS.",
+        "control": "Use PRD v2.0 as source of truth; do not implement out-of-scope roadmap features."
+      },
+      {
+        "id": "R2",
+        "level": "P0",
+        "risk": "PPTX rendering blocks delivery.",
+        "control": "Convert PPTX to PDF/pages or require PDF fallback for MVP demo."
+      },
+      {
+        "id": "R3",
+        "level": "P0",
+        "risk": "Browser camera/mic remains active after UI toggle.",
+        "control": "Stop all MediaStream tracks on toggle off, exit, unmount, and recording stop."
+      },
+      {
+        "id": "R4",
+        "level": "P0",
+        "risk": "Plaintext secrets exist in local documentation.",
+        "control": "Rotate exposed keys, never commit secrets, use .env and .gitignore."
+      },
+      {
+        "id": "R5",
+        "level": "P1",
+        "risk": "Direct IP public deployment lacks HTTPS.",
+        "control": "Accept only for MVP test; production needs domain and HTTPS."
+      }
+    ],
+    "signals": [
+      "npm run lint passes",
+      "npm run build passes",
+      "GET /api/v1/health returns code 0",
+      "Manual teacher-student MVP path can be recorded end to end"
+    ]
+  },
+  "scope": {
+    "in": [
+      {
+        "id": "F01",
+        "name": "PPT/PDF import",
+        "description": "Upload PPT/PDF, parse or convert to course pages, support page browsing."
+      },
+      {
+        "id": "F02",
+        "name": "Course-practice sync",
+        "description": "Associate PPT/page content with practice items; Excel can create preview/homework rows linked to course/page."
+      },
+      {
+        "id": "F03",
+        "name": "Chinese TTS",
+        "description": "Course page button triggers TTS API; browser TTS fallback allowed when provider is missing."
+      },
+      {
+        "id": "F04",
+        "name": "Recording capture",
+        "description": "Student MediaRecorder audio capture."
+      },
+      {
+        "id": "F05",
+        "name": "Recording storage",
+        "description": "Upload audio to storage and link metadata to student/course/page."
+      },
+      {
+        "id": "F06",
+        "name": "Recording management",
+        "description": "Student can play, delete, and download own recordings."
+      },
+      {
+        "id": "F07",
+        "name": "Kazakh adaptation",
+        "description": "Chinese/Russian/Kazakh UI switching."
+      },
+      {
+        "id": "F08",
+        "name": "Replay",
+        "description": "Teacher recording is saved and students can replay by date in schedule/history."
+      },
+      {
+        "id": "F09",
+        "name": "Teacher live modes",
+        "description": "Local screen share mode and PDF mode with paging/canvas drawing/camera."
+      },
+      {
+        "id": "F10",
+        "name": "Permission lifecycle bugfix",
+        "description": "Camera/mic/screen tracks stop reliably."
+      }
+    ],
+    "out": [
+      "online_ppt_editing",
+      "realtime_bilingual_subtitles",
+      "danmaku_social_system",
+      "multi_tenant_saas",
+      "icp_filing",
+      "international_payment",
+      "ai_pronunciation_scoring",
+      "teacher_virtual_background"
+    ]
+  },
+  "data_model": {
+    "entities": [
+      "user(id, username, password_hash, role, display_name, language_pref, created_at)",
+      "course(id, teacher_id, title, description, created_at)",
+      "course_page(id, course_id, page_number, content_html, audio_text, image_url)",
+      "exercise(id, course_id, page_number, prompt, answer, source_file_id, created_at)",
+      "recording(id, student_id, course_id, page_number, audio_url, duration_sec, created_at)",
+      "lecture_recording(id, course_id, teacher_id, video_url, duration_sec, created_at)",
+      "file_metadata(id, owner_id, course_id, type, filename, mime_type, size_bytes, storage_url, created_at)"
+    ],
+    "storage": {
+      "course_pages": "object storage or local upload directory for MVP",
+      "student_audio": "WebM/Opus object",
+      "lecture_video": "WebM object",
+      "metadata": "PostgreSQL preferred; SQLite/local JSON acceptable only as emergency demo fallback"
+    }
+  },
+  "api_contract": {
+    "response_shape": {
+      "code": 0,
+      "data": {},
+      "message": "success"
+    },
+    "routes": [
+      { "method": "GET", "path": "/api/v1/health", "purpose": "health check" },
+      { "method": "POST", "path": "/api/v1/auth/login", "purpose": "demo login" },
+      { "method": "GET", "path": "/api/v1/users/me", "purpose": "current user" },
+      { "method": "GET", "path": "/api/v1/courses", "purpose": "course list" },
+      { "method": "POST", "path": "/api/v1/courses", "purpose": "teacher creates course" },
+      { "method": "GET", "path": "/api/v1/courses/:id/pages", "purpose": "course pages" },
+      { "method": "POST", "path": "/api/v1/coursewares", "purpose": "upload pptx/pdf/xlsx" },
+      { "method": "GET", "path": "/api/v1/exercises?courseId=&page=", "purpose": "student practice items from Excel" },
+      { "method": "GET", "path": "/api/v1/tts?text=&lang=", "purpose": "tts facade" },
+      { "method": "POST", "path": "/api/v1/recordings", "purpose": "upload student recording" },
+      { "method": "GET", "path": "/api/v1/recordings?courseId=&page=", "purpose": "list recordings" },
+      { "method": "DELETE", "path": "/api/v1/recordings/:id", "purpose": "delete own recording" },
+      { "method": "POST", "path": "/api/v1/lectures", "purpose": "upload teacher lecture recording" },
+      { "method": "GET", "path": "/api/v1/lectures?courseId=&date=", "purpose": "list replays" },
+      { "method": "DELETE", "path": "/api/v1/lectures/:id", "purpose": "delete replay" }
+    ]
+  },
+  "frontend_integration_targets": [
+    "src/components/LoginView.tsx",
+    "src/components/TeacherCoursesView.tsx",
+    "src/components/StudentClassroomView.tsx",
+    "src/components/HomeworkView.tsx",
+    "src/components/TeacherClassroomView.tsx",
+    "src/components/ScheduleView.tsx",
+    "src/services/ttsService.ts",
+    "src/services/apiClient.ts"
+  ],
+  "tasks": [
+    {
+      "id": "T00",
+      "phase": "P0-foundation",
+      "owner": "audit-controller",
+      "title": "Secret hygiene and PRD guardrails",
+      "status": "completed",
+      "depends_on": [],
+      "acceptance": [
+        ".env* ignored",
+        "No real API key/token in git diff",
+        "README or deployment notes state PRD v2.0 is source of truth",
+        "Out-of-scope features are explicitly blocked"
+      ],
+      "agent_prompt": "Audit the repository and planned changes for secrets and scope creep. Use PRD v2.0 as source of truth. Add or verify .gitignore entries for .env files and uploaded media. Do not print or commit secret values.",
+      "progress_note": "Completed in light refactor: .env and media/storage outputs are ignored; PRD v2.0 guardrails added to .agent rules and README/Agent docs."
+    },
+    {
+      "id": "T01",
+      "phase": "P0-backend",
+      "owner": "backend-worker",
+      "title": "Create single-tenant MVP backend skeleton",
+      "status": "completed",
+      "depends_on": ["T00"],
+      "acceptance": [
+        "Backend starts locally",
+        "GET /api/v1/health returns code 0",
+        "Response envelope is consistent",
+        "Demo teacher/student auth exists"
+      ],
+      "agent_prompt": "Implement a minimal Node.js Express or Fastify backend for the single-tenant CZU MVP. Add health, demo auth, current user, config, response envelope, and error handling. Do not implement multi-tenant SaaS.",
+      "progress_note": "Implemented Express API with health, demo auth, current user, response envelope, local JSON DB, and local file storage."
+    },
+    {
+      "id": "T02",
+      "phase": "P0-courseware",
+      "owner": "backend-worker",
+      "title": "Courseware upload and course page generation",
+      "status": "completed_with_fallback",
+      "depends_on": ["T01"],
+      "acceptance": [
+        "POST /api/v1/coursewares accepts pptx/pdf/xlsx",
+        "pptx/pdf file limit is <=50MB",
+        "PDF is displayable as course pages",
+        "PPTX has conversion or explicit PDF fallback",
+        "Excel rows create exercise records linked to course/page"
+      ],
+      "agent_prompt": "Implement course/courseware APIs from PRD v2.0. Support teacher upload of pptx/pdf/xlsx. Generate course pages for PDF/PPTX fallback and parse Excel into practice items. Keep online PPT editing out of scope.",
+      "progress_note": "API accepts pptx/pdf/xlsx and enforces type/size. PDF/PPTX and Excel currently generate MVP fallback pages/exercises instead of true parsing."
+    },
+    {
+      "id": "T03",
+      "phase": "P0-student-loop",
+      "owner": "backend-worker",
+      "title": "TTS and student recording APIs",
+      "status": "completed_with_fallback",
+      "depends_on": ["T01", "T02"],
+      "acceptance": [
+        "GET /api/v1/tts accepts text/lang",
+        "POST /api/v1/recordings stores WebM/Opus",
+        "GET /api/v1/recordings filters by course/page",
+        "DELETE /api/v1/recordings/:id enforces ownership",
+        "Recording download/play URL is returned"
+      ],
+      "agent_prompt": "Implement the student practice backend loop: TTS facade and recording upload/list/delete/download metadata. Use env-based provider config; do not hardcode Tencent secrets.",
+      "progress_note": "Recording upload/list/delete/play URL implemented. TTS facade implemented with browser fallback metadata; real Tencent TTS provider not configured yet."
+    },
+    {
+      "id": "T04",
+      "phase": "P0-replay",
+      "owner": "backend-worker",
+      "title": "Teacher lecture replay APIs",
+      "status": "completed",
+      "depends_on": ["T01"],
+      "acceptance": [
+        "POST /api/v1/lectures stores WebM replay",
+        "GET /api/v1/lectures supports course/date filters",
+        "DELETE /api/v1/lectures/:id teacher-only",
+        "Replay play URL is returned"
+      ],
+      "agent_prompt": "Implement teacher lecture replay upload/list/delete. Store video through the same storage abstraction and link it to course/teacher/date.",
+      "progress_note": "Lecture upload/list/delete implemented through same local storage abstraction."
+    },
+    {
+      "id": "T05",
+      "phase": "P0-frontend",
+      "owner": "frontend-worker",
+      "title": "API client and demo login",
+      "status": "completed",
+      "depends_on": ["T01"],
+      "acceptance": [
+        "VITE_API_BASE_URL is used",
+        "LoginView calls backend login",
+        "Teacher/student route selection uses returned role",
+        "API errors show a user-friendly message"
+      ],
+      "agent_prompt": "Create API client/services and replace simulated LoginView behavior with backend demo login. Preserve current visual design.",
+      "progress_note": "Added src/services/apiClient.ts and wired LoginView to backend demo auth."
+    },
+    {
+      "id": "T06",
+      "phase": "P0-frontend",
+      "owner": "frontend-worker",
+      "title": "Teacher courseware upload UI",
+      "status": "completed",
+      "depends_on": ["T02", "T05"],
+      "acceptance": [
+        "TeacherCoursesView loads courses from API",
+        "Teacher can create/select course",
+        "Teacher can upload pptx/pdf/xlsx",
+        "Upload result appears in course page/practice data"
+      ],
+      "agent_prompt": "Wire TeacherCoursesView to real course/courseware APIs. Add upload controls for pptx/pdf/xlsx. Keep non-core dashboards mock if needed.",
+      "progress_note": "TeacherCoursesView now loads courses, creates courses, and uploads pptx/pdf/xlsx through the API."
+    },
+    {
+      "id": "T07",
+      "phase": "P0-frontend",
+      "owner": "frontend-worker",
+      "title": "Student course practice, TTS, and recording management",
+      "status": "completed",
+      "depends_on": ["T02", "T03", "T05"],
+      "acceptance": [
+        "StudentClassroomView renders course pages from API",
+        "Student can flip pages",
+        "TTS calls backend facade with browser fallback",
+        "Student can record/upload/play/download/delete own recordings",
+        "Excel-derived exercises are visible in practice/homework context"
+      ],
+      "agent_prompt": "Replace mock-only student practice behavior with API-backed course pages, TTS, recording management, and Excel-derived exercise display. Preserve UI style and mobile/iPad adaptability.",
+      "progress_note": "StudentClassroomView now renders API course pages, uses backend TTS facade with browser fallback, and supports recording upload/list/play/download/delete."
+    },
+    {
+      "id": "T08",
+      "phase": "P0-media-bugfix",
+      "owner": "frontend-worker",
+      "title": "Teacher live modes and permission lifecycle fix",
+      "status": "code_completed_needs_browser_verification",
+      "depends_on": ["T04", "T05"],
+      "acceptance": [
+        "Camera toggle off stops video tracks",
+        "Mic toggle off stops audio tracks",
+        "Screen share stop stops display tracks",
+        "Exit/unmount stops all active tracks",
+        "Teacher can choose local screen share or PDF mode",
+        "PDF mode supports page changes and canvas drawing",
+        "Teacher recording uploads replay to backend"
+      ],
+      "agent_prompt": "Fix TeacherClassroomView media lifecycle. Centralize track cleanup and call it on toggle off, exit, unmount, and recording stop. Wire lecture recording upload and keep local/PDF live modes demo-ready.",
+      "progress_note": "Media cleanup and lecture upload are wired in code. Real browser verification of camera/mic/screen indicators is still required."
+    },
+    {
+      "id": "T09",
+      "phase": "P1-replay-ui",
+      "owner": "frontend-worker",
+      "title": "Schedule/history replay UI",
+      "status": "completed",
+      "depends_on": ["T04", "T05", "T08"],
+      "acceptance": [
+        "ScheduleView loads lecture replays from API",
+        "Student can choose date and play historical video",
+        "Empty state is clear when no replay exists"
+      ],
+      "agent_prompt": "Wire ScheduleView history/replay section to lecture APIs so students can replay videos by date, as required by PRD v2.0.",
+      "progress_note": "ScheduleView replays tab now reads lecture data from backend and opens replay URLs."
+    },
+    {
+      "id": "T10",
+      "phase": "P1-deploy",
+      "owner": "deployment-worker",
+      "title": "Tencent Cloud public test deployment",
+      "status": "todo",
+      "depends_on": ["T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09"],
+      "acceptance": [
+        "Deployment env example exists without real secrets",
+        "Nginx or equivalent serves frontend and proxies /api",
+        "Upload body limit supports courseware/replay MVP",
+        "Public frontend opens",
+        "Public /api/v1/health returns OK"
+      ],
+      "agent_prompt": "Create minimal deployment assets and checklist for Tencent Cloud IP-based MVP test. Prefer Docker Compose; PM2 fallback is acceptable. Never include real secrets.",
+      "progress_note": "Not started. Local build/test/API smoke passed; public deployment remains next major phase."
+    },
+    {
+      "id": "T11",
+      "phase": "P1-audit",
+      "owner": "auditor",
+      "title": "MVP acceptance audit against PRD v2.0",
+      "status": "pending_e2e",
+      "depends_on": ["T10"],
+      "acceptance": [
+        "A1 PPT upload checked",
+        "A2 course browsing checked",
+        "A3 TTS checked",
+        "A4 recording flow checked",
+        "A5 replay flow checked",
+        "A6 three-language UI checked",
+        "A7 public access checked or clearly risk-noted",
+        "Camera/mic permission bug verified fixed",
+        "Known v1.0 gaps documented"
+      ],
+      "agent_prompt": "Run a code and manual-flow audit against PRD v2.0 only. Report pass/fail for A1-A7 plus the explicit media permission bug. Block if the core loop is still mock-only.",
+      "progress_note": "Unit/type/build/API smoke passed. Playwright/browser E2E prompt added at docs/03-testing-deployment/e2e-agent-prompt.md."
+    }
+  ],
+  "audit_gates": [
+    "No secrets in committed files",
+    "PRD v2.0 remains source of truth",
+    "No out-of-scope LMS/SaaS/social/payment/AI-scoring implementation is required for MVP",
+    "Teacher can upload pptx/pdf/xlsx",
+    "Student can use TTS and manage recordings",
+    "Teacher replay can be uploaded and viewed by students",
+    "Camera/mic/screen tracks stop after toggle off and exit",
+    "Frontend build passes",
+    "Backend health check passes",
+    "Tencent Cloud public health check passes before demo"
+  ],
+  "manual_demo_path": [
+    "Teacher login",
+    "Teacher uploads PPT/PDF",
+    "Teacher uploads Excel practice file",
+    "Student opens generated course page",
+    "Student flips pages",
+    "Student clicks TTS",
+    "Student records pronunciation",
+    "Student uploads, plays, downloads, and deletes recording",
+    "Teacher starts local screen share mode",
+    "Teacher switches to PDF mode and draws on canvas",
+    "Teacher toggles camera off and confirms browser indicator closes",
+    "Teacher records and saves lecture",
+    "Student finds replay in schedule/history by date",
+    "Public Tencent Cloud URL and health endpoint are verified"
+  ]
+}

@@ -4,6 +4,8 @@
  * dedicated servers running CosyVoice, GPT-SoVITS, or ChatTTS.
  */
 
+import { ttsApi, mediaUrl } from './apiClient.ts';
+
 class TTSService {
   private voices: SpeechSynthesisVoice[] = [];
 
@@ -46,14 +48,23 @@ class TTSService {
    * @param text The string to speak
    * @param lang Language code (e.g., 'zh-CN', 'ru-RU')
    */
-  public speak(text: string, lang: 'zh-CN' | 'ru-RU' = 'zh-CN') {
+  public async speak(text: string, lang: 'zh-CN' | 'ru-RU' = 'zh-CN') {
     if (typeof window === 'undefined') return;
 
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
-    // Check for custom API integration (e.g. GPT-SoVITS or CosyVoice proxy)
-    // Note: This environment uses browser synthesis as it doesn't have the heavy GPU backend pre-installed.
+    try {
+      const result = await ttsApi.synthesize(text, lang);
+      if (result.audioUrl) {
+        const audio = new Audio(mediaUrl(result.audioUrl));
+        await audio.play();
+        return;
+      }
+    } catch (error) {
+      console.warn('TTS backend unavailable, using browser fallback.', error);
+    }
+
     const utterance = new SpeechSynthesisUtterance(text);
     const voice = this.getBestVoice(lang);
     

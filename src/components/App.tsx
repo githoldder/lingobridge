@@ -65,7 +65,7 @@ export default function App() {
       case 'teacher-dashboard':
         return <TeacherDashboardView onNavigate={handleNavigate} />;
       case 'teacher-courses':
-        return <TeacherCoursesView />;
+        return <TeacherCoursesView onNavigate={handleNavigate} />;
       case 'teacher-classroom':
         return <TeacherClassroomView onExit={handleClassExit} />;
       case 'student-classroom':
