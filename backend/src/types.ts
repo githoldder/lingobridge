@@ -36,11 +36,72 @@ export interface Exercise {
   createdAt: string;
 }
 
+export interface LearningTask {
+  id: string;
+  courseId: string;
+  sourceFileId: string;
+  taskId: string;
+  taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';
+  unit: number;
+  lesson: number;
+  lessonTitle: string;
+  pageNumber: number;
+  zhText: string;
+  pinyin: string;
+  translationRu: string;
+  translationKk: string;
+  prompt: string;
+  answer: string;
+  initial: string;
+  final: string;
+  tone: string;
+  rhymeGroup: string;
+  difficulty: number;
+  dueAt: string;
+  publishToHomework: boolean;
+  publishToVocab: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VocabularyItem {
+  id: string;
+  courseId: string;
+  taskId: string;
+  zhText: string;
+  pinyin: string;
+  translationRu: string;
+  translationKk: string;
+  initial: string;
+  final: string;
+  tone: string;
+  rhymeGroup: string;
+  difficulty: number;
+  tags: string;
+  sourceFileId: string;
+  createdAt: string;
+}
+
+export interface LearningRecord {
+  id: string;
+  studentId: string;
+  taskId: string;
+  context: 'homework' | 'vocabulary' | 'practice';
+  status: 'not_started' | 'in_progress' | 'completed';
+  score: number;
+  attemptsCount: number;
+  lastRecordingId: string;
+  completedAt: string;
+  updatedAt: string;
+}
+
 export interface Recording {
   id: string;
   studentId: string;
   courseId: string;
   pageNumber: number;
+  taskId?: string;
   audioUrl: string;
   filename: string;
   durationSec: number;
@@ -56,6 +117,27 @@ export interface Lecture {
   filename: string;
   durationSec: number;
   createdAt: string;
+}
+
+export interface LiveSession {
+  id: string;
+  courseId: string;
+  teacherId: string;
+  status: 'active' | 'ended';
+  sourceMode: 'screen' | 'pdf';
+  currentPage: number;
+  recordingStatus: 'idle' | 'recording' | 'saved';
+  startedAt: string;
+  endedAt: string;
+}
+
+export interface ClassroomComment {
+  id: string;
+  liveSessionId: string;
+  studentId: string;
+  body: string;
+  createdAt: string;
+  visibility: 'visible' | 'hidden';
 }
 
 export interface FileMetadata {
@@ -75,8 +157,13 @@ export interface Database {
   courses: Course[];
   coursePages: CoursePage[];
   exercises: Exercise[];
+  learningTasks: LearningTask[];
+  vocabularyItems: VocabularyItem[];
+  learningRecords: LearningRecord[];
   recordings: Recording[];
   lectures: Lecture[];
+  liveSessions: LiveSession[];
+  classroomComments: ClassroomComment[];
   files: FileMetadata[];
 }
 

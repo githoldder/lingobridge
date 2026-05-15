@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  Monitor, 
-  MessageSquare, 
-  Users, 
-  ChevronLeft, 
+import {
+  Monitor,
+  MessageSquare,
+  Users,
+  ChevronLeft,
   ChevronRight,
   Hand,
   Mic,
@@ -29,13 +29,16 @@ import { lecturesApi } from '../services/apiClient.ts';
 
 interface TeacherClassroomViewProps {
   onExit: () => void;
+  role?: 'teacher' | 'student';
 }
 
-const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) => {
+const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, role = 'teacher' }) => {
   const { t } = useLanguage();
+  const isTeacher = role === 'teacher';
   const [showPoll, setShowPoll] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -45,7 +48,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   const [inputText, setInputText] = useState('');
   const [chatMessages, setChatMessages] = useState<{ id: number; user: string; text: string; isSelf?: boolean }[]>([]);
   const [danmaku, setDanmaku] = useState<{ id: number; text: string; top: number; duration: number; isSelf?: boolean }[]>([]);
-  const [subtitles, setSubtitles] = useState({ zh: '大家好，欢迎来到我们的中文课！', pinyin: 'Dàjiā hǎo, huānyíng lái dào wǒmen de Zhōngwén kè!', ru: 'Всем привет, добро пожаловать на наш урок китайского языка!' });
   const [transcript, setTranscript] = useState<{ zh: string; ru: string }[]>([]);
 
   // Hardware states
@@ -104,23 +106,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
     };
   }, []);
 
-  // Subtitles Simulation
-  React.useEffect(() => {
-    const lines = [
-      { zh: '大家好，欢迎来到我们的中文课！', pinyin: 'Dàjiā hǎo, huānyíng lái dào wǒmen de Zhōngwén kè!', ru: 'Всем привет, добро пожаловать на наш урок китайского языка!' },
-      { zh: '今天我们要学习一些基本的问候语。', pinyin: 'Jīntiān wǒmen yào xuéxí yīxiē jīběn de wènhòǔǔ.', ru: 'Сегодня мы выучим несколько базовых приветствий.' },
-      { zh: '请跟着我朗读：大家好。', pinyin: 'Qǐng gēnzhe wǒ lǎngdú: Dàjiā hǎo.', ru: 'Пожалуйста, читайте за мной: Дацзя хао.' },
-      { zh: '很好，大家的发音都很标准。', pinyin: 'Hěn hǎo, dàjiā de fāyīn dōu hěn biāozhǔn.', ru: 'Очень хорошо, у всех стандартное произношение.' },
-    ];
-    let index = 0;
-    const interval = setInterval(() => {
-      index = (index + 1) % lines.length;
-      setSubtitles(lines[index]);
-      setTranscript(prev => [...prev.slice(-3), lines[index]]);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Toggle Fullscreen logic
   const toggleFullscreen = () => {
     const elem = document.getElementById('classroom-view');
@@ -139,47 +124,22 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
     e.preventDefault();
     if (!inputText.trim()) return;
     const id = Date.now();
-    
+
     // Send to Chat
-    setChatMessages(prev => [...prev, { id, user: 'Teacher Li', text: inputText, isSelf: true }]);
-    
+    setChatMessages(prev => [...prev, { id, user: isTeacher ? 'Teacher Li' : 'Anna Zhang', text: inputText, isSelf: true }]);
+
     // Trigger Danmaku
-    setDanmaku(prev => [...prev, { 
-      id, 
-      text: inputText, 
-      top: 20 + Math.random() * 40, 
+    setDanmaku(prev => [...prev, {
+      id,
+      text: inputText,
+      top: 20 + Math.random() * 40,
       duration: 10,
-      isSelf: true 
+      isSelf: true
     }]);
-    
+
     setInputText('');
     setTimeout(() => setDanmaku(prev => prev.filter(d => d.id !== id)), 10000);
   };
-
-  // Simulate incoming danmaku
-  React.useEffect(() => {
-    const messages = t('language') === 'zh' 
-      ? ['你好老师！', '老师讲得真好', '666', '太棒了', '大家辛苦了']
-      : t('language') === 'ru'
-        ? ['Здравствуйте!', 'Вау!', 'Круто!', 'Очень понятно', 'Спасибо']
-        : ['Hello Teacher!', 'Amazing!', 'Great lesson', 'Love it', 'Thank you'];
-        
-    const interval = setInterval(() => {
-      const id = Date.now() + Math.random();
-      const text = messages[Math.floor(Math.random() * messages.length)];
-      const top = Math.random() * 60 + 10;
-      const duration = 8 + Math.random() * 5;
-      
-      setDanmaku(prev => [...prev, { id, text, top, duration }]);
-      setChatMessages(prev => [...prev.slice(-15), { id, user: t('students.table_student'), text }]);
-      
-      setTimeout(() => {
-        setDanmaku(prev => prev.filter(d => d.id !== id));
-      }, duration * 1000);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [t]);
 
   const toggleMic = async () => {
     try {
@@ -249,6 +209,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   };
 
   const toggleRecording = () => {
+    if (!isTeacher) return;
     if (!isRecording) {
       // Start Recording
       try {
@@ -264,7 +225,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
           const blob = new Blob(chunks, { type: 'video/webm' });
           try {
             await lecturesApi.upload({
-              courseId: 'course-1',
+              courseId: localStorage.getItem('lingobridge_courseId') || 'course-1',
               title: t('course.basic') + ' - ' + new Date().toLocaleTimeString(),
               blob,
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
@@ -293,6 +254,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   };
 
   const startScreenShare = async () => {
+    if (!isTeacher) return;
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       setScreenStream(stream);
@@ -309,6 +271,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   };
 
   const stopScreenShare = () => {
+    if (!isTeacher) return;
     if (screenStream) {
       stopTracks(screenStream);
       setScreenStream(null);
@@ -318,6 +281,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   };
 
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isTeacher) return;
     const file = e.target.files?.[0];
     if (file) {
       // Simulate real upload
@@ -332,16 +296,18 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
 
   // Canvas Drawing logic
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isTeacher) return;
     setIsDrawing(true);
     const pos = getPos(e);
     setLastPos(pos);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isTeacher) return;
     if (!isDrawing || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
-    
+
     const pos = getPos(e);
     ctx.beginPath();
     ctx.strokeStyle = '#3b82f6';
@@ -356,6 +322,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
   const stopDrawing = () => setIsDrawing(false);
 
   const clearCanvas = () => {
+    if (!isTeacher) return;
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -391,23 +358,23 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <AlertCircle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">{t('classroom.end_confirm_title')}</h3>
-              <p className="text-gray-500 text-sm mb-8">{t('classroom.end_confirm_desc')}</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{isTeacher ? t('classroom.end_confirm_title') : t('classroom.leave_confirm_title')}</h3>
+              <p className="text-gray-500 text-sm mb-8">{isTeacher ? t('classroom.end_confirm_desc') : t('classroom.leave_confirm_desc')}</p>
               <div className="flex gap-4">
-                <button 
+                <button
                   onClick={() => setShowExitConfirm(false)}
                   className="flex-1 py-3 px-6 rounded-xl font-bold text-gray-400 hover:bg-gray-50 transition-colors"
                 >
                   {t('classroom.cancel')}
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     cleanupMedia();
                     onExit();
                   }}
                   className="flex-1 py-3 px-6 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-colors"
                 >
-                  {t('classroom.end_btn')}
+                  {isTeacher ? t('classroom.end_btn') : t('classroom.leave')}
                 </button>
               </div>
             </motion.div>
@@ -418,14 +385,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
       {/* Poll Overlay */}
       <AnimatePresence>
         {showPoll && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
           >
             <div className="bg-white rounded-[2rem] w-full max-w-md p-8 shadow-2xl text-gray-900 relative">
-              <button 
+              <button
                 onClick={() => setShowPoll(false)}
                 className="absolute top-6 right-6 text-gray-400 hover:text-gray-900"
               >
@@ -440,7 +407,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                   <p className="text-xs text-gray-400 font-medium tracking-wide font-noto">{t('classroom.interactive_assessment')}</p>
                 </div>
               </div>
-              
+
               <div className="space-y-6">
                 <p className="font-bold text-gray-800 text-lg">{t('classroom.poll_question')}</p>
                 <div className="space-y-3">
@@ -460,7 +427,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                     </div>
                   ))}
                 </div>
-                <button 
+                <button
                   onClick={() => setShowPoll(false)}
                   className="w-full py-4 bg-[#0056D2] text-white rounded-2xl font-bold hover:shadow-xl transition-all"
                 >
@@ -500,10 +467,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                       <p className="text-[10px] text-gray-400">{t('classroom.active')}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-400 transition-colors"><Mic size={14} /></button>
-                    <button className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-400 transition-colors"><Video size={14} /></button>
-                  </div>
+                  {isTeacher && (
+                    <div className="flex gap-2">
+                      <button className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-400 transition-colors"><Mic size={14} /></button>
+                      <button className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-blue-400 transition-colors"><Video size={14} /></button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -526,14 +495,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
         </div>
 
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => setShowParticipants(!showParticipants)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${showParticipants ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
           >
             <Users size={18} />
             <span className="hidden sm:inline">{t('classroom.students')} (32)</span>
           </button>
-          <button 
+          <button
             onClick={() => setShowExitConfirm(true)}
             className="bg-red-600 hover:bg-red-700 text-white px-4 md:px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2"
           >
@@ -546,15 +515,15 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
       <div className="flex-1 flex overflow-hidden">
         {/* Main Display Area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          
+
           {/* Main Stage Area */}
           <div className="flex-1 relative overflow-hidden bg-black flex flex-col group/stage z-30">
             {liveMode === 'local' ? (
               <div className="flex-1 bg-gray-900 relative flex items-center justify-center">
                 {screenStream ? (
-                  <video 
-                    autoPlay 
-                    playsInline 
+                  <video
+                    autoPlay
+                    playsInline
                     ref={(el) => { if (el) el.srcObject = screenStream; }}
                     className="w-full h-full object-contain"
                   />
@@ -565,12 +534,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                   </div>
                 )}
                 <div className="absolute top-8 left-8 z-[100] flex items-center gap-2">
-                   <button 
-                     onClick={stopScreenShare}
-                     className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-lg flex items-center gap-2"
-                   >
-                     <X size={14} /> Stop Sharing
-                   </button>
+                {isTeacher && (
+                  <button
+                       onClick={stopScreenShare}
+                       className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-lg flex items-center gap-2"
+                     >
+                       <X size={14} /> {t('classroom.stop_share')}
+                     </button>
+                )}
                 </div>
               </div>
             ) : (
@@ -579,8 +550,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                 {pdfFile ? (
                   <div className="absolute inset-0 z-10 flex items-center justify-center">
                     <div className="w-full h-full bg-gray-100 flex items-center justify-center relative">
-                       <img 
-                        src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=1200&auto=format&fit=crop" 
+                       <img
+                        src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=1200&auto=format&fit=crop"
                         className="w-full h-full object-contain opacity-50 blur-sm"
                         alt="PDF Background"
                        />
@@ -603,8 +574,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                 ) : (
                   <>
                     <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
-                      <img 
-                        src="https://images.unsplash.com/photo-1510070112810-d4e9a46d9e91?q=80&w=1200&auto=format&fit=crop" 
+                      <img
+                        src="https://images.unsplash.com/photo-1510070112810-d4e9a46d9e91?q=80&w=1200&auto=format&fit=crop"
                         className="w-full h-full object-cover"
                         alt=""
                       />
@@ -619,7 +590,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
             )}
 
             {/* Canvas Drawing Layer (Global across modes) */}
-            <canvas 
+            <canvas
               ref={canvasRef}
               width={1200}
               height={800}
@@ -627,12 +598,13 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               onMouseMove={draw}
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
-              className="absolute inset-0 z-40 cursor-crosshair w-full h-full pointer-events-auto"
+              className={`absolute inset-0 z-40 w-full h-full ${isTeacher ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'}`}
             />
 
             {/* Control Sidebar (Left) */}
+            {isTeacher && (
             <div className="absolute top-24 left-6 z-[120] flex flex-col items-start gap-3 pointer-events-none">
-              <button 
+              <button
                 onClick={() => setIsControlsExpanded(!isControlsExpanded)}
                 className="w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
               >
@@ -641,7 +613,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
 
               <AnimatePresence>
                 {isControlsExpanded && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, x: -20, scale: 0.95 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: -20, scale: 0.95 }}
@@ -650,7 +622,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                     <div className="flex flex-col gap-2">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Content Mode</span>
                       <div className="grid grid-cols-2 gap-2">
-                        <button 
+                        <button
                           onClick={() => setLiveMode('local')}
                           className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${
                             liveMode === 'local' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'
@@ -658,7 +630,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                         >
                           Recording
                         </button>
-                        <button 
+                        <button
                           onClick={() => setLiveMode('multimedia')}
                           className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${
                             liveMode === 'multimedia' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'
@@ -672,7 +644,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                     <div className="h-[1px] w-full bg-gray-100" />
 
                     <div className="flex flex-col gap-4">
-                      <button 
+                      <button
                         onClick={() => setIsPPTLocked(!isPPTLocked)}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-bold border transition-all ${
                           isPPTLocked ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-gray-50 border-gray-200 text-gray-400'
@@ -684,7 +656,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                         </div>
                         <div className={`w-2 h-2 rounded-full ${isPPTLocked ? 'bg-orange-500 animate-pulse' : 'bg-gray-300'}`} />
                       </button>
-                      
+
                       <label className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-all">
                          <Plus size={16} />
                          {t('classroom.upload_pdf') || 'Upload PDF'}
@@ -693,15 +665,15 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
 
                       {pdfFile && liveMode === 'multimedia' && (
                         <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 p-2">
-                           <button 
-                            onClick={(e) => { e.stopPropagation(); setPdfPage(p => Math.max(1, p - 1)); }} 
+                           <button
+                            onClick={(e) => { e.stopPropagation(); setPdfPage(p => Math.max(1, p - 1)); }}
                             className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
                            >
                             <ChevronLeft size={16} />
                            </button>
                            <span className="text-[11px] font-black text-gray-700 min-w-[60px] text-center">PG {pdfPage}</span>
-                           <button 
-                            onClick={(e) => { e.stopPropagation(); setPdfPage(p => p + 1); }} 
+                           <button
+                            onClick={(e) => { e.stopPropagation(); setPdfPage(p => p + 1); }}
                             className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
                            >
                             <ChevronRight size={16} />
@@ -712,7 +684,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
 
                     <div className="h-[1px] w-full bg-gray-100" />
 
-                    <button 
+                    <button
                       onClick={clearCanvas}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xl"
                     >
@@ -722,6 +694,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                 )}
               </AnimatePresence>
             </div>
+            )}
 
             {/* Shared Overlays (Danmaku, ASR, Camera) */}
             <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
@@ -747,11 +720,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                 <Monitor size={14} />
                 {liveMode === 'local' ? t('classroom.ppt_recording_mode') || 'PPT RECORDING' : t('classroom.presentation_active')}
               </div>
-              
+
               {/* Pagination logic: Only show bottom pagination if in PPT mode */}
               {liveMode === 'local' ? (
                 <div className="flex items-center gap-8 mx-auto md:mx-0">
-                  <button 
+                  <button
                     onClick={() => setPdfPage(p => Math.max(1, p - 1))}
                     className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     title="Prev Slide"
@@ -762,7 +735,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                     <div className="text-xs font-black">{pdfPage}</div>
                     <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">SLIDE</div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setPdfPage(p => p + 1)}
                     className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     title="Next Slide"
@@ -775,7 +748,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               )}
 
               <div className="flex items-center gap-4">
-                <button 
+                <button
                   onClick={toggleFullscreen}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 >
@@ -786,6 +759,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
           </div>
 
           {/* Translation Tracker Section */}
+          {showTranscript && (
           <div className="h-40 bg-[#0F172A] border-t border-gray-800 flex flex-col z-20 relative">
              <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800 bg-white/5">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400 tracking-tighter uppercase whitespace-nowrap">
@@ -813,19 +787,20 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
                 )}
              </div>
           </div>
+          )}
 
           {/* Draggable Teacher Camera Window - Floating Overlay */}
-          <motion.div 
+          <motion.div
             drag
             dragMomentum={false}
             initial={{ left: 'auto', right: 32, bottom: 200 }}
             className="absolute w-56 h-40 bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/50 z-[110] cursor-move active:scale-95 transition-transform"
           >
             {isCamOn ? (
-              <video 
-                autoPlay 
-                playsInline 
-                muted 
+              <video
+                autoPlay
+                playsInline
+                muted
                 ref={(el) => {
                   if (el && localStream) el.srcObject = localStream;
                 }}
@@ -834,10 +809,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-800">
                 <Video size={32} className="text-gray-600 mb-2" />
-                <img 
-                  src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=600&auto=format&fit=crop" 
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-20 grayscale" 
-                  alt="Teacher sitting at computer" 
+                <img
+                  src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=600&auto=format&fit=crop"
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-20 grayscale"
+                  alt="Teacher sitting at computer"
                 />
               </div>
             )}
@@ -848,7 +823,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               </div>
             </div>
             <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
-              {t('classroom.instructor')} Li
+              {isTeacher ? `${t('classroom.instructor')} Li` : t('classroom.waiting_teacher')}
             </div>
           </motion.div>
         </div>
@@ -856,7 +831,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
         {/* Chat Sidebar */}
         <AnimatePresence>
           {showChat && (
-            <motion.div 
+            <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 320, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
@@ -874,7 +849,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
                  {chatMessages.map(msg => (
                     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={msg.id} className={`flex flex-col gap-1 ${msg.isSelf ? 'items-end' : 'items-start'}`}>
-                      <span className={`text-[10px] font-bold ${msg.isSelf ? 'text-blue-400' : 'text-gray-400'}`}>{msg.user} {msg.isSelf && `(${t('classroom.instructor')})`}</span>
+                      <span className={`text-[10px] font-bold ${msg.isSelf ? 'text-blue-400' : 'text-gray-400'}`}>{msg.user} {msg.isSelf && `(${isTeacher ? t('classroom.instructor') : t('classroom.students')})`}</span>
                       <div className={`text-xs p-3 rounded-2xl border ${
                         msg.isSelf ? 'bg-blue-600/20 border-blue-500/20 rounded-tr-none' : 'bg-white/5 border-white/5 rounded-tl-none text-white'
                       }`}>
@@ -890,11 +865,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               </div>
               <div className="p-4 border-t border-gray-800 bg-[#0F172A]">
                  <form onSubmit={handleSendMessage} className="flex gap-2">
-                    <input 
-                       type="text" 
+                    <input
+                       type="text"
                        value={inputText}
                        onChange={(e) => setInputText(e.target.value)}
-                       placeholder={t('classroom.say_something')} 
+                       placeholder={t('classroom.say_something')}
                        className="flex-1 bg-white/5 border border-gray-800 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 transition-all text-white"
                     />
                     <button type="submit" className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors">
@@ -910,7 +885,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
       {/* Control Bar */}
       <footer className="h-20 bg-[#0F172A] border-t border-gray-800 px-4 md:px-12 flex justify-between items-center z-50">
         <div className="flex gap-4">
-          <button 
+          <button
             onClick={toggleMic}
             style={{ borderRadius: '22px' }}
             className={`w-12 h-12 flex items-center justify-center transition-all group relative ${isMicOn ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
@@ -920,7 +895,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               {isMicOn ? t('classroom.mute_mic') : t('classroom.unmute_mic')}
             </span>
           </button>
-          <button 
+          <button
             onClick={toggleCam}
             style={{ borderRadius: '22px' }}
             className={`w-12 h-12 flex items-center justify-center transition-all group relative ${isCamOn ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
@@ -930,7 +905,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               {isCamOn ? t('classroom.stop_video') : t('classroom.start_video')}
             </span>
           </button>
-          <button 
+          {isTeacher && (
+          <button
              onClick={toggleRecording}
              style={{ borderRadius: '22px' }}
              className={`w-12 h-12 flex items-center justify-center transition-all group relative ${isRecording ? 'bg-red-600/20 text-red-500 border border-red-500/20' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
@@ -940,23 +916,26 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               {isRecording ? t('classroom.stop_recording') : t('classroom.recording')}
             </span>
           </button>
+          )}
         </div>
 
         <div className="flex gap-4 md:gap-8 items-center bg-white/5 px-4 md:px-8 py-2 rounded-3xl border border-white/5 shadow-inner">
+          {isTeacher && (
           <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={liveMode === 'local' ? stopScreenShare : startScreenShare}>
             <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${liveMode === 'local' ? 'bg-orange-600/20 text-orange-400 border-orange-500/30' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600/30 border-blue-500/30'} border`}>
               <Monitor size={18} />
             </div>
-            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${liveMode === 'local' ? 'text-orange-400' : 'text-blue-400'}`}>{liveMode === 'local' ? 'STOP SHARE' : 'SHARE SCREEN'}</span>
+            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${liveMode === 'local' ? 'text-orange-400' : 'text-blue-400'}`}>{liveMode === 'local' ? t('classroom.stop_share') : t('classroom.screen')}</span>
           </div>
+          )}
           <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowChat(!showChat)}>
             <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showChat ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
               <MessageSquare size={18} />
             </div>
             <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('classroom.chat')}</span>
           </div>
-          <div className="hidden sm:flex flex-col items-center gap-1 group cursor-pointer">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center group-hover:bg-white/5 transition-all">
+          <div className="hidden sm:flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowTranscript((value) => !value)}>
+            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showTranscript ? 'bg-white/10 text-white' : 'group-hover:bg-white/5'}`}>
               <Languages size={18} />
             </div>
             <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('classroom.translate')}</span>
@@ -969,8 +948,9 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
           </div>
         </div>
 
+        {isTeacher ? (
         <div className="hidden md:flex w-[140px] justify-end">
-           <button 
+           <button
             onClick={toggleRecording}
             className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all ${isRecording ? 'bg-red-600/10 border-red-500/20' : 'bg-white/5 border-white/10 text-gray-500'}`}
            >
@@ -981,6 +961,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit }) =
               <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-gray-500'}`} />
            </button>
         </div>
+        ) : (
+          <div className="hidden md:flex w-[140px] justify-end">
+            <button className="flex items-center gap-3 px-4 py-2 rounded-xl border bg-white/5 border-white/10 text-gray-400">
+              <Hand size={16} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">{t('classroom.raise_hand')}</span>
+            </button>
+          </div>
+        )}
       </footer>
     </div>
   );

@@ -16,3 +16,5 @@ tmp/
 *.mp4
 *.wav
 *.mp3
+.playwright-cli/
+output/playwright/screenshots/

@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
-import { 
-  Plus, 
-  Search, 
-  Volume2, 
-  PenTool, 
-  LayoutGrid, 
-  List, 
-  ChevronLeft, 
+import { vocabularyApi, learningRecordsApi, type VocabularyItem, type LearningRecord } from '../services/apiClient.ts';
+import {
+  Plus,
+  Search,
+  Volume2,
+  PenTool,
+  LayoutGrid,
+  List,
+  ChevronLeft,
   ChevronRight,
   Puzzle,
   Calendar,
@@ -19,73 +20,65 @@ import {
   Trophy,
   ArrowRight,
   BookOpen,
+  FileWarning,
   Filter,
   Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// Word Metadata: char, pinyin, meaning (ru), initials, finals, rhyme, progress
-const INITIAL_WORDS = [
-  { id: 1, char: '你好', pinyin: 'nǐ hǎo', meaning: 'Привет', initial: 'n', final: 'i/ao', rhyme: 'ao', progress: 90, status: 'Mastered' },
-  { id: 2, char: '老师', pinyin: 'lǎo shī', meaning: 'Учитель', initial: 'l/sh', final: 'ao/i', rhyme: 'i', progress: 85, status: 'Mastered' },
-  { id: 3, char: '学生', pinyin: 'xué sheng', meaning: 'Студент', initial: 'x/sh', final: 'ue/eng', rhyme: 'eng', progress: 80, status: 'Mastered' },
-  { id: 4, char: '中国', pinyin: 'zhōng guó', meaning: 'Китай', initial: 'zh/g', final: 'ong/uo', rhyme: 'uo', progress: 60, status: 'Learning' },
-  { id: 5, char: '学习', pinyin: 'xué xí', meaning: 'Учиться', initial: 'x/x', final: 'ue/i', rhyme: 'i', progress: 50, status: 'Learning' },
-  { id: 6, char: '喜欢', pinyin: 'xǐ huan', meaning: 'Нравиться', initial: 'x/h', final: 'i/uan', rhyme: 'uan', progress: 55, status: 'Learning' },
-  { id: 7, char: '没有', pinyin: 'méi yǒu', meaning: 'Нет, не иметь', initial: 'm/y', final: 'ei/ou', rhyme: 'ou', progress: 20, status: 'New' },
-  { id: 8, char: '时候', pinyin: 'shí hou', meaning: 'Время', initial: 'sh/h', final: 'i/ou', rhyme: 'ou', progress: 15, status: 'New' },
-  { id: 9, char: '再见', pinyin: 'zài jiàn', meaning: 'До свидания', initial: 'z/j', final: 'ai/ian', rhyme: 'ian', progress: 10, status: 'New' },
-  { id: 10, char: '妈妈', pinyin: 'mā ma', meaning: 'Мама', initial: 'm', final: 'a', rhyme: 'a', progress: 95, status: 'Mastered' },
-  { id: 11, char: '爸爸', pinyin: 'bà ba', meaning: 'Папа', initial: 'b', final: 'a', rhyme: 'a', progress: 92, status: 'Mastered' },
-  { id: 12, char: '医生', pinyin: 'yī shēng', meaning: 'Врач', initial: 'y/sh', final: 'i/eng', rhyme: 'eng', progress: 75, status: 'Learning' },
-];
+function computeStatus(record: LearningRecord | undefined): 'Mastered' | 'Learning' | 'New' {
+  if (!record) return 'New';
+  if (record.status === 'completed' && record.score >= 80) return 'Mastered';
+  if (record.status === 'completed' || record.attemptsCount > 0) return 'Learning';
+  return 'New';
+}
 
-const VocabularyCard = ({ word, onStudy }: { word: any, onStudy: (w: any) => void, key?: any }) => {
+const VocabularyCard = ({ word, onStudy, status, progress }: { word: VocabularyItem, onStudy: (w: VocabularyItem) => void, status: string, progress: number }) => {
   const { t } = useLanguage();
   return (
-    <div 
+    <div
       onClick={() => onStudy(word)}
       className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4 hover:shadow-xl hover:border-[#0056D2] transition-all group cursor-pointer relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
         <Sparkles size={18} className="text-[#0056D2]" />
       </div>
-      
+
       <div className="flex justify-between items-start">
         <div>
-          <div className="text-4xl font-bold text-gray-900 mb-1 font-noto">{word.char}</div>
+          <div className="text-4xl font-bold text-gray-900 mb-1 font-noto">{word.zhText}</div>
           <div className="text-sm font-medium text-gray-400 font-mono">{word.pinyin}</div>
         </div>
         <div className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-          word.status === 'Mastered' ? 'bg-green-100 text-green-700' : 
-          word.status === 'Learning' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-[#0056D2]'
+          status === 'Mastered' ? 'bg-green-100 text-green-700' :
+          status === 'Learning' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-[#0056D2]'
         }`}>
-          {word.status === 'Mastered' ? t('vocab.mastered') : word.status === 'Learning' ? t('vocab.learning') : t('vocab.new')}
+          {status === 'Mastered' ? t('vocab.mastered') : status === 'Learning' ? t('vocab.learning') : t('vocab.new')}
         </div>
       </div>
-      
-      <div className="text-base font-bold text-gray-700">{word.meaning}</div>
-      
+
+      <div className="text-base font-bold text-gray-700">{word.translationRu}</div>
+
       <div className="flex items-center gap-4 mt-auto">
         <div className="flex-1">
           <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
             <span>{t('vocab.mastery')}</span>
-            <span>{word.progress}%</span>
+            <span>{progress}%</span>
           </div>
           <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-            <motion.div 
+            <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${word.progress}%` }}
+              animate={{ width: `${progress}%` }}
               className={`h-full rounded-full ${
-                word.status === 'Mastered' ? 'bg-green-500' : 
-                word.status === 'Learning' ? 'bg-orange-500' : 'bg-[#0056D2]'
+                status === 'Mastered' ? 'bg-green-500' :
+                status === 'Learning' ? 'bg-orange-500' : 'bg-[#0056D2]'
               }`}
             />
           </div>
         </div>
         <div className="flex gap-1">
-          <button 
-            onClick={(e) => { e.stopPropagation(); ttsService.speak(word.char); }}
+          <button
+            onClick={(e) => { e.stopPropagation(); ttsService.speak(word.zhText); }}
             className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#0056D2] hover:bg-blue-50 transition-all hover:scale-110 active:scale-95"
           >
             <Volume2 size={18} />
@@ -98,17 +91,17 @@ const VocabularyCard = ({ word, onStudy }: { word: any, onStudy: (w: any) => voi
 
 interface Question {
   type: 'mc_ru_zh' | 'mc_zh_ru' | 'pronounce' | 'rhyme';
-  word: any;
-  options?: any[];
-  correctAnswer: any;
+  word: VocabularyItem;
+  options?: VocabularyItem[];
+  correctAnswer: string;
 }
 
-const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: any[], onFinish: () => void, groupName?: string }) => {
+const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: VocabularyItem[], onFinish: () => void, groupName?: string }) => {
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedOption, setSelectedOption] = useState<any>(null);
-  const [isJuice, setIsJuice] = useState(false); // For "Correction" state
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isJuice, setIsJuice] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
   const [lastScore, setLastScore] = useState<number | null>(null);
@@ -116,15 +109,14 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
   const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
-    // Generate simple session sequence
     const generated = initialWords.flatMap(word => {
-      const qTypes: Question['type'] [] = ['mc_ru_zh', 'mc_zh_ru', 'pronounce'];
+      const qTypes: Question['type'][] = ['mc_ru_zh', 'mc_zh_ru', 'pronounce'];
       return qTypes.map(type => {
-        let options: any[] | undefined;
+        let options: VocabularyItem[] | undefined;
         if (type.startsWith('mc')) {
           options = [...initialWords]
             .sort(() => Math.random() - 0.5)
-            .filter(w => w.id !== word.id)
+            .filter(w => w.taskId !== word.taskId)
             .slice(0, 3);
           options.push(word);
           options.sort(() => Math.random() - 0.5);
@@ -133,28 +125,39 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
           type,
           word,
           options,
-          correctAnswer: type === 'mc_ru_zh' ? word.char : 
-                         type === 'mc_zh_ru' ? word.meaning : 
-                         word.char
+          correctAnswer: type === 'mc_ru_zh' ? word.zhText :
+                         type === 'mc_zh_ru' ? word.translationRu :
+                         word.zhText
         };
       });
-    }).sort(() => Math.random() - 0.5).slice(0, 5 + initialWords.length);
-    
+    }).sort(() => Math.random() - 0.5).slice(0, Math.max(5, initialWords.length * 2));
+
     setQuestions(generated);
   }, [initialWords]);
 
   const currentQ = questions[currentIndex];
 
+  const saveRecord = useCallback(async (word: VocabularyItem, questionScore: number) => {
+    try {
+      await learningRecordsApi.save(word.taskId, {
+        context: 'vocabulary',
+        status: questionScore >= 80 ? 'completed' : 'in_progress',
+        score: questionScore
+      });
+    } catch (err) {
+      console.error('Failed to save vocabulary learning record:', err);
+    }
+  }, []);
+
   const handleCheck = () => {
     if (currentQ.type === 'pronounce') {
-      // Simulate voice check with score threshold logic
-      // Generate a realistic score range (65-100)
       const simulatedScore = Math.floor(Math.random() * 35) + 65;
       const correct = simulatedScore >= 80;
-      
+
       setLastScore(simulatedScore);
       setIsCorrect(correct);
       if (correct) setScore(s => s + 1);
+      saveRecord(currentQ.word, simulatedScore);
     } else {
       const correct = selectedOption === currentQ.correctAnswer;
       setIsCorrect(correct);
@@ -180,7 +183,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
 
   if (showResult) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="max-w-xl mx-auto bg-white rounded-3xl p-12 text-center shadow-2xl border border-gray-100"
@@ -190,7 +193,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
         </div>
         <h2 className="text-3xl font-bold text-gray-900 mb-2">{t('vocab.session_complete')}</h2>
         <p className="text-gray-500 mb-8">{t('vocab.session_desc').replace('{score}', score.toString())}</p>
-        
+
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
             <div className="text-2xl font-bold text-[#0056D2]">{Math.round((score / questions.length) * 100)}%</div>
@@ -202,7 +205,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
           </div>
         </div>
 
-        <button 
+        <button
           onClick={onFinish}
           className="w-full bg-[#0056D2] text-white py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all shadow-lg hover:scale-[1.02] active:scale-95"
         >
@@ -220,7 +223,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
           <ChevronLeft size={24} />
         </button>
         <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-          <motion.div 
+          <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${((currentIndex) / questions.length) * 100}%` }}
             className="h-full bg-[#0056D2] rounded-full"
@@ -230,7 +233,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div 
+        <motion.div
           key={currentIndex}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -243,15 +246,15 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
               {currentQ.type === 'mc_zh_ru' && t('vocab.translate_to_ru')}
               {currentQ.type === 'pronounce' && t('vocab.pronounce')}
             </h2>
-            
+
             <div className="inline-block p-10 bg-white rounded-[2.5rem] shadow-xl border border-gray-100 relative mb-8">
               <div className="text-6xl font-bold mb-4 font-noto">
-                {currentQ.type === 'mc_ru_zh' ? currentQ.word.meaning : currentQ.word.char}
+                {currentQ.type === 'mc_ru_zh' ? currentQ.word.translationRu : currentQ.word.zhText}
               </div>
               <div className="flex items-center justify-center gap-2">
-                <button 
+                <button
                   id="vocal-trigger-learning"
-                  onClick={() => ttsService.speak(currentQ.word.char)}
+                  onClick={() => ttsService.speak(currentQ.word.zhText)}
                   className="w-16 h-16 bg-[#0056D2] text-white rounded-full hover:bg-blue-700 transition-all shadow-lg hover:scale-110 active:scale-95 flex items-center justify-center group relative overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
@@ -264,7 +267,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
           <div className="grid grid-cols-1 gap-4">
             {currentQ.type.startsWith('mc') ? (
               currentQ.options?.map((opt, i) => {
-                const val = currentQ.type === 'mc_ru_zh' ? opt.char : opt.meaning;
+                const val = currentQ.type === 'mc_ru_zh' ? opt.zhText : opt.translationRu;
                 const isSelected = selectedOption === val;
                 return (
                   <button
@@ -272,8 +275,8 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
                     disabled={isJuice}
                     onClick={() => setSelectedOption(val)}
                     className={`p-6 rounded-2xl border-2 text-left font-bold transition-all flex items-center justify-between group ${
-                      isSelected 
-                        ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]' 
+                      isSelected
+                        ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]'
                         : 'border-gray-100 bg-white text-gray-700 hover:border-gray-300'
                     }`}
                   >
@@ -290,7 +293,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
               <div className="flex flex-col items-center gap-8 py-10">
                 <div className="flex gap-2 items-end h-12">
                    {[0.4, 0.6, 1, 0.8, 1, 0.4, 1, 0.7, 0.3, 1].map((h, i) => (
-                    <motion.div 
+                    <motion.div
                       key={i}
                       animate={isRecording ? { height: [h*100+'%', (h*0.4)*100+'%', h*100+'%'] } : { height: '20%' }}
                       transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.05 }}
@@ -298,7 +301,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
                     />
                   ))}
                 </div>
-                <button 
+                <button
                   onMouseDown={() => setIsRecording(true)}
                   onMouseUp={() => { setIsRecording(false); handleCheck(); }}
                   className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
@@ -336,13 +339,13 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
                 )}
               </h4>
               <p className={`text-sm ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                {isCorrect 
-                  ? (lastScore !== null ? t('vocab.pron_great') : t('vocab.pron_well')) 
+                {isCorrect
+                  ? (lastScore !== null ? t('vocab.pron_great') : t('vocab.pron_well'))
                   : (lastScore !== null ? t('vocab.pron_low') : `${t('vocab.correct_is')} ${currentQ.correctAnswer}`)}
               </p>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleNext}
             className={`px-10 py-4 rounded-2xl font-bold text-white transition-all shadow-lg ${
               isCorrect ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
@@ -355,12 +358,12 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
 
       {!isJuice && currentQ.type.startsWith('mc') && (
         <div className="mt-12 text-center">
-          <button 
+          <button
             disabled={!selectedOption}
             onClick={handleCheck}
             className={`w-full max-w-sm py-4 rounded-2xl font-bold text-lg shadow-xl transition-all ${
-              selectedOption 
-                ? 'bg-[#0056D2] text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95' 
+              selectedOption
+                ? 'bg-[#0056D2] text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
           >
@@ -377,37 +380,97 @@ const VocabularyView = () => {
   const [view, setView] = useState<'bank' | 'learning'>('bank');
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [sessionWords, setSessionWords] = useState<any[]>([]);
+  const [sessionWords, setSessionWords] = useState<VocabularyItem[]>([]);
   const [sessionGroup, setSessionGroup] = useState<string>('');
+  const [vocabItems, setVocabItems] = useState<VocabularyItem[]>([]);
+  const [learningRecords, setLearningRecords] = useState<LearningRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredWords = INITIAL_WORDS.filter(w => {
-    const matchesFilter = filter === 'All' || w.status === filter;
-    const matchesSearch = w.char.includes(search) || w.meaning.toLowerCase().includes(search.toLowerCase()) || w.pinyin.includes(search);
+  useEffect(() => {
+    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    Promise.all([
+      vocabularyApi.list(courseId),
+      learningRecordsApi.list(courseId, 'vocabulary')
+    ]).then(([items, records]) => {
+      setVocabItems(items);
+      setLearningRecords(records);
+      setLoading(false);
+    }).catch((err) => {
+      console.error('Failed to load vocabulary:', err);
+      setError(t('vocab.load_error'));
+      setLoading(false);
+    });
+  }, []);
+
+  const getRecord = (taskId: string): LearningRecord | undefined =>
+    learningRecords.find(r => r.taskId === taskId);
+
+  const getStatus = (item: VocabularyItem): 'Mastered' | 'Learning' | 'New' => {
+    const record = getRecord(item.taskId);
+    return computeStatus(record);
+  };
+
+  const getProgress = (item: VocabularyItem): number => {
+    const record = getRecord(item.taskId);
+    if (!record) return 0;
+    if (record.status === 'completed' && record.score >= 80) return Math.min(record.score, 100);
+    return Math.min(record.attemptsCount * 25, 75);
+  };
+
+  const filteredWords = vocabItems.filter(w => {
+    const status = getStatus(w);
+    const matchesFilter = filter === 'All' || status === filter;
+    const matchesSearch = w.zhText.includes(search) || w.translationRu.toLowerCase().includes(search.toLowerCase()) || w.pinyin.includes(search);
     return matchesFilter && matchesSearch;
   });
 
-  // Group by finals or rhymes (Duolingo Style clusters)
   const phoneticGroups = useMemo(() => {
-    const groups: { [key: string]: any[] } = {};
-    INITIAL_WORDS.forEach(w => {
-      if (!groups[w.rhyme]) groups[w.rhyme] = [];
-      groups[w.rhyme].push(w);
+    const groups: { [key: string]: VocabularyItem[] } = {};
+    vocabItems.forEach(w => {
+      const key = w.rhymeGroup || w.final || 'other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(w);
     });
     return Object.entries(groups).filter(([_, list]) => list.length >= 2);
-  }, []);
+  }, [vocabItems]);
 
-  const startSession = (words: any[], groupName?: string) => {
+  const masteredCount = vocabItems.filter(w => getStatus(w) === 'Mastered').length;
+
+  const startSession = (words: VocabularyItem[], groupName?: string) => {
     setSessionWords(words);
     setSessionGroup(groupName || '');
     setView('learning');
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">{t('vocab.loading')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center max-w-md">
+          <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 font-medium">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (view === 'learning') {
     return (
       <div id="vocabulary-learning" className="min-h-screen py-12 px-4">
-        <LearningSession 
-          initialWords={sessionWords} 
-          onFinish={() => setView('bank')} 
+        <LearningSession
+          initialWords={sessionWords}
+          onFinish={() => setView('bank')}
           groupName={sessionGroup}
         />
       </div>
@@ -428,13 +491,13 @@ const VocabularyView = () => {
              </div>
              <div className="flex items-center gap-2 px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold border border-green-100">
                <Trophy size={14} />
-               92 {t('vocab.mastered')}
+               {masteredCount} {t('vocab.mastered')}
              </div>
           </div>
         </div>
         <div className="flex gap-3">
-          <button 
-            onClick={() => startSession(INITIAL_WORDS.slice(0, 5), 'Daily Mix')}
+          <button
+            onClick={() => startSession(vocabItems.filter(w => getStatus(w) !== 'Mastered').slice(0, 5), 'Daily Mix')}
             className="flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white font-bold rounded-2xl shadow-xl hover:opacity-90 transition-all hover:scale-105 active:scale-95"
           >
             <Sparkles size={20} />
@@ -444,6 +507,7 @@ const VocabularyView = () => {
       </div>
 
       {/* Phonetic Study Clusters (Duolingo Style) */}
+      {phoneticGroups.length > 0 && (
       <section className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -454,7 +518,7 @@ const VocabularyView = () => {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {phoneticGroups.map(([rhyme, list], idx) => (
-            <div 
+            <div
               key={idx}
               className="bg-white border-2 border-gray-100 rounded-3xl p-6 hover:border-blue-200 transition-all group relative overflow-hidden"
             >
@@ -463,11 +527,11 @@ const VocabularyView = () => {
               <h3 className="text-lg font-bold text-gray-900 mb-4">{list.length} {t('vocab.cluster')}</h3>
               <div className="flex gap-1 mb-6">
                 {list.slice(0, 3).map((w, i) => (
-                  <span key={i} className="text-xl font-noto bg-gray-50 px-2 py-1 rounded-lg">{w.char}</span>
+                  <span key={i} className="text-xl font-noto bg-gray-50 px-2 py-1 rounded-lg">{w.zhText}</span>
                 ))}
                 {list.length > 3 && <span className="text-xs text-gray-400 self-end">+{list.length - 3}</span>}
               </div>
-              <button 
+              <button
                 onClick={() => startSession(list, `Rhyme -${rhyme}`)}
                 className="w-full py-2.5 bg-blue-50 text-[#0056D2] font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#0056D2] hover:text-white transition-all flex items-center justify-center gap-2"
               >
@@ -477,6 +541,7 @@ const VocabularyView = () => {
           ))}
         </div>
       </section>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 sticky top-0 z-10 py-4 bg-gray-50/80 backdrop-blur-md">
@@ -493,27 +558,31 @@ const VocabularyView = () => {
             </button>
           ))}
         </div>
-        
+
         <div className="relative w-full lg:w-96">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#0056D2] transition-colors" size={20} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('vocab.search_placeholder')} 
+            placeholder={t('vocab.search_placeholder')}
             className="w-full bg-white border border-gray-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-[#0056D2] transition-all shadow-sm"
           />
         </div>
       </div>
 
       {/* Main Grid */}
+      {vocabItems.length > 0 ? (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {filteredWords.map((word) => (
-          <VocabularyCard 
-            key={word.id} 
-            word={word} 
-            onStudy={() => startSession([word], word.char)} 
-          />
+          <div key={word.taskId}>
+            <VocabularyCard
+              word={word}
+              status={getStatus(word)}
+              progress={getProgress(word)}
+              onStudy={(w) => startSession([w], w.zhText)}
+            />
+          </div>
         ))}
         <button className="bg-dashed-border bg-gray-50/50 rounded-2xl p-6 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 group hover:border-[#0056D2] hover:bg-white transition-all text-gray-400 hover:text-[#0056D2] min-h-[220px]">
           <div className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center group-hover:border-[#0056D2] transition-colors">
@@ -522,12 +591,20 @@ const VocabularyView = () => {
           <span className="font-bold uppercase tracking-widest text-xs">{t('vocab.add_word')}</span>
         </button>
       </div>
+      ) : (
+        <div className="text-center py-16">
+          <BookOpen size={64} className="mx-auto text-gray-200 mb-4" />
+          <p className="text-gray-400 font-medium text-lg">{t('vocab.empty')}</p>
+          <p className="text-gray-400 text-sm mt-2">{t('vocab.empty_desc')}</p>
+        </div>
+      )}
 
       {/* Spaced Repetition Hero Card */}
+      {vocabItems.length > 0 && (
       <section className="bg-[#0056D2] rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl -mr-20 -mt-20" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10" />
-        
+
         <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-12">
           <div className="max-w-xl text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest mb-6">
@@ -535,9 +612,9 @@ const VocabularyView = () => {
               {t('vocab.recommended')}
             </div>
             <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">{t('vocab.master_title')}</h2>
-            <p className="text-blue-100 text-lg mb-8 opacity-90 leading-relaxed font-medium">{t('vocab.ai_analyze')} <span className="text-white underline underline-offset-4 decoration-yellow-400 font-bold">Rhymes ending in -uo and -ie.</span></p>
-            <button 
-              onClick={() => startSession(INITIAL_WORDS.filter(w => w.status !== 'Mastered').slice(0, 5), 'Spaced Repetition')}
+            <p className="text-blue-100 text-lg mb-8 opacity-90 leading-relaxed font-medium">{t('vocab.ai_analyze')}</p>
+            <button
+              onClick={() => startSession(vocabItems.filter(w => getStatus(w) !== 'Mastered').slice(0, 5), 'Spaced Repetition')}
               className="px-10 py-5 bg-white text-[#0056D2] font-bold rounded-[1.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 mx-auto lg:mx-0 group text-lg"
             >
               {t('vocab.start_ai')}
@@ -553,6 +630,7 @@ const VocabularyView = () => {
           </div>
         </div>
       </section>
+      )}
 
       {/* Footer Nav Info */}
       <div className="flex justify-center items-center gap-8 py-8 border-t border-gray-100">

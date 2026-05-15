@@ -1,0 +1,9 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8090:80"
+    volumes:
+      - ../dist:/usr/share/nginx/html:ro
+      - ./nginx/nginx.host-backend.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped

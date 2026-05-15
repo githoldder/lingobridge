@@ -22,6 +22,25 @@ npm run build
 npm run lint
 ```
 
+## Local Simulation Order
+
+Use PM2 for local port and process management before Docker packaging:
+
+```bash
+npm run build
+npm run pm2:start
+pm2 list
+curl --noproxy '*' -sS http://127.0.0.1:3001/api/v1/health
+curl --noproxy '*' -sS -o /dev/null -w '%{http_code} %{content_type}\n' http://127.0.0.1:4174/
+```
+
+Local stable ports:
+
+- Backend API: `127.0.0.1:3001`
+- Frontend preview: `127.0.0.1:4174`
+
+Only after PM2-managed local E2E passes should the project move to Docker packaging, Tencent Cloud CLI deployment, and service mounting.
+
 Current frontend entry points remain at the repository root:
 
 - `src/`
@@ -77,4 +96,3 @@ Out of scope for MVP:
 ## Security
 
 Never commit real secrets. Local Obsidian server notes may contain plaintext keys and tokens; only sanitized summaries may be copied into this repository. `.env*` is ignored except `.env.example`.
-

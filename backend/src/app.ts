@@ -2,6 +2,7 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import path from 'node:path';
 import { readDb, writeDb } from './db.ts';
 import { saveBase64File, storageRoot } from './storage.ts';
+import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
 import type { CoursePage, Exercise, FileMetadata } from './types.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
@@ -33,27 +34,6 @@ function createPagesFromCourseware(courseId: string, filename: string, fileUrl: 
     audioText: pageNumber === 1 ? '大家好，欢迎来到中文课。' : pageNumber === 2 ? '请跟着老师朗读这一页。' : '请完成本页的跟读练习。',
     fileUrl
   }));
-}
-
-function createExercisesFromExcel(courseId: string, filename: string): Exercise[] {
-  return [
-    {
-      id: crypto.randomUUID(),
-      courseId,
-      pageNumber: 1,
-      prompt: `${filename}: 请朗读“大家好”。`,
-      answer: '大家好',
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: crypto.randomUUID(),
-      courseId,
-      pageNumber: 2,
-      prompt: `${filename}: 请朗读“我来自哈萨克斯坦”。`,
-      answer: '我来自哈萨克斯坦',
-      createdAt: new Date().toISOString()
-    }
-  ];
 }
 
 export function createApp() {
@@ -102,7 +82,7 @@ export function createApp() {
     const courses = db.courses.map((course) => ({
       ...course,
       pagesCount: db.coursePages.filter((page) => page.courseId === course.id).length,
-      exercisesCount: db.exercises.filter((exercise) => exercise.courseId === course.id).length,
+      exercisesCount: db.learningTasks.filter((t) => t.courseId === course.id && t.publishToHomework).length,
       recordingsCount: db.recordings.filter((recording) => recording.courseId === course.id).length
     }));
     ok(res, courses);
@@ -156,17 +136,27 @@ export function createApp() {
 
     let pages: CoursePage[] = [];
     let exercises: Exercise[] = [];
+    let tasks: unknown[] = [];
+    let vocab: unknown[] = [];
+    let parseErrors: string[] = [];
+
     if (ext === 'pdf' || ext === 'pptx') {
       pages = createPagesFromCourseware(courseId, filename, saved.url);
       db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
     }
     if (ext === 'xlsx') {
-      exercises = createExercisesFromExcel(courseId, filename);
-      db.exercises = db.exercises.filter((exercise) => exercise.courseId !== courseId).concat(exercises);
+      const result = parseExcel(saved.absolutePath, courseId, fileMeta.id);
+      if (result.errors.length > 0) {
+        parseErrors = result.errors;
+      }
+      upsertTasks(db, result.learningTasks);
+      upsertVocabulary(db, result.vocabularyItems);
+      tasks = result.learningTasks;
+      vocab = result.vocabularyItems;
     }
 
     await writeDb(db);
-    ok(res, { file: fileMeta, pages, exercises });
+    ok(res, { file: fileMeta, pages, exercises, tasks, vocabulary: vocab, warnings: parseErrors.length > 0 ? parseErrors : undefined });
   });
 
   app.get('/api/v1/exercises', async (req, res) => {
@@ -174,6 +164,86 @@ export function createApp() {
     const courseId = String(req.query.courseId || 'course-1');
     const page = req.query.page ? Number(req.query.page) : undefined;
     ok(res, db.exercises.filter((item) => item.courseId === courseId && (!page || item.pageNumber === page)));
+  });
+
+  app.get('/api/v1/homework/tasks', async (req, res) => {
+    const db = await readDb();
+    const courseId = String(req.query.courseId || '');
+    const unit = req.query.unit ? Number(req.query.unit) : undefined;
+    const lesson = req.query.lesson ? Number(req.query.lesson) : undefined;
+    let items = db.learningTasks.filter((t) => t.publishToHomework);
+    if (courseId) items = items.filter((t) => t.courseId === courseId);
+    if (unit !== undefined) items = items.filter((t) => t.unit === unit);
+    if (lesson !== undefined) items = items.filter((t) => t.lesson === lesson);
+    items.sort((a, b) => a.sortOrder - b.sortOrder);
+    ok(res, items);
+  });
+
+  app.get('/api/v1/vocabulary', async (req, res) => {
+    const db = await readDb();
+    const courseId = String(req.query.courseId || '');
+    const q = String(req.query.q || '').toLowerCase();
+    const initial = String(req.query.initial || '');
+    const final_ = String(req.query.final || '');
+    const tone = String(req.query.tone || '');
+    let items = db.vocabularyItems;
+    if (courseId) items = items.filter((v) => v.courseId === courseId);
+    if (q) items = items.filter((v) => v.zhText.includes(q) || v.pinyin.toLowerCase().includes(q));
+    if (initial) items = items.filter((v) => v.initial === initial);
+    if (final_) items = items.filter((v) => v.final === final_);
+    if (tone) items = items.filter((v) => v.tone === tone);
+    ok(res, items);
+  });
+
+  app.post('/api/v1/learning-records', async (req, res) => {
+    const { taskId, context = 'homework', status = 'completed', score = 0 } = req.body ?? {};
+    if (!taskId) return fail(res, 400, 'taskId is required');
+    const db = await readDb();
+    const studentId = currentUserId(req) || 'student-1';
+    const existing = db.learningRecords.find(
+      (r) => r.studentId === studentId && r.taskId === taskId
+    );
+    const now = new Date().toISOString();
+    if (existing) {
+      existing.status = status;
+      existing.score = Math.max(existing.score, Number(score));
+      existing.attemptsCount += 1;
+      existing.lastRecordingId = req.body?.recordingId || existing.lastRecordingId;
+      existing.completedAt = status === 'completed' ? now : existing.completedAt;
+      existing.updatedAt = now;
+      await writeDb(db);
+      ok(res, existing);
+    } else {
+      const record = {
+        id: crypto.randomUUID(),
+        studentId,
+        taskId,
+        context,
+        status,
+        score: Number(score),
+        attemptsCount: 1,
+        lastRecordingId: req.body?.recordingId || '',
+        completedAt: status === 'completed' ? now : '',
+        updatedAt: now
+      };
+      db.learningRecords.push(record);
+      await writeDb(db);
+      ok(res, record);
+    }
+  });
+
+  app.get('/api/v1/learning-records', async (req, res) => {
+    const db = await readDb();
+    const studentId = currentUserId(req) || 'student-1';
+    const courseId = String(req.query.courseId || '');
+    const context = String(req.query.context || '');
+    let records = db.learningRecords.filter((r) => r.studentId === studentId);
+    if (context) records = records.filter((r) => r.context === context);
+    if (courseId) {
+      const taskIds = db.learningTasks.filter((t) => t.courseId === courseId).map((t) => t.taskId);
+      records = records.filter((r) => taskIds.includes(r.taskId));
+    }
+    ok(res, records);
   });
 
   app.get('/api/v1/tts', (req, res) => {
@@ -186,7 +256,7 @@ export function createApp() {
   });
 
   app.post('/api/v1/recordings', async (req, res) => {
-    const { courseId = 'course-1', pageNumber = 1, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId = 'course-1', pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
     if (!base64) return fail(res, 400, 'base64 audio is required');
     const db = await readDb();
     const saved = await saveBase64File({ base64, filename, folder: 'recordings' });
@@ -195,6 +265,7 @@ export function createApp() {
       studentId: currentUserId(req) || 'student-1',
       courseId,
       pageNumber: Number(pageNumber),
+      taskId: taskId || undefined,
       audioUrl: saved.url,
       filename,
       durationSec: Number(durationSec),

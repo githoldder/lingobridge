@@ -13,7 +13,6 @@ import HomeView from './HomeView.tsx';
 import TeacherDashboardView from './TeacherDashboardView.tsx';
 import TeacherCoursesView from './TeacherCoursesView.tsx';
 import TeacherClassroomView from './TeacherClassroomView.tsx';
-import StudentClassroomView from './StudentClassroomView.tsx';
 import TeacherStudentsView from './TeacherStudentsView.tsx';
 import TeacherReportsView from './TeacherReportsView.tsx';
 import LoginView from './LoginView.tsx';
@@ -67,9 +66,9 @@ export default function App() {
       case 'teacher-courses':
         return <TeacherCoursesView onNavigate={handleNavigate} />;
       case 'teacher-classroom':
-        return <TeacherClassroomView onExit={handleClassExit} />;
+        return <TeacherClassroomView onExit={handleClassExit} role="teacher" />;
       case 'student-classroom':
-        return <StudentClassroomView onExit={handleClassExit} />;
+        return <TeacherClassroomView onExit={handleClassExit} role="student" />;
       case 'students':
         return <TeacherStudentsView />;
       case 'reports':

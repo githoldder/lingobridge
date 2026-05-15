@@ -77,8 +77,13 @@ const seed: Database = {
       createdAt: now
     }
   ],
+  learningTasks: [],
+  vocabularyItems: [],
+  learningRecords: [],
   recordings: [],
   lectures: [],
+  liveSessions: [],
+  classroomComments: [],
   files: []
 };
 

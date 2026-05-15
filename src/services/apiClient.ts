@@ -42,6 +42,7 @@ export interface Recording {
   studentId: string;
   courseId: string;
   pageNumber: number;
+  taskId?: string;
   audioUrl: string;
   filename: string;
   durationSec: number;
@@ -131,7 +132,7 @@ export const coursesApi = {
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
   async uploadCourseware(courseId: string, file: File) {
-    return request<{ file: unknown; pages: CoursePage[]; exercises: Exercise[] }>('/coursewares', {
+    return request<{ file: unknown; pages: CoursePage[]; exercises: Exercise[]; tasks: LearningTask[]; vocabulary: VocabularyItem[]; warnings?: string[] }>('/coursewares', {
       method: 'POST',
       body: JSON.stringify({
         courseId,
@@ -145,7 +146,7 @@ export const coursesApi = {
 
 export const recordingsApi = {
   list: (courseId = 'course-1', page = 1) => request<Recording[]>(`/recordings?courseId=${courseId}&page=${page}`),
-  async upload(params: { courseId: string; pageNumber: number; blob: Blob; durationSec: number; filename?: string }) {
+  async upload(params: { courseId: string; pageNumber: number; taskId?: string; blob: Blob; durationSec: number; filename?: string }) {
     return request<Recording>('/recordings', {
       method: 'POST',
       body: JSON.stringify({
@@ -173,6 +174,96 @@ export const lecturesApi = {
         base64: await fileToBase64(params.blob)
       })
     });
+  }
+};
+
+export interface LearningTask {
+  id: string;
+  courseId: string;
+  sourceFileId: string;
+  taskId: string;
+  taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';
+  unit: number;
+  lesson: number;
+  lessonTitle: string;
+  pageNumber: number;
+  zhText: string;
+  pinyin: string;
+  translationRu: string;
+  translationKk: string;
+  prompt: string;
+  answer: string;
+  initial: string;
+  final: string;
+  tone: string;
+  rhymeGroup: string;
+  difficulty: number;
+  dueAt: string;
+  publishToHomework: boolean;
+  publishToVocab: boolean;
+  sortOrder: number;
+}
+
+export interface VocabularyItem {
+  id: string;
+  courseId: string;
+  taskId: string;
+  zhText: string;
+  pinyin: string;
+  translationRu: string;
+  translationKk: string;
+  initial: string;
+  final: string;
+  tone: string;
+  rhymeGroup: string;
+  difficulty: number;
+  tags: string;
+  sourceFileId: string;
+}
+
+export interface LearningRecord {
+  id: string;
+  studentId: string;
+  taskId: string;
+  context: 'homework' | 'vocabulary' | 'practice';
+  status: 'not_started' | 'in_progress' | 'completed';
+  score: number;
+  attemptsCount: number;
+  lastRecordingId: string;
+  completedAt: string;
+  updatedAt: string;
+}
+
+export const homeworkApi = {
+  tasks: (courseId: string, unit?: number, lesson?: number) => {
+    let path = `/homework/tasks?courseId=${courseId}`;
+    if (unit !== undefined) path += `&unit=${unit}`;
+    if (lesson !== undefined) path += `&lesson=${lesson}`;
+    return request<LearningTask[]>(path);
+  }
+};
+
+export const vocabularyApi = {
+  list: (courseId: string, params?: { q?: string; initial?: string; final?: string; tone?: string }) => {
+    let path = `/vocabulary?courseId=${courseId}`;
+    if (params?.q) path += `&q=${encodeURIComponent(params.q)}`;
+    if (params?.initial) path += `&initial=${params.initial}`;
+    if (params?.final) path += `&final=${params.final}`;
+    if (params?.tone) path += `&tone=${params.tone}`;
+    return request<VocabularyItem[]>(path);
+  }
+};
+
+export const learningRecordsApi = {
+  save: (taskId: string, params: { context?: string; status?: string; score?: number; recordingId?: string }) =>
+    request<LearningRecord>('/learning-records', {
+      method: 'POST',
+      body: JSON.stringify({ taskId, ...params })
+    }),
+  list: (courseId: string, context?: string) => {
+    let path = `/learning-records?courseId=${courseId}`;
+    if (context) path += `&context=${context}`;
+    return request<LearningRecord[]>(path);
   }
 };
 

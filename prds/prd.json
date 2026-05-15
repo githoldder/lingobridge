@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-14-prd-v2-execution-control",
+  "version": "2026-05-15-prd-v3-customer-delivery-standard",
   "source_of_truth": {
     "path": "/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md",
     "status": "user-reviewed-approved",
@@ -32,33 +32,299 @@
     }
   },
   "implementation_status": {
-    "last_updated": "2026-05-14",
-    "summary": "First MVP vertical slice implemented: backend scaffold, API client, demo login, teacher course upload, student course practice/TTS/recording loop, teacher replay upload, schedule replay loading, and E2E delegation prompt.",
+    "last_updated": "2026-05-15",
+    "summary": "MVP data backbone completed: real Excel parser with schema validation (xlsx package), LearningTask/VocabularyItem database entities, homework/tasks API, vocabulary API, learning-records API. HomeworkView and VocabularyView now fetch from API instead of mock data. Logo replaced with root logo.svg. TeacherCoursesView has separate courseware and Excel upload buttons. Remaining: PDF.js preview/annotation (mock placeholder), virtual background (MediaPipe not implemented), live session API (no WebRTC), MinIO storage (local fs). Tencent Cloud deployment blocked — tccli not installed.",
     "verification": {
       "backend_test": "passed: npm run backend:test, 3 tests",
       "typescript": "passed: npm run lint",
       "frontend_build": "passed: npm run build",
-      "api_smoke": "passed: health, login, courses"
+      "api_smoke": "passed: health, login, courses",
+      "e2e_browser": "passed: 22/22 steps in headed Chromium (fake media stream)",
+      "docker_local": "passed: backend + nginx containers running, health code:0"
     },
     "open_items": [
-      "Run Playwright/browser E2E using docs/03-testing-deployment/e2e-agent-prompt.md",
-      "Verify camera/mic/screen indicator cleanup in a real browser",
-      "Deploy Tencent Cloud public test",
+      "Install Tencent Cloud CLI (tccli) and deploy to CVM for public test",
+      "Verify camera/mic/screen indicator cleanup in a real browser (browser_pending_manual)",
       "Replace fallback PPTX/PDF/Excel handling with real parsers/converters when demo time allows",
       "Add real object storage and cloud TTS providers after MVP path is stable"
     ]
   },
   "mvp_core_loop": [
     "teacher_uploads_ppt_or_pdf",
+    "teacher_uploads_structured_homework_excel",
     "system_generates_course_pages",
+    "system_parses_excel_into_homework_and_vocabulary_bank",
     "student_enters_practice",
     "student_clicks_chinese_tts",
     "student_records_local_audio",
     "audio_uploads_to_cloud_storage",
-    "student_can_play_delete_download_own_recordings"
+    "student_can_play_delete_download_own_recordings",
+    "student_self_studies_vocabulary_from_teacher_excel_bank"
   ],
+  "customer_delivery_revision": {
+    "date": "2026-05-15",
+    "purpose": "将本轮 agent 执行报告从“本地 smoke 通过”升级为可给甲方交付的产品口径：老师端有课件、直播、作业 Excel 三个入口；学生端有直播、homework 录音练习、vocabulary 自学三个入口；Excel 成为作业与单词库的数据标准。",
+    "agent_report_audit": {
+      "accepted": [
+        "PM2、Docker、本地 smoke、headed E2E 的证据可作为本地可运行性证明。",
+        "Tencent Cloud 部署被 tccli 缺失阻塞的判断成立，需要安装并配置腾讯云 CLI 后继续。",
+        "真实摄像头指示器验证无法完全自动化，需要真实硬件和人工观察。"
+      ],
+      "gaps": [
+        "HomeworkView 与 VocabularyView 当前仍以 mock 数据为主，未真正接入老师上传的 Excel 作业数据。",
+        "后端 Excel 解析当前是 fallback 练习生成，不满足“Excel 标准表单 -> 学生作业/单词库”的交付口径。",
+        "虚拟背景不应继续放在 out-of-scope；甲方已明确直播时需要该能力，MVP 可先交付浏览器端虚拟背景。",
+        "Logo 组件仍内嵌旧 SVG，需要替换为根目录 logo.svg 并统一侧栏/落地页使用。"
+      ],
+      "decision": "本轮 PRD 以“学习任务数据标准 + homework/vocabulary 通路打通 + 直播虚拟背景 + logo 替换 + 腾讯云部署”为下一批验收主线。"
+    },
+    "client_answers": [
+      {
+        "question": "腾讯云 CLI 是否需要下载？",
+        "answer": "需要。R048-R053 阻塞不是代码失败，而是开发机缺少 tccli。交付动作是安装 tccli，配置 CAM 子账号 SecretId/SecretKey、地域和 CVM 目标，然后执行镜像/compose/nginx/health 部署验证。密钥只进本机环境变量或 .env，不进仓库。"
+      },
+      {
+        "question": "PPTX 渲染怎么处理？",
+        "answer": "MVP 阶段课件入口支持 pptx/pdf，但由于浏览器端完整还原 PPTX 动画、字体、音频、版式成本高，正式演示建议老师上传 PDF 作为课件展示格式；pptx 作为原文件归档，后端异步转 PDF/图片作为后续增强。"
+      },
+      {
+        "question": "直播虚拟背景怎么实现？",
+        "answer": "参考腾讯会议/Teams 的产品形态，MVP 使用浏览器端 getUserMedia 获取摄像头，MediaPipe Selfie Segmentation 或 TensorFlow.js BodyPix 做人像分割，把人像与背景图/模糊背景合成到 canvas，再用 canvas.captureStream() 替代原摄像头流进入直播/录制。后续如果接入 TRTC，则把合成流作为 custom video track 推送。"
+      },
+      {
+        "question": "学生 homework 和 vocabulary 的数据从哪里来？",
+        "answer": "由老师上传的课程练习 Excel 生成。每一行是一个可练习任务，task_type 决定进入 homework 还是 vocabulary；同一份或多份 Excel 会沉淀为学生 homework 队列和 vocabulary 自学知识库，学生录音、TTS、完成状态和学习记录都绑定到 task_id。"
+      }
+    ],
+    "live_classroom_revision": {
+      "date": "2026-05-15",
+      "purpose": "教师端 live 课堂从“功能展示页”收敛为真实上课工作台：老师优先关注课件/屏幕画面、摄像头、录制状态和学生评论；AI 转录翻译作为可隐藏的辅助面板，不占用主画面。",
+      "teacher_layout_rule": [
+        "默认主区域显示 PDF/屏幕投屏画面，右下或侧边显示摄像头预览。",
+        "顶部或底部保留录制状态、保存按钮、摄像头/麦克风/屏幕共享/PDF 模式切换。",
+        "学生弹幕/评论作为课堂互动面板保留，可折叠但默认可见。",
+        "实时 AI 转录与翻译面板必须可隐藏；教师上课默认隐藏或折叠，仅在录播复盘/学生端回放/字幕模式中展示。"
+      ],
+      "pdf_whiteboard_requirement": {
+        "pdf_preview": "教师端必须支持 PDF 预览、上一页/下一页、页码状态、缩放适配；MVP 推荐使用 PDF.js 将页面渲染到 canvas。",
+        "annotation_layer": "PDF 上方叠加独立 annotation canvas，支持画笔颜色、粗细、橡皮擦、清空当前页、撤销，至少能稳定渲染笔迹。",
+        "library_options": [
+          {
+            "name": "PDF.js",
+            "use": "PDF 渲染与翻页",
+            "reason": "浏览器原生 canvas 渲染 PDF，适合把课件页作为底层画面。"
+          },
+          {
+            "name": "Excalidraw",
+            "use": "嵌入式白板/手绘批注",
+            "reason": "可作为 React component 嵌入，并通过 onChange/imperative API 获取场景元素；适合接近 Excalidraw 的手绘体验。"
+          },
+          {
+            "name": "tldraw",
+            "use": "更完整的无限画布 SDK",
+            "reason": "适合后续多人协同白板，但 MVP 体积和集成复杂度高于轻量 canvas 或 Excalidraw。"
+          }
+        ],
+        "mvp_decision": "MVP 先使用 PDF.js + 自研轻量 annotation canvas，避免引入过重白板编辑器；若甲方明确要求 Excalidraw 质感，再引入 @excalidraw/excalidraw。"
+      },
+      "screen_cast_requirement": {
+        "browser_screen_share": "本地屏幕共享使用 navigator.mediaDevices.getDisplayMedia()，由老师在浏览器授权选择屏幕/窗口/标签页；拿到 MediaStream 后进入课堂画面、录制或 WebRTC/TRTC 推流。",
+        "device_cast_boundary": "纯 Web 页面不能静默向系统外接显示器、投影仪或 Chromecast 发起投屏。若要“真实投屏到设备”，必须走用户授权的浏览器投屏 UI、Google Cast Web Sender SDK、AirPlay/系统投屏，或桌面端封装能力。",
+        "mvp_decision": "MVP 交付真实屏幕共享/本地投屏画面进入课堂，不承诺静默控制外部投影设备；如甲方现场有 Chromecast/会议屏，单独评估 Google Cast Web Sender。"
+      },
+      "auto_recording_requirement": {
+        "entry_behavior": "老师进入课堂后自动准备录制；在浏览器权限允许后自动调用 MediaRecorder 开始录制课程画面流。",
+        "stream_composition": "录制流应由 PDF/屏幕画面、annotation canvas、摄像头画面、麦克风音频混合而成；MVP 可以先录制主画面 + 麦克风 + 摄像头或当前已有 MediaStream。",
+        "save_behavior": "录制分片保存在前端 Blob 队列，结束或定时切片后上传到后端；后端写入 MinIO/S3 兼容对象存储并生成 lecture_recording 元数据。",
+        "permission_boundary": "浏览器安全策略不允许在没有用户授权的情况下自动获取摄像头、麦克风或屏幕；自动录制必须发生在老师已授权媒体权限之后。"
+      },
+      "storage_requirement": {
+        "provider": "MinIO first for MVP private deployment; Tencent COS can be added through the same object-storage adapter.",
+        "upload_mode": "Backend direct upload is acceptable for small MVP files; preferred production path is backend生成 presigned PUT URL，前端直传 MinIO，完成后回调写 metadata。",
+        "objects": [
+          "lecture-recordings/{courseId}/{lectureId}.webm",
+          "student-recordings/{courseId}/{taskId}/{studentId}.webm",
+          "coursewares/{courseId}/{fileId}.pdf"
+        ]
+      }
+    },
+    "teacher_entrypoints": [
+      {
+        "id": "TE01",
+        "name": "上传课件",
+        "route": "teacher-courses",
+        "formats": ["pptx", "pdf"],
+        "mvp_rule": "PDF 是课堂展示一等格式；PPTX 可上传归档，渲染优先走转 PDF/图片，失败时提示老师上传 PDF。"
+      },
+      {
+        "id": "TE02",
+        "name": "直播课堂与虚拟背景",
+        "route": "teacher-classroom",
+        "capabilities": ["camera", "microphone", "screen_share", "pdf_mode", "pdf_page_turning", "canvas_annotation", "student_comments", "hideable_ai_transcript", "auto_recording", "minio_replay_storage", "virtual_background"],
+        "mvp_rule": "虚拟背景先在本地浏览器端合成，不依赖服务端 GPU；需要 HTTPS 或 localhost 才能稳定使用摄像头。"
+      },
+      {
+        "id": "TE03",
+        "name": "上传学生作业 Excel",
+        "route": "teacher-courses",
+        "formats": ["xlsx"],
+        "mvp_rule": "Excel 必须符合 homework_excel_schema；后端校验字段、生成 task_id，并同步到 homework 与 vocabulary。"
+      }
+    ],
+    "student_entrypoints": [
+      {
+        "id": "SE01",
+        "name": "进入实时直播间",
+        "route": "student-classroom",
+        "data_source": "当前课程 live_session 或最近一节课程",
+        "acceptance": "学生侧能从导航/课表进入直播，看到老师视频/屏幕或课件页，后续可接入 TRTC 实时流。"
+      },
+      {
+        "id": "SE02",
+        "name": "homework 路径学习",
+        "route": "homework",
+        "data_source": "Excel 中 publish_to_homework=true 的任务",
+        "acceptance": "学生按课程/单元/课次看到任务路径，进入题目后可听 TTS、录音、上传、回放、删除，并保存完成记录。"
+      },
+      {
+        "id": "SE03",
+        "name": "vocabulary 单词自学",
+        "route": "vocabulary",
+        "data_source": "所有老师已发布 Excel 中 publish_to_vocab=true 的词条",
+        "acceptance": "学生可搜索/筛选词条，按声母、韵母、声调或课程分组练习；发音录音和学习结果写入 learning_records。"
+      }
+    ],
+    "homework_excel_schema": {
+      "file_rule": "一个 Excel 文件对应一门课或一个单元；第一行必须是字段名；建议工作表名为 tasks，MVP 只解析第一个工作表。",
+      "required_columns": [
+        "course_code",
+        "unit",
+        "lesson",
+        "task_id",
+        "task_type",
+        "zh_text",
+        "pinyin",
+        "translation_ru",
+        "translation_kk",
+        "publish_to_homework",
+        "publish_to_vocab"
+      ],
+      "optional_columns": [
+        "course_title",
+        "lesson_title",
+        "page_number",
+        "prompt",
+        "answer",
+        "initial",
+        "final",
+        "tone",
+        "rhyme_group",
+        "difficulty",
+        "due_at",
+        "tags",
+        "audio_text",
+        "teacher_note",
+        "sort_order"
+      ],
+      "task_type_values": ["pronunciation", "vocabulary", "sentence_reading", "dialogue", "listening"],
+      "boolean_rule": "publish_to_homework 和 publish_to_vocab 使用 TRUE/FALSE 或 1/0。",
+      "identity_rule": "task_id 在同一 course_code 内唯一；重复上传同一 task_id 时按最新 Excel 覆盖题干和发布状态，但保留学生历史记录。",
+      "sample_rows": [
+        {
+          "course_code": "PINYIN-01",
+          "unit": 1,
+          "lesson": 1,
+          "task_id": "PINYIN-01-L01-001",
+          "task_type": "pronunciation",
+          "zh_text": "现在上课。",
+          "pinyin": "Xiànzài shàng kè.",
+          "translation_ru": "Начинаем урок.",
+          "translation_kk": "Сабақ басталды.",
+          "publish_to_homework": true,
+          "publish_to_vocab": false,
+          "page_number": 19,
+          "prompt": "请朗读句子，注意第四声。",
+          "answer": "现在上课。",
+          "tone": "4-4-4-4",
+          "difficulty": 1
+        },
+        {
+          "course_code": "PINYIN-01",
+          "unit": 1,
+          "lesson": 1,
+          "task_id": "PINYIN-01-L01-002",
+          "task_type": "vocabulary",
+          "zh_text": "老师",
+          "pinyin": "lǎo shī",
+          "translation_ru": "Учитель",
+          "translation_kk": "Мұғалім",
+          "publish_to_homework": false,
+          "publish_to_vocab": true,
+          "initial": "l/sh",
+          "final": "ao/i",
+          "tone": "3-1",
+          "rhyme_group": "i",
+          "difficulty": 1
+        }
+      ],
+      "pptx_homework_seed": {
+        "source_file": "analysis/data-analysis/拼音1(1).pptx",
+        "last_homework_slides": ["slide17", "slide18", "slide19"],
+        "seed_task_groups": [
+          "朗读声母：b/p/m/f/d/t/n/l/g/k/h/j/q/x/z/c/s/zh/ch/sh/r",
+          "朗读韵母：a/e/ü/i/an/ai/ie/ao/uai/iao/ua/ei/ai/ie/en/ang",
+          "辨别声韵母：b-p、d-t、g-k、j-q-x、zh-ch-sh、n-l、z-s、a-e、i-ü、ao-ou、ie-üe",
+          "朗读单音节：ū/ú/ǔ/ù、āo/áo/ǎo/ào、wēi/wéi/wěi/wèi、yuē/yué/yuě/yuè",
+          "朗读句子：现在上课。请你读。很好。下课。请跟我读。你听，我说。休息一下。"
+        ]
+      }
+    },
+    "data_flow": [
+      "Teacher uploads PDF/PPTX -> file_metadata/course_pages -> teacher-classroom PDF mode and student-classroom page browsing.",
+      "Teacher uploads XLSX -> parser validates schema -> learning_tasks table -> homework assignments and vocabulary bank views.",
+      "Student opens homework -> GET /api/v1/homework/tasks -> TTS -> MediaRecorder -> POST /api/v1/recordings with task_id -> POST /api/v1/learning-records.",
+      "Student opens vocabulary -> GET /api/v1/vocabulary -> TTS/recording/session result -> learning_records aggregated into progress.",
+      "Teacher starts live -> optional virtual background canvas stream -> classroom preview/recording now, TRTC custom stream later."
+    ]
+  },
+  "handoff_for_next_agents": {
+    "date": "2026-05-15",
+    "status": "PRD updated after route/live/courses audit. Some code has been partially corrected, but the items below are not fully delivered.",
+    "non_negotiable_route_contract": [
+      "Teacher live route and student live route must use the same live classroom experience/component family.",
+      "Teacher live route: `teacher-classroom`, role=teacher, can manage class, upload/select PDF, annotate, share screen, record, save replay, moderate comments.",
+      "Student live route: `student-classroom`, role=student, can view teacher live stage/PDF/screen, use camera/mic if allowed, send comments, raise hand, and leave; must not see teacher-only controls.",
+      "`StudentClassroomView` must not be used as the live room. If kept, it is only a course-practice/recording page and must be renamed or routed under homework/practice to avoid future confusion.",
+      "Dashboard and Schedule `Join Live Class` buttons must navigate to `student-classroom`, and that route must resolve to the shared live classroom in student role."
+    ],
+    "forbidden_implementation_mistakes": [
+      "Do not create a separate fake student live page to satisfy routing. Fix the shared route/component contract instead.",
+      "Do not add timer-generated fake danmaku, fake transcript, fake students, fake courses, or fake live sessions as if they were real data.",
+      "Do not hardcode English UI text in teacher courses/live pages; every visible label must use `t(...)` or API-provided user content.",
+      "Do not make AI transcript/translation occupy teacher live default layout. It must stay hidden/collapsed unless explicitly opened.",
+      "Do not claim PPTX is truly rendered if the implementation only shows fallback placeholder pages. Use PDF as MVP first-class display format.",
+      "Do not silently start camera/mic/screen capture. Browser permission prompts are mandatory; auto-recording only starts after permission."
+    ],
+    "partially_completed_context": [
+      "Student dashboard live entry has been redirected in code to the shared classroom component with student role, but live session API/state is still not implemented.",
+      "Teacher live mock auto-danmaku and mock auto-transcript have been removed from code, and transcript defaults hidden, but the page still contains placeholder PDF visuals, placeholder participants, and incomplete data-backed comments.",
+      "Teacher courses visible copy has been moved toward i18n, but full static-text audit across all course/live/schedule/dashboard surfaces remains required.",
+      "TeacherCoursesView loads API courses, but course management is still shallow: no edit/delete/archive/detail page, no separation of courseware upload vs homework Excel upload, and no real Excel parsing."
+    ],
+    "recommended_next_order": [
+      "T24 route guard and live-state API contract",
+      "T25 teacher courses real management and no-mock audit",
+      "T13 Excel parser and schema validation",
+      "T14/T15 homework and vocabulary API wiring",
+      "T20 PDF.js preview/page turning plus annotation canvas",
+      "T21/T22 MinIO recording storage and auto-recording",
+      "T26 full i18n/static text audit",
+      "T12 logo replacement",
+      "T18 Tencent Cloud deployment"
+    ]
+  },
   "okrts": {
-    "objective": "Make the PRD v2.0 MVP demonstrable by 2026-05-15: teacher courseware upload, student course practice, TTS, recording storage/management, teacher replay, and Tencent Cloud public test.",
+    "objective": "Make the PRD v3.0 MVP demonstrable by 2026-05-15: teacher courseware/uploaded Excel, student course practice/homework/vocabulary, TTS, recording storage/management, teacher live/replay, and Tencent Cloud public test.",
     "key_results": [
       {
         "id": "KR1",
@@ -83,12 +349,12 @@
       {
         "id": "KR5",
         "name": "Teacher recording and replay works",
-        "acceptance": "Teacher screen/camera recording is saved; students can find replay by date in schedule/history."
+        "acceptance": "Teacher classroom recording auto-starts after media permission, saves to MinIO/object storage, and students can find replay by date in schedule/history."
       },
       {
         "id": "KR6",
         "name": "Live mode demo works",
-        "acceptance": "Teacher can choose local screen share mode or uploaded/existing PDF mode with PDF page and canvas drawing."
+        "acceptance": "Teacher can choose local screen share mode or uploaded/existing PDF mode; PDF page turning, annotation canvas drawing, camera, recording controls, and student comments work; AI transcript panel is hideable."
       },
       {
         "id": "KR7",
@@ -111,7 +377,7 @@
         "id": "R1",
         "level": "P0",
         "risk": "Scope expands into full LMS or SaaS.",
-        "control": "Use PRD v2.0 as source of truth; do not implement out-of-scope roadmap features."
+        "control": "Use PRD v3.0 as source of truth; do not implement out-of-scope roadmap features."
       },
       {
         "id": "R2",
@@ -185,17 +451,37 @@
       {
         "id": "F08",
         "name": "Replay",
-        "description": "Teacher recording is saved and students can replay by date in schedule/history."
+        "description": "Teacher classroom recording auto-starts after permission, saves to MinIO/S3-compatible object storage, and students can replay by date in schedule/history."
       },
       {
         "id": "F09",
         "name": "Teacher live modes",
-        "description": "Local screen share mode and PDF mode with paging/canvas drawing/camera."
+        "description": "Local screen share mode and PDF mode with PDF.js page turning, annotation canvas drawing, camera preview, recording controls, student comments, and hideable AI transcript panel."
       },
       {
         "id": "F10",
         "name": "Permission lifecycle bugfix",
         "description": "Camera/mic/screen tracks stop reliably."
+      },
+      {
+        "id": "F11",
+        "name": "Teacher virtual background",
+        "description": "Teacher camera can use blur or uploaded/static virtual background during live preview and lecture recording through browser-side canvas stream composition."
+      },
+      {
+        "id": "F12",
+        "name": "Excel homework standard",
+        "description": "Teacher uploads structured Excel; backend validates rows and converts them into homework tasks, vocabulary items, and learning records."
+      },
+      {
+        "id": "F13",
+        "name": "Homework/vocabulary data integration",
+        "description": "Student HomeworkView and VocabularyView consume Excel-derived API data instead of mock-only local arrays."
+      },
+      {
+        "id": "F14",
+        "name": "Live classroom storage and comments",
+        "description": "Teacher live room supports student comment stream, lecture recording metadata, and MinIO-backed media persistence."
       }
     ],
     "out": [
@@ -205,8 +491,7 @@
       "multi_tenant_saas",
       "icp_filing",
       "international_payment",
-      "ai_pronunciation_scoring",
-      "teacher_virtual_background"
+      "ai_pronunciation_scoring"
     ]
   },
   "data_model": {
@@ -214,15 +499,20 @@
       "user(id, username, password_hash, role, display_name, language_pref, created_at)",
       "course(id, teacher_id, title, description, created_at)",
       "course_page(id, course_id, page_number, content_html, audio_text, image_url)",
-      "exercise(id, course_id, page_number, prompt, answer, source_file_id, created_at)",
-      "recording(id, student_id, course_id, page_number, audio_url, duration_sec, created_at)",
-      "lecture_recording(id, course_id, teacher_id, video_url, duration_sec, created_at)",
+      "learning_task(id, course_id, source_file_id, task_id, task_type, unit, lesson, lesson_title, page_number, zh_text, pinyin, translation_ru, translation_kk, prompt, answer, initial, final, tone, rhyme_group, difficulty, due_at, publish_to_homework, publish_to_vocab, sort_order, created_at, updated_at)",
+      "exercise(id, course_id, page_number, task_id, prompt, answer, source_file_id, created_at)",
+      "vocabulary_item(id, course_id, task_id, zh_text, pinyin, translation_ru, translation_kk, initial, final, tone, rhyme_group, difficulty, tags, source_file_id, created_at)",
+      "learning_record(id, student_id, task_id, context, status, score, attempts_count, last_recording_id, completed_at, updated_at)",
+      "recording(id, student_id, course_id, page_number, task_id, audio_url, duration_sec, created_at)",
+      "lecture_recording(id, course_id, teacher_id, live_session_id, video_url, storage_provider, object_key, duration_sec, auto_started_at, saved_at, created_at)",
+      "live_session(id, course_id, teacher_id, status, source_mode, current_page, recording_status, started_at, ended_at)",
+      "classroom_comment(id, live_session_id, student_id, body, created_at, visibility)",
       "file_metadata(id, owner_id, course_id, type, filename, mime_type, size_bytes, storage_url, created_at)"
     ],
     "storage": {
       "course_pages": "object storage or local upload directory for MVP",
       "student_audio": "WebM/Opus object",
-      "lecture_video": "WebM object",
+      "lecture_video": "WebM object in MinIO/S3-compatible storage for MVP",
       "metadata": "PostgreSQL preferred; SQLite/local JSON acceptable only as emergency demo fallback"
     }
   },
@@ -241,19 +531,28 @@
       { "method": "GET", "path": "/api/v1/courses/:id/pages", "purpose": "course pages" },
       { "method": "POST", "path": "/api/v1/coursewares", "purpose": "upload pptx/pdf/xlsx" },
       { "method": "GET", "path": "/api/v1/exercises?courseId=&page=", "purpose": "student practice items from Excel" },
+      { "method": "GET", "path": "/api/v1/homework/tasks?courseId=&unit=&lesson=", "purpose": "Excel-derived homework learning path" },
+      { "method": "GET", "path": "/api/v1/vocabulary?courseId=&q=&initial=&final=&tone=", "purpose": "Excel-derived vocabulary self-study bank" },
+      { "method": "POST", "path": "/api/v1/learning-records", "purpose": "save homework/vocabulary progress and bind latest recording" },
       { "method": "GET", "path": "/api/v1/tts?text=&lang=", "purpose": "tts facade" },
       { "method": "POST", "path": "/api/v1/recordings", "purpose": "upload student recording" },
       { "method": "GET", "path": "/api/v1/recordings?courseId=&page=", "purpose": "list recordings" },
       { "method": "DELETE", "path": "/api/v1/recordings/:id", "purpose": "delete own recording" },
       { "method": "POST", "path": "/api/v1/lectures", "purpose": "upload teacher lecture recording" },
       { "method": "GET", "path": "/api/v1/lectures?courseId=&date=", "purpose": "list replays" },
-      { "method": "DELETE", "path": "/api/v1/lectures/:id", "purpose": "delete replay" }
+      { "method": "DELETE", "path": "/api/v1/lectures/:id", "purpose": "delete replay" },
+      { "method": "POST", "path": "/api/v1/live-sessions", "purpose": "create/start teacher live session and recording state" },
+      { "method": "PATCH", "path": "/api/v1/live-sessions/:id", "purpose": "update source mode/current PDF page/recording status" },
+      { "method": "GET", "path": "/api/v1/live-sessions/active?courseId=", "purpose": "student live room entry" },
+      { "method": "GET", "path": "/api/v1/live-sessions/:id/comments", "purpose": "list student comments" },
+      { "method": "POST", "path": "/api/v1/live-sessions/:id/comments", "purpose": "student sends classroom comment" },
+      { "method": "POST", "path": "/api/v1/uploads/presigned-url", "purpose": "create MinIO/S3-compatible presigned upload URL for lecture/student media" }
     ]
   },
   "frontend_integration_targets": [
     "src/components/LoginView.tsx",
     "src/components/TeacherCoursesView.tsx",
-    "src/components/StudentClassroomView.tsx",
+    "src/components/StudentClassroomView.tsx (legacy practice only; do not use for live route)",
     "src/components/HomeworkView.tsx",
     "src/components/TeacherClassroomView.tsx",
     "src/components/ScheduleView.tsx",
@@ -271,11 +570,11 @@
       "acceptance": [
         ".env* ignored",
         "No real API key/token in git diff",
-        "README or deployment notes state PRD v2.0 is source of truth",
+        "README or deployment notes state PRD v3.0 is source of truth",
         "Out-of-scope features are explicitly blocked"
       ],
-      "agent_prompt": "Audit the repository and planned changes for secrets and scope creep. Use PRD v2.0 as source of truth. Add or verify .gitignore entries for .env files and uploaded media. Do not print or commit secret values.",
-      "progress_note": "Completed in light refactor: .env and media/storage outputs are ignored; PRD v2.0 guardrails added to .agent rules and README/Agent docs."
+      "agent_prompt": "Audit the repository and planned changes for secrets and scope creep. Use PRD v3.0 as source of truth. Add or verify .gitignore entries for .env files and uploaded media. Do not print or commit secret values.",
+      "progress_note": "Completed in light refactor: .env and media/storage outputs are ignored; PRD guardrails added to .agent rules and README/Agent docs."
     },
     {
       "id": "T01",
@@ -307,7 +606,7 @@
         "PPTX has conversion or explicit PDF fallback",
         "Excel rows create exercise records linked to course/page"
       ],
-      "agent_prompt": "Implement course/courseware APIs from PRD v2.0. Support teacher upload of pptx/pdf/xlsx. Generate course pages for PDF/PPTX fallback and parse Excel into practice items. Keep online PPT editing out of scope.",
+      "agent_prompt": "Implement course/courseware APIs from PRD v3.0. Support teacher upload of pptx/pdf/xlsx. Generate course pages for PDF/PPTX fallback and parse Excel into homework/vocabulary practice items. Keep online PPT editing out of scope.",
       "progress_note": "API accepts pptx/pdf/xlsx and enforces type/size. PDF/PPTX and Excel currently generate MVP fallback pages/exercises instead of true parsing."
     },
     {
@@ -383,14 +682,14 @@
       "status": "completed",
       "depends_on": ["T02", "T03", "T05"],
       "acceptance": [
-        "StudentClassroomView renders course pages from API",
+        "Legacy StudentClassroomView, or its renamed StudentPracticeView replacement, renders course pages from API only when used for practice/homework, not live class",
         "Student can flip pages",
         "TTS calls backend facade with browser fallback",
         "Student can record/upload/play/download/delete own recordings",
         "Excel-derived exercises are visible in practice/homework context"
       ],
-      "agent_prompt": "Replace mock-only student practice behavior with API-backed course pages, TTS, recording management, and Excel-derived exercise display. Preserve UI style and mobile/iPad adaptability.",
-      "progress_note": "StudentClassroomView now renders API course pages, uses backend TTS facade with browser fallback, and supports recording upload/list/play/download/delete."
+      "agent_prompt": "Replace mock-only student practice behavior with API-backed course pages, TTS, recording management, and Excel-derived exercise display. Preserve UI style and mobile/iPad adaptability. Do not use this component for live class routing.",
+      "progress_note": "Legacy StudentClassroomView renders API course pages and recording flow, but it is not the live classroom and should be renamed/quarantined."
     },
     {
       "id": "T08",
@@ -423,7 +722,7 @@
         "Student can choose date and play historical video",
         "Empty state is clear when no replay exists"
       ],
-      "agent_prompt": "Wire ScheduleView history/replay section to lecture APIs so students can replay videos by date, as required by PRD v2.0.",
+      "agent_prompt": "Wire ScheduleView history/replay section to lecture APIs so students can replay videos by date, as required by PRD v3.0.",
       "progress_note": "ScheduleView replays tab now reads lecture data from backend and opens replay URLs."
     },
     {
@@ -437,17 +736,18 @@
         "Deployment env example exists without real secrets",
         "Nginx or equivalent serves frontend and proxies /api",
         "Upload body limit supports courseware/replay MVP",
+        "PM2-managed local frontend/backend verification passes before Docker packaging",
         "Public frontend opens",
         "Public /api/v1/health returns OK"
       ],
-      "agent_prompt": "Create minimal deployment assets and checklist for Tencent Cloud IP-based MVP test. Prefer Docker Compose; PM2 fallback is acceptable. Never include real secrets.",
-      "progress_note": "Dockerfile, docker-compose.yml, nginx.conf, PM2 ecosystem.cjs, deploy/seed/healthcheck scripts created and locally reviewed. Actual Tencent Cloud VM deploy and public health verification are still pending."
+      "agent_prompt": "Create minimal deployment assets and checklist for Tencent Cloud IP-based MVP test. For local simulation, use PM2 first for port/process management and run headed E2E locally. Only after local verification passes, package with Docker and use Tencent Cloud CLI for deployment and service mounting. Never include real secrets.",
+      "progress_note": "Dockerfile, docker-compose.yml, nginx.conf, PM2 ecosystem.cjs, deploy/seed/healthcheck scripts created and locally reviewed. PM2-managed local E2E passed (22/22). Docker local build/verify passed. Tencent Cloud CLI (tccli) not installed on dev machine — deployment blocked until tccli is available."
     },
     {
       "id": "T11",
       "phase": "P1-audit",
       "owner": "auditor",
-      "title": "MVP acceptance audit against PRD v2.0",
+      "title": "MVP acceptance audit against PRD v3.0",
       "status": "code_audited_pending_e2e_and_vm",
       "depends_on": ["T10"],
       "acceptance": [
@@ -461,22 +761,881 @@
         "Camera/mic permission bug verified fixed",
         "Known v1.0 gaps documented"
       ],
-      "agent_prompt": "Run a code and manual-flow audit against PRD v2.0 only. Report pass/fail for A1-A7 plus the explicit media permission bug. Block if the core loop is still mock-only.",
-      "progress_note": "Acceptance report created at tests/acceptance/mvp-acceptance-report.md. Unit/type/build/backend smoke checks pass. Browser E2E, media permission indicator verification, and Tencent Cloud public URL verification remain pending."
+      "agent_prompt": "Run a code and manual-flow audit against PRD v3.0 only. Report pass/fail for A1-A7 plus the explicit media permission bug. Block if the core loop is still mock-only.",
+      "progress_note": "Acceptance report created at tests/acceptance/mvp-acceptance-report.md. Unit/type/build/backend smoke checks pass. Browser E2E passed (22/22, steps R015-R036 automated via Playwright). Camera indicator verification remains browser_pending_manual. Tencent Cloud public URL verification blocked — tccli not installed."
+    },
+    {
+      "id": "T12",
+      "phase": "P0-brand-polish",
+      "owner": "frontend-worker",
+      "title": "Replace embedded logo with user-provided root logo.svg",
+      "status": "completed",
+      "depends_on": ["T05"],
+      "acceptance": [
+        "src/components/Logo.tsx renders /logo.svg or imported root logo asset",
+        "Sidebar and landing/header logo show the new asset",
+        "No old embedded SVG remains visible in normal app navigation",
+        "npm run build passes"
+      ],
+      "agent_prompt": "Replace the current hardcoded Logo.tsx SVG with the user-provided root logo.svg. Preserve component props and sizing behavior so existing layout does not shift.",
+      "progress_note": "Hardcoded SVG replaced with <img src=\"/logo.svg\"> in Logo.tsx. Root logo.svg copied to public/ for Vite serving. Component props and sizing preserved."
+    },
+    {
+      "id": "T13",
+      "phase": "P0-data-standard",
+      "owner": "backend-worker",
+      "title": "Implement Excel homework parser and validation",
+      "status": "completed",
+      "depends_on": ["T02"],
+      "acceptance": [
+        "XLSX parser reads first worksheet with homework_excel_schema columns",
+        "Missing required columns return clear validation errors",
+        "Rows are upserted by course_code + task_id",
+        "Rows produce learning_task records",
+        "publish_to_homework rows are returned by homework API",
+        "publish_to_vocab rows are returned by vocabulary API",
+        "Existing student learning_records are preserved on task overwrite"
+      ],
+      "agent_prompt": "Replace fallback Excel exercise generation with real XLSX parsing based on customer_delivery_revision.homework_excel_schema. Add backend types, storage, validation, and tests.",
+      "progress_note": "Real XLSX parsing implemented in backend/src/excelParser.ts. Uses xlsx package, validates required columns and task_type, upserts by courseId+taskId preserving student records. Backend tests updated (3/3 passing). API routes added: GET /api/v1/homework/tasks, GET /api/v1/vocabulary, POST/GET /api/v1/learning-records."
+    },
+    {
+      "id": "T14",
+      "phase": "P0-homework-route",
+      "owner": "frontend-worker",
+      "title": "Wire HomeworkView to Excel-derived homework tasks",
+      "status": "completed",
+      "depends_on": ["T03", "T13"],
+      "acceptance": [
+        "Homework path is generated from API tasks grouped by unit and lesson",
+        "Task page displays zh_text, pinyin, translation, prompt, due_at, and progress",
+        "TTS uses zh_text/audio_text from task",
+        "Recording upload includes task_id",
+        "Student can play/delete/download own task recordings",
+        "Learning record is saved after attempt/completion"
+      ],
+      "agent_prompt": "Keep the optimized HomeworkView visual design, but replace CURRICULUM_DATA and MOCK_SENTENCES with API-backed homework tasks and task recordings. Preserve mobile layout.",
+      "progress_note": "MOCK_SENTENCES and CURRICULUM_DATA replaced with API-backed LearningTask data. Tasks fetched from GET /api/v1/homework/tasks, grouped by unit/lesson. Recording upload includes taskId. Learning records saved on attempt/completion via POST /api/v1/learning-records. UI preserved."
+    },
+    {
+      "id": "T15",
+      "phase": "P0-vocabulary-route",
+      "owner": "frontend-worker",
+      "title": "Wire VocabularyView to teacher Excel vocabulary bank",
+      "status": "completed",
+      "depends_on": ["T13"],
+      "acceptance": [
+        "Vocabulary list loads from /api/v1/vocabulary",
+        "Search/filter/grouping uses API fields initial/final/tone/rhyme_group/status",
+        "Learning session uses API vocabulary items",
+        "Pronunciation recording includes task_id and context=vocabulary",
+        "Learning records update item mastery/progress"
+      ],
+      "agent_prompt": "Keep the optimized VocabularyView visual design, but replace INITIAL_WORDS with Excel-derived vocabulary API data and record study outcomes.",
+      "progress_note": "INITIAL_WORDS replaced with API-backed VocabularyItem data from GET /api/v1/vocabulary. Learning records saved via POST /api/v1/learning-records on session check. Status/progress computed from learning records. Phonetic grouping by rhymeGroup/initial. UI preserved."
+    },
+    {
+      "id": "T16",
+      "phase": "P1-live",
+      "owner": "frontend-worker",
+      "title": "Teacher virtual background for live classroom",
+      "status": "planned",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "Teacher can choose none, blur, or static image background",
+        "Camera preview shows segmented teacher over selected background",
+        "Composited canvas stream is used for local preview and lecture recording",
+        "Turning off camera stops source camera tracks and canvas stream tracks",
+        "If segmentation model fails to load, classroom falls back to normal camera with a clear message"
+      ],
+      "agent_prompt": "Add browser-side virtual background to TeacherClassroomView using MediaPipe Selfie Segmentation or a lightweight equivalent. Compose camera + background to canvas and use canvas.captureStream for preview/recording. Do not require server GPU for MVP.",
+      "progress_note": "Feature requested by customer; current PRD previously excluded it."
+    },
+    {
+      "id": "T17",
+      "phase": "P1-student-live",
+      "owner": "frontend-worker",
+      "title": "Student live room entry and live-state routing",
+      "status": "partially_completed_needs_api_state",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "Student dashboard/schedule exposes a live room entry",
+        "Entry opens the shared live classroom in student role, not the old course-practice StudentClassroomView",
+        "Student role hides teacher-only controls: screen share, PDF upload, annotation tools, recording controls, end-class controls",
+        "Student role keeps student controls: view live stage, chat/comment, mic/camera if allowed, raise hand, leave",
+        "If no live session exists, student sees latest course/replay fallback",
+        "Future TRTC integration point is documented"
+      ],
+      "agent_prompt": "Lock the route contract: dashboard/schedule Join Live Class -> student-classroom -> shared live classroom with role=student. Never route live class to a practice/recording page. Then add active live-session API state and replay fallback.",
+      "progress_note": "Route fixed: App.tsx maps 'student-classroom' to TeacherClassroomView with role='student'. The old StudentClassroomView is no longer used in routing. Still needs: live_session API creation/PATCH/active query, and a route guard test."
+    },
+    {
+      "id": "T18",
+      "phase": "P1-deploy",
+      "owner": "deployment-worker",
+      "title": "Install and configure Tencent Cloud CLI deployment path",
+      "status": "blocked_waiting_local_tool_install",
+      "depends_on": ["T10"],
+      "acceptance": [
+        "tccli is installed and version is recorded",
+        "Tencent Cloud CAM credentials are configured outside git",
+        "Target CVM/region/security group are identified",
+        "Docker or PM2 deployment uploads assets and starts services",
+        "Public frontend opens",
+        "Public /api/v1/health returns code 0"
+      ],
+      "agent_prompt": "Install/use Tencent Cloud CLI only with user-approved credentials. Continue R048-R053 from the existing smoke report, record public URL and health proof, and do not commit secrets.",
+      "progress_note": "Blocked because tccli is not installed on the development machine."
+    },
+    {
+      "id": "T19",
+      "phase": "P0-live-ui",
+      "owner": "frontend-worker",
+      "title": "Restructure teacher live classroom layout",
+      "status": "partially_completed_needs_data_cleanup",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "AI transcription/translation panel can be hidden and is collapsed by default for teacher live teaching",
+        "Main teaching area prioritizes PDF/screen content, camera preview, recording controls, and student comments",
+        "Student comments remain visible or one-click expandable during class",
+        "Teacher-only controls are not visible in student role",
+        "No timer-generated fake transcript, fake danmaku, or fake student comments remain",
+        "Layout works on desktop and iPad-width viewports without overlap"
+      ],
+      "agent_prompt": "Update TeacherClassroomView so the teacher live workspace prioritizes teaching controls. Make real-time AI transcription/translation hideable and default-collapsed for teacher live mode; keep it available for replay/student-facing transcript modes.",
+      "progress_note": "Transcript is now hideable/default hidden and auto mock danmaku/transcript were removed. Remaining work: replace placeholder participants/comments/live session data with API-backed state and verify layouts."
+    },
+    {
+      "id": "T20",
+      "phase": "P0-live-pdf-whiteboard",
+      "owner": "frontend-worker",
+      "title": "PDF preview page turning and annotation canvas",
+      "status": "planned",
+      "depends_on": ["T06", "T08"],
+      "acceptance": [
+        "Teacher PDF mode renders uploaded/existing PDF pages with previous/next controls and page count",
+        "PDF page is rendered by PDF.js or equivalent stable renderer",
+        "Annotation layer renders brush strokes over the PDF without moving the PDF layer",
+        "Brush color, brush width, eraser or clear-current-page are available",
+        "Annotations are stored per page in component state and survive page switching during the session",
+        "A future Excalidraw/tldraw integration point is documented if richer whiteboard editing is needed"
+      ],
+      "agent_prompt": "Implement teacher PDF mode with real page preview and a separate annotation canvas. Prefer PDF.js plus lightweight per-page canvas strokes for MVP; only introduce Excalidraw/tldraw if the local implementation cannot meet drawing quality.",
+      "progress_note": "Current PRD said PDF mode/canvas drawing, but this task makes PDF preview, page turning, and drawing render acceptance explicit."
+    },
+    {
+      "id": "T21",
+      "phase": "P0-live-recording-storage",
+      "owner": "backend-worker",
+      "title": "MinIO-backed lecture recording upload and metadata",
+      "status": "planned",
+      "depends_on": ["T04"],
+      "acceptance": [
+        "Backend supports MinIO/S3-compatible storage through env configuration",
+        "Lecture recording upload stores object_key/storage_provider/video_url metadata",
+        "Presigned PUT URL endpoint exists for lecture media or a direct-upload fallback is documented",
+        "Replay listing returns playable MinIO/COS/local URL",
+        "No storage access keys are committed"
+      ],
+      "agent_prompt": "Add MinIO/S3-compatible storage adapter for lecture recordings. Prefer presigned upload URL for large media; keep direct backend upload fallback only for local MVP. Preserve existing lecture API response shape where possible.",
+      "progress_note": "User requires saved course recordings in MinIO multimedia OSS/cloud storage."
+    },
+    {
+      "id": "T22",
+      "phase": "P0-live-auto-record",
+      "owner": "frontend-worker",
+      "title": "Auto-start teacher classroom recording after permission",
+      "status": "planned",
+      "depends_on": ["T08", "T21"],
+      "acceptance": [
+        "Teacher classroom attempts to start recording automatically after required media streams are granted",
+        "Browser permission prompts are handled explicitly and never bypassed",
+        "Recording status is visible immediately after entering class",
+        "Stop/save uploads lecture media to backend/MinIO path",
+        "If screen/camera permission is denied, recording falls back to available streams and shows a clear warning"
+      ],
+      "agent_prompt": "Compose available classroom streams and auto-start MediaRecorder after the teacher grants media permission. Upload on stop/save to the lecture API or presigned MinIO URL. Respect browser security prompts.",
+      "progress_note": "Current recording requires manual action; user wants teacher entry to start course recording automatically when possible."
+    },
+    {
+      "id": "T23",
+      "phase": "P1-live-cast",
+      "owner": "frontend-worker",
+      "title": "Real screen sharing and optional device casting boundary",
+      "status": "planned",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "Local screen share uses getDisplayMedia and sends selected screen/window/tab into classroom picture",
+        "The app records or streams the selected display MediaStream when teacher chooses local screen mode",
+        "PRD and UI copy clarify that browsers cannot silently cast to external hardware",
+        "If a target device path is required, Google Cast Web Sender or desktop-app wrapper is evaluated separately"
+      ],
+      "agent_prompt": "Make local screen share a real getDisplayMedia flow and document the device-casting boundary. Do not pretend a web page can silently control external display hardware.",
+      "progress_note": "User asked for local casting to truly request a device/screen; browser permission and hardware casting limits must be explicit."
+    },
+    {
+      "id": "T24",
+      "phase": "P0-live-routing-guard",
+      "owner": "frontend-worker",
+      "title": "Add route regression guard for shared teacher/student live classroom",
+      "status": "planned",
+      "depends_on": ["T17"],
+      "acceptance": [
+        "Automated browser smoke proves dashboard Join Live Class enters `#classroom-view` live UI",
+        "Smoke proves old `Practice mode` text is absent from live route",
+        "Smoke proves student role does not show teacher-only Share Screen/PDF Upload/Recording controls",
+        "Smoke proves teacher role still shows teacher controls",
+        "Code comments or tests explicitly state `StudentClassroomView` is not the live route"
+      ],
+      "agent_prompt": "Create a focused regression test for the live route bug. It must fail if student live entry goes to the practice/recording page or if teacher-only controls leak to students.",
+      "progress_note": "Manual Playwright verification passed once, but no committed regression test exists."
+    },
+    {
+      "id": "T25",
+      "phase": "P0-teacher-courses",
+      "owner": "frontend-worker",
+      "title": "Teacher courses real management and no-mock cleanup",
+      "status": "completed",
+      "depends_on": ["T06", "T13"],
+      "acceptance": [
+        "TeacherCoursesView has no hardcoded mock course cards or default fake course titles",
+        "Course list, page count, exercise count, recording count, and status come from API only",
+        "Create course uses API and refreshes list",
+        "Course selection is explicit and preserved while uploading files",
+        "Courseware upload and homework Excel upload are visually separate entry points",
+        "Upload messages distinguish PDF/PPTX courseware from XLSX homework data",
+        "Empty state is real: if API returns no courses, show create-course prompt instead of fake cards",
+        "No English static labels remain when language is zh/ru/kk"
+      ],
+      "agent_prompt": "Finish TeacherCoursesView as a real management page. Remove all mock/course placeholder behavior, separate courseware upload from homework Excel upload, and keep every visible label translated through LanguageContext.",
+      "progress_note": "Two distinct upload buttons: courseware (pptx/pdf) and homework Excel (xlsx). API returns tasks/vocabulary counts for XLSX uploads, pages count for courseware. Upload messages distinguish between courseware pages and Excel tasks. All labels use t()."
+    },
+    {
+      "id": "T26",
+      "phase": "P0-i18n-audit",
+      "owner": "frontend-worker",
+      "title": "Full static text and i18n audit for demo-critical pages",
+      "status": "planned",
+      "depends_on": ["T17", "T19", "T25"],
+      "acceptance": [
+        "Switching language updates TeacherCoursesView, TeacherClassroomView, DashboardView, ScheduleView, HomeworkView, VocabularyView visible chrome",
+        "Developer-facing fallback text is not visible to users in normal flows",
+        "All button labels, empty states, upload messages, warnings, and panel titles use `t(...)` unless they are API/user content",
+        "A grep/audit report lists any remaining hardcoded visible English and explains whether it is allowed",
+        "At least zh language switch is manually/browser verified on teacher courses and live pages"
+      ],
+      "agent_prompt": "Audit and fix static user-facing strings on demo-critical pages. Do not translate API-provided course/user names, but do translate UI chrome, empty states, errors, and action buttons.",
+      "progress_note": "TeacherCoursesView was partially fixed. Several live/schedule/dashboard strings and fallback labels may remain."
+    },
+    {
+      "id": "T27",
+      "phase": "P0-live-api",
+      "owner": "backend-worker",
+      "title": "Live session and classroom comments API",
+      "status": "planned",
+      "depends_on": ["T01"],
+      "acceptance": [
+        "POST /api/v1/live-sessions creates/starts a live session linked to course_id and teacher_id",
+        "GET /api/v1/live-sessions/active?courseId= returns active session or null",
+        "PATCH /api/v1/live-sessions/:id updates source_mode, current_page, recording_status, and ended_at",
+        "GET/POST /api/v1/live-sessions/:id/comments list and create classroom comments",
+        "Frontend live comments read from API or clearly documented polling/local fallback",
+        "No generated fake comments are used as real data"
+      ],
+      "agent_prompt": "Add minimal live_session and classroom_comment backend support. Keep it single-tenant MVP. This is not a broad social system; it is only classroom interaction state.",
+      "progress_note": "Frontend still lacks real live_session/comment data source."
+    },
+    {
+      "id": "T28",
+      "phase": "P0-component-boundary",
+      "owner": "frontend-worker",
+      "title": "Rename or quarantine old StudentClassroomView practice component",
+      "status": "partially_completed",
+      "depends_on": ["T14"],
+      "acceptance": [
+        "Old StudentClassroomView is either renamed to StudentPracticeView or removed if unused",
+        "No route named live/classroom imports the practice component",
+        "Homework/practice route uses the practice component only if it is API-backed with Excel tasks",
+        "Component names make product intent obvious to future agents"
+      ],
+      "agent_prompt": "Prevent future route confusion by renaming/quarantining the old student classroom practice page. Live class must use shared live classroom; practice/homework can use a separate practice component.",
+      "progress_note": "Route was corrected: App.tsx routes 'student-classroom' to TeacherClassroomView with role='student'. StudentClassroomView.tsx file still exists but is no longer imported by any route. Pending: rename/delete the unused file, mark it clearly as deprecated."
     }
   ],
   "audit_gates": [
     "No secrets in committed files",
-    "PRD v2.0 remains source of truth",
-    "No out-of-scope LMS/SaaS/social/payment/AI-scoring implementation is required for MVP",
+    "PRD v3.0 remains source of truth",
+    "No out-of-scope LMS/SaaS/broad-social/payment/AI-scoring implementation is required for MVP",
     "Teacher can upload pptx/pdf/xlsx",
     "Student can use TTS and manage recordings",
     "Teacher replay can be uploaded and viewed by students",
+    "Teacher live transcript/translation panel can be hidden",
+    "Teacher PDF mode has real preview, page turning, and annotation rendering",
+    "Teacher lecture recording saves to MinIO/S3-compatible object storage or documented local fallback",
     "Camera/mic/screen tracks stop after toggle off and exit",
     "Frontend build passes",
     "Backend health check passes",
     "Tencent Cloud public health check passes before demo"
   ],
+  "ralph_2min_prd_steps": {
+    "purpose": "把剩余工作拆成 2 分钟内可执行、低判断、可复制的小步骤。每一步只允许做一件事，并留下可验证证据。",
+    "rules": [
+      "每个 step 的目标必须能用一个命令、一个文件改动、一次页面点击、或一次文档记录完成。",
+      "本机模拟开发必须先使用 PM2 管理端口和进程，不再用临时 npm run dev 或临时 Docker 端口碰运气。",
+      "本机 PM2 验证通过后，才进入 Docker 打包。",
+      "Docker 打包通过后，才使用 Tencent Cloud CLI 部署并挂载服务。",
+      "如果某一步失败，只记录 blocker、命令、错误摘要和下一步建议，不做大范围排查。",
+      "禁止扩展 PRD v3.0 之外的 LMS/SaaS/支付/广义社交/AI 评分功能。"
+    ],
+    "definition_of_done_per_step": [
+      "执行动作完成",
+      "记录 pass/fail",
+      "记录证据：命令输出、文件路径、截图路径、或报告段落",
+      "如果失败，记录最小 blocker，不顺手重构"
+    ],
+    "steps": [
+      {
+        "id": "R001",
+        "group": "local-pm2-control",
+        "title": "确认 PM2 当前进程列表",
+        "estimated_minutes": 2,
+        "action": "Run `pm2 list`.",
+        "acceptance": "能看到是否已有 `lingobridge-*` 进程，以及是否有其它项目占用常用端口。",
+        "proof": "把 `pm2 list` 关键行写入 e2e smoke report 的 Environment 部分。"
+      },
+      {
+        "id": "R002",
+        "group": "local-pm2-control",
+        "title": "确认 3001 后端端口是否空闲",
+        "estimated_minutes": 2,
+        "action": "Run `lsof -nP -iTCP:3001 -sTCP:LISTEN`.",
+        "acceptance": "端口空闲，或占用者是 `lingobridge-backend`。",
+        "proof": "记录端口状态；不要杀非 LingoBridge 进程。"
+      },
+      {
+        "id": "R003",
+        "group": "local-pm2-control",
+        "title": "确认 4173 前端端口是否空闲",
+        "estimated_minutes": 2,
+        "action": "Run `lsof -nP -iTCP:4173 -sTCP:LISTEN`.",
+        "acceptance": "如果被其它项目占用，标记为不可用。",
+        "proof": "记录占用进程名称和 PID。"
+      },
+      {
+        "id": "R004",
+        "group": "local-pm2-control",
+        "title": "选择 LingoBridge 前端固定端口",
+        "estimated_minutes": 2,
+        "action": "如果 4173 被占用，检查 4174；若空闲则使用 4174。",
+        "acceptance": "确定一个不冲突的固定端口。",
+        "proof": "在 `ecosystem.config.cjs`、README、本 PRD 中保持同一个端口。"
+      },
+      {
+        "id": "R005",
+        "group": "local-pm2-control",
+        "title": "更新 PM2 前端 preview 端口",
+        "estimated_minutes": 2,
+        "action": "Edit `ecosystem.config.cjs` so `lingobridge-frontend-preview` uses the chosen fixed port with `--strictPort`.",
+        "acceptance": "配置中没有随机端口；端口和文档一致。",
+        "proof": "`rg -n \"preview --host\" ecosystem.config.cjs` shows the expected port."
+      },
+      {
+        "id": "R006",
+        "group": "local-pm2-control",
+        "title": "更新本机端口说明",
+        "estimated_minutes": 2,
+        "action": "Edit README local simulation section to match backend and frontend PM2 ports.",
+        "acceptance": "README 明确写 PM2 first、backend port、frontend port。",
+        "proof": "`rg -n \"Local stable ports|PM2\" README.md` returns the section."
+      },
+      {
+        "id": "R007",
+        "group": "local-pm2-control",
+        "title": "重启 PM2 LingoBridge 服务",
+        "estimated_minutes": 2,
+        "action": "Run `npm run pm2:restart`.",
+        "acceptance": "`lingobridge-backend` and `lingobridge-frontend-preview` are online.",
+        "proof": "`pm2 list` shows both online."
+      },
+      {
+        "id": "R008",
+        "group": "local-pm2-control",
+        "title": "检查 PM2 后端日志",
+        "estimated_minutes": 2,
+        "action": "Run `pm2 logs lingobridge-backend --lines 30 --nostream`.",
+        "acceptance": "日志显示 API listening on `127.0.0.1:3001`，无启动错误。",
+        "proof": "记录 listening 行。"
+      },
+      {
+        "id": "R009",
+        "group": "local-pm2-control",
+        "title": "检查 PM2 前端日志",
+        "estimated_minutes": 2,
+        "action": "Run `pm2 logs lingobridge-frontend-preview --lines 30 --nostream`.",
+        "acceptance": "日志显示 Vite preview ready，且没有 port in use。",
+        "proof": "记录 ready 或 local URL 行。"
+      },
+      {
+        "id": "R010",
+        "group": "local-pm2-smoke",
+        "title": "验证后端 health",
+        "estimated_minutes": 2,
+        "action": "Run `curl --noproxy '*' -sS http://127.0.0.1:3001/api/v1/health`.",
+        "acceptance": "返回 `code:0` and `status:ok`。",
+        "proof": "保存响应摘要。"
+      },
+      {
+        "id": "R011",
+        "group": "local-pm2-smoke",
+        "title": "验证前端 preview 首页",
+        "estimated_minutes": 2,
+        "action": "Run curl against the PM2 frontend preview URL.",
+        "acceptance": "HTTP 200 and `text/html`。",
+        "proof": "记录 HTTP code and content type。"
+      },
+      {
+        "id": "R012",
+        "group": "local-pm2-smoke",
+        "title": "验证 demo teacher 登录 API",
+        "estimated_minutes": 2,
+        "action": "POST `/api/v1/auth/login` with `teacher@test.com` and `Test@123456`.",
+        "acceptance": "返回 user role `teacher`。",
+        "proof": "记录 role，不记录 token 全量。"
+      },
+      {
+        "id": "R013",
+        "group": "local-pm2-smoke",
+        "title": "验证 demo student 登录 API",
+        "estimated_minutes": 2,
+        "action": "POST `/api/v1/auth/login` with `student_a@test.com` and `Test@123456`.",
+        "acceptance": "返回 user role `student`。",
+        "proof": "记录 role，不记录 token 全量。"
+      },
+      {
+        "id": "R014",
+        "group": "local-pm2-smoke",
+        "title": "验证课程列表 API",
+        "estimated_minutes": 2,
+        "action": "GET `/api/v1/courses`.",
+        "acceptance": "返回数组；至少不报错。",
+        "proof": "记录课程数量。"
+      },
+      {
+        "id": "R015",
+        "group": "headed-e2e",
+        "title": "打开有头浏览器到 PM2 前端",
+        "estimated_minutes": 2,
+        "action": "Use Playwright CLI `open <frontend-url> --headed`.",
+        "acceptance": "浏览器可见 LingoBridge 首页。",
+        "proof": "截图保存到 `output/playwright/`。"
+      },
+      {
+        "id": "R016",
+        "group": "headed-e2e",
+        "title": "教师登录页面可达",
+        "estimated_minutes": 2,
+        "action": "Click Login and snapshot.",
+        "acceptance": "Email/password inputs visible。",
+        "proof": "Snapshot or screenshot path."
+      },
+      {
+        "id": "R017",
+        "group": "headed-e2e",
+        "title": "教师登录成功",
+        "estimated_minutes": 2,
+        "action": "Fill teacher credentials and submit.",
+        "acceptance": "Teacher dashboard/sidebar visible。",
+        "proof": "Screenshot or snapshot showing teacher navigation."
+      },
+      {
+        "id": "R018",
+        "group": "headed-e2e",
+        "title": "教师课程页可达",
+        "estimated_minutes": 2,
+        "action": "Click Courses.",
+        "acceptance": "My Courses section visible。",
+        "proof": "Screenshot or snapshot."
+      },
+      {
+        "id": "R019",
+        "group": "headed-e2e",
+        "title": "创建 E2E 测试课程",
+        "estimated_minutes": 2,
+        "action": "Enter `E2E Smoke Course` and click Create.",
+        "acceptance": "新课程卡片出现。",
+        "proof": "课程卡片截图或 API 课程数量变化。"
+      },
+      {
+        "id": "R020",
+        "group": "headed-e2e",
+        "title": "上传 PDF fixture",
+        "estimated_minutes": 2,
+        "action": "Upload small `.pdf` fixture through teacher course upload.",
+        "acceptance": "UI message shows pages generated, expected `Pages: 3` for fallback。",
+        "proof": "截图或 snapshot text."
+      },
+      {
+        "id": "R021",
+        "group": "headed-e2e",
+        "title": "上传 XLSX fixture",
+        "estimated_minutes": 2,
+        "action": "Upload small `.xlsx` fixture through teacher course upload.",
+        "acceptance": "UI message shows exercises generated, expected `exercises: 2` for fallback。",
+        "proof": "截图或 snapshot text."
+      },
+      {
+        "id": "R022",
+        "group": "headed-e2e",
+        "title": "进入教师课堂",
+        "estimated_minutes": 2,
+        "action": "Click Enter Class from the test course.",
+        "acceptance": "Teacher classroom controls visible。",
+        "proof": "Snapshot showing Live Class controls."
+      },
+      {
+        "id": "R023",
+        "group": "headed-e2e",
+        "title": "验证摄像头按钮 UI 状态",
+        "estimated_minutes": 2,
+        "action": "Click Start Video in headed browser.",
+        "acceptance": "If fake media is enabled, button changes to Stop Video. If real permission blocks, record blocker only.",
+        "proof": "Snapshot or blocker note."
+      },
+      {
+        "id": "R024",
+        "group": "headed-e2e",
+        "title": "验证摄像头关闭 UI 状态",
+        "estimated_minutes": 2,
+        "action": "Click Stop Video.",
+        "acceptance": "Button returns to Start Video or camera state visibly off。",
+        "proof": "Snapshot or blocker note."
+      },
+      {
+        "id": "R025",
+        "group": "headed-e2e",
+        "title": "验证麦克风按钮 UI 状态",
+        "estimated_minutes": 2,
+        "action": "Click Unmute Mic, then Mute Mic.",
+        "acceptance": "Button toggles without crash. If permission blocks, record blocker only。",
+        "proof": "Snapshot or blocker note."
+      },
+      {
+        "id": "R026",
+        "group": "headed-e2e",
+        "title": "验证教师录制上传",
+        "estimated_minutes": 2,
+        "action": "With fake media or available stream, start Recording, wait briefly, stop Recording.",
+        "acceptance": "Upload success alert appears or lecture API records one item。",
+        "proof": "Alert text or `GET /lectures` count."
+      },
+      {
+        "id": "R027",
+        "group": "headed-e2e",
+        "title": "记录真实摄像头指示器验证状态",
+        "estimated_minutes": 2,
+        "action": "If real camera permission is available, observe OS/browser camera indicator after Stop Video and Leave Class.",
+        "acceptance": "Indicator closes; if not observable in automation, mark `browser_pending_manual`。",
+        "proof": "Manual note in e2e smoke report."
+      },
+      {
+        "id": "R028",
+        "group": "headed-e2e",
+        "title": "学生登录成功",
+        "estimated_minutes": 2,
+        "action": "Logout or clear session, login as `student_a@test.com`.",
+        "acceptance": "Student dashboard/sidebar visible。",
+        "proof": "Screenshot or snapshot."
+      },
+      {
+        "id": "R029",
+        "group": "headed-e2e",
+        "title": "学生课堂页面可达",
+        "estimated_minutes": 2,
+        "action": "Open student classroom/course page.",
+        "acceptance": "Generated course page visible。",
+        "proof": "Snapshot showing page content."
+      },
+      {
+        "id": "R030",
+        "group": "headed-e2e",
+        "title": "学生翻页可用",
+        "estimated_minutes": 2,
+        "action": "Click next/previous page controls.",
+        "acceptance": "Page number or content changes。",
+        "proof": "Before/after snapshot note."
+      },
+      {
+        "id": "R031",
+        "group": "headed-e2e",
+        "title": "学生 TTS 不崩溃",
+        "estimated_minutes": 2,
+        "action": "Click TTS/speaker button.",
+        "acceptance": "No UI crash; backend fallback may be used。",
+        "proof": "Console has no new error or UI remains usable."
+      },
+      {
+        "id": "R032",
+        "group": "headed-e2e",
+        "title": "学生录音上传",
+        "estimated_minutes": 2,
+        "action": "Use fake mic or real mic to record briefly and stop.",
+        "acceptance": "Recording appears in list or upload API returns success。",
+        "proof": "Snapshot or API count."
+      },
+      {
+        "id": "R033",
+        "group": "headed-e2e",
+        "title": "学生录音播放",
+        "estimated_minutes": 2,
+        "action": "Click play on uploaded recording.",
+        "acceptance": "No UI crash and audio element/action starts。",
+        "proof": "Record pass/fail in report."
+      },
+      {
+        "id": "R034",
+        "group": "headed-e2e",
+        "title": "学生录音下载",
+        "estimated_minutes": 2,
+        "action": "Click download on uploaded recording.",
+        "acceptance": "Browser download is triggered or link is reachable。",
+        "proof": "Record link reachability or download event."
+      },
+      {
+        "id": "R035",
+        "group": "headed-e2e",
+        "title": "学生录音删除",
+        "estimated_minutes": 2,
+        "action": "Click delete on uploaded recording.",
+        "acceptance": "Recording disappears or API delete returns deleted true。",
+        "proof": "Snapshot or API response."
+      },
+      {
+        "id": "R036",
+        "group": "headed-e2e",
+        "title": "学生课表回放可见",
+        "estimated_minutes": 2,
+        "action": "Open schedule/history replay view.",
+        "acceptance": "Teacher lecture replay list loads; empty state is acceptable only if no lecture was uploaded。",
+        "proof": "Snapshot or API lecture count."
+      },
+      {
+        "id": "R037",
+        "group": "e2e-report",
+        "title": "创建 E2E smoke report 文件",
+        "estimated_minutes": 2,
+        "action": "Create `tests/acceptance/e2e-smoke-report.md` from the existing prompt format.",
+        "acceptance": "File has Environment, Results, Blocking Defects, Non-Blocking Notes, Screenshots sections.",
+        "proof": "File path exists."
+      },
+      {
+        "id": "R038",
+        "group": "e2e-report",
+        "title": "填写 PM2 环境信息",
+        "estimated_minutes": 2,
+        "action": "Add frontend URL, backend URL, PM2 process names, browser mode.",
+        "acceptance": "Environment section is complete。",
+        "proof": "Report contains URLs and PM2 names."
+      },
+      {
+        "id": "R039",
+        "group": "e2e-report",
+        "title": "填写教师上传结果",
+        "estimated_minutes": 2,
+        "action": "Record R017-R022 pass/fail in the report.",
+        "acceptance": "Teacher login, course creation, PDF upload, XLSX upload, classroom entry rows are filled。",
+        "proof": "Report table updated."
+      },
+      {
+        "id": "R040",
+        "group": "e2e-report",
+        "title": "填写媒体验证结果",
+        "estimated_minutes": 2,
+        "action": "Record camera/mic/replay upload status.",
+        "acceptance": "Real camera indicator is either Pass or explicitly `browser_pending_manual`。",
+        "proof": "Report table updated."
+      },
+      {
+        "id": "R041",
+        "group": "e2e-report",
+        "title": "填写学生学习闭环结果",
+        "estimated_minutes": 2,
+        "action": "Record student login, page navigation, TTS, recording upload/play/download/delete.",
+        "acceptance": "Every student loop row is Pass/Fail/Blocked, no blank cells。",
+        "proof": "Report table updated."
+      },
+      {
+        "id": "R042",
+        "group": "e2e-report",
+        "title": "列出阻塞缺陷",
+        "estimated_minutes": 2,
+        "action": "Add only defects that block PRD MVP demo.",
+        "acceptance": "No generic TODOs; each blocker has exact failed step id。",
+        "proof": "Blocking Defects section updated."
+      },
+      {
+        "id": "R043",
+        "group": "docker-after-local-pass",
+        "title": "确认本机 E2E 是否允许进入 Docker",
+        "estimated_minutes": 2,
+        "action": "Check e2e smoke report for blocking defects.",
+        "acceptance": "No blocking defects before Docker packaging starts。",
+        "proof": "Report says `Docker gate: pass` or `blocked`."
+      },
+      {
+        "id": "R044",
+        "group": "docker-after-local-pass",
+        "title": "确认 Docker Hub 可拉取基础镜像",
+        "estimated_minutes": 2,
+        "action": "Run `docker pull node:20-alpine` only after local E2E gate passes.",
+        "acceptance": "Image pulls successfully, or blocker recorded as registry/network issue。",
+        "proof": "Docker pull result."
+      },
+      {
+        "id": "R045",
+        "group": "docker-after-local-pass",
+        "title": "构建 backend Docker 镜像",
+        "estimated_minutes": 2,
+        "action": "Run `docker compose build backend`.",
+        "acceptance": "Build completes without error。",
+        "proof": "Build final line or image id."
+      },
+      {
+        "id": "R046",
+        "group": "docker-after-local-pass",
+        "title": "启动 Docker compose 服务",
+        "estimated_minutes": 2,
+        "action": "Run `docker compose up -d` from `docker/`.",
+        "acceptance": "backend and nginx containers are running。",
+        "proof": "`docker compose ps`."
+      },
+      {
+        "id": "R047",
+        "group": "docker-after-local-pass",
+        "title": "验证 Docker health",
+        "estimated_minutes": 2,
+        "action": "Curl Docker-served `/api/v1/health`.",
+        "acceptance": "Returns `code:0`。",
+        "proof": "Curl response."
+      },
+      {
+        "id": "R048",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "确认 Tencent Cloud CLI 已登录",
+        "estimated_minutes": 2,
+        "action": "Run Tencent Cloud CLI identity/status command without printing secrets.",
+        "acceptance": "CLI can identify target account/region。",
+        "proof": "Sanitized account/region summary."
+      },
+      {
+        "id": "R049",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "确认目标 CVM 或部署目标",
+        "estimated_minutes": 2,
+        "action": "Use Tencent Cloud CLI to list/select the target instance or service.",
+        "acceptance": "One target is selected; no destructive action。",
+        "proof": "Target id/name recorded, secrets omitted."
+      },
+      {
+        "id": "R050",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "上传或同步 Docker 部署资产",
+        "estimated_minutes": 2,
+        "action": "Use Tencent Cloud CLI approved workflow to upload compose/nginx/build assets.",
+        "acceptance": "Remote target has deployment assets。",
+        "proof": "CLI success summary."
+      },
+      {
+        "id": "R051",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "挂载服务并启动远端应用",
+        "estimated_minutes": 2,
+        "action": "Use Tencent Cloud CLI/service command to start or mount the deployed service.",
+        "acceptance": "Remote service reports running。",
+        "proof": "Service status summary."
+      },
+      {
+        "id": "R052",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "验证公网 health",
+        "estimated_minutes": 2,
+        "action": "Curl public `/api/v1/health`.",
+        "acceptance": "Returns `code:0` from public endpoint。",
+        "proof": "Public URL and sanitized response."
+      },
+      {
+        "id": "R053",
+        "group": "tencent-cloud-cli-after-docker-pass",
+        "title": "验证公网首页",
+        "estimated_minutes": 2,
+        "action": "Open or curl public frontend URL.",
+        "acceptance": "HTTP 200 and LingoBridge page visible。",
+        "proof": "Screenshot or HTTP response summary."
+      },
+      {
+        "id": "R054",
+        "group": "final-audit",
+        "title": "更新 acceptance report",
+        "estimated_minutes": 2,
+        "action": "Update `tests/acceptance/mvp-acceptance-report.md` with local PM2, Docker, and Tencent Cloud gate status.",
+        "acceptance": "Report distinguishes pass, blocked, and pending_manual。",
+        "proof": "Report diff."
+      },
+      {
+        "id": "R055",
+        "group": "final-audit",
+        "title": "更新 PRD task status",
+        "estimated_minutes": 2,
+        "action": "Update T10/T11 status based on latest gate results.",
+        "acceptance": "T10/T11 progress_note matches actual evidence。",
+        "proof": "`prds/prd.json` parses and status is current."
+      },
+      {
+        "id": "R056",
+        "group": "final-audit",
+        "title": "运行 JSON 校验",
+        "estimated_minutes": 2,
+        "action": "Run JSON parse check for `prds/prd.json` and `package.json`.",
+        "acceptance": "Both parse without error。",
+        "proof": "Command output `json ok`."
+      },
+      {
+        "id": "R057",
+        "group": "final-audit",
+        "title": "运行 TypeScript 校验",
+        "estimated_minutes": 2,
+        "action": "Run `npm run lint`.",
+        "acceptance": "No type errors。",
+        "proof": "Command success."
+      },
+      {
+        "id": "R058",
+        "group": "final-audit",
+        "title": "运行生产构建",
+        "estimated_minutes": 2,
+        "action": "Run `npm run build`.",
+        "acceptance": "Build succeeds; chunk warning is non-blocking。",
+        "proof": "Build success line."
+      },
+      {
+        "id": "R059",
+        "group": "final-audit",
+        "title": "检查 git diff 范围",
+        "estimated_minutes": 2,
+        "action": "Run `git status --short` and `git diff --stat`.",
+        "acceptance": "Diff only contains intended PRD/docs/config/report changes。",
+        "proof": "Status summary."
+      },
+      {
+        "id": "R060",
+        "group": "final-audit",
+        "title": "提交已验证进度",
+        "estimated_minutes": 2,
+        "action": "Commit only after R056-R059 pass or blockers are recorded.",
+        "acceptance": "Commit message names the completed gate, e.g. `chore: add pm2 local verification plan`。",
+        "proof": "Commit hash."
+      }
+    ]
+  },
   "manual_demo_path": [
     "Teacher login",
     "Teacher uploads PPT/PDF",
@@ -491,6 +1650,7 @@
     "Teacher toggles camera off and confirms browser indicator closes",
     "Teacher records and saves lecture",
     "Student finds replay in schedule/history by date",
-    "Public Tencent Cloud URL and health endpoint are verified"
+        "PM2-managed local frontend/backend ports are verified before Docker packaging",
+        "Public Tencent Cloud URL and health endpoint are verified after Tencent Cloud CLI deployment"
   ]
 }

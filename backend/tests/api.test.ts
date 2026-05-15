@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import * as XLSX from 'xlsx';
 import { createApp } from '../src/app.ts';
 import { resetDbForTests } from '../src/db.ts';
 
@@ -51,6 +52,23 @@ test('courseware upload creates pages and excel exercises', async () => {
     assert.equal(pdfJson.code, 0);
     assert.equal(pdfJson.data.pages.length, 3);
 
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[
+      'course_code', 'unit', 'lesson', 'task_id', 'task_type',
+      'zh_text', 'pinyin', 'translation_ru', 'translation_kk',
+      'publish_to_homework', 'publish_to_vocab'
+    ], [
+      'TEST-01', 1, 1, 'TEST-01-L01-001', 'pronunciation',
+      '现在上课。', 'Xiànzài shàng kè.', 'Начинаем урок.', 'Сабақ басталды.',
+      'TRUE', 'FALSE'
+    ], [
+      'TEST-01', 1, 1, 'TEST-01-L01-002', 'vocabulary',
+      '老师', 'lǎo shī', 'Учитель', 'Мұғалім',
+      'FALSE', 'TRUE'
+    ]]);
+    XLSX.utils.book_append_sheet(wb, ws, 'tasks');
+    const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
     const excel = await fetch(`${baseUrl}/api/v1/coursewares`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
@@ -58,12 +76,16 @@ test('courseware upload creates pages and excel exercises', async () => {
         courseId: 'course-1',
         filename: 'practice.xlsx',
         mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        base64: Buffer.from('fake excel').toString('base64')
+        base64: xlsxBuffer.toString('base64')
       })
     });
     const excelJson = await excel.json();
     assert.equal(excelJson.code, 0);
-    assert.equal(excelJson.data.exercises.length, 2);
+    assert.equal(excelJson.data.tasks.length, 2);
+    assert.equal(excelJson.data.tasks[0].taskType, 'pronunciation');
+    assert.equal(excelJson.data.tasks[0].publishToHomework, true);
+    assert.equal(excelJson.data.tasks[1].publishToVocab, true);
+    assert.equal(excelJson.data.vocabulary.length, 1);
   });
 });
 

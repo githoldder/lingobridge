@@ -12,12 +12,15 @@ Read:
 - `context/project-brief.md`
 - `.agent/rules/mvp-scope.md`
 
-Start the services:
+Start the services through PM2 for local port management:
 
 ```bash
-npm run backend:dev
-npm run dev
+npm run build
+npm run pm2:start
+pm2 list
 ```
+
+Use frontend URL `http://127.0.0.1:4173` and backend URL `http://127.0.0.1:3001/api/v1`. Do not use Tencent Cloud CLI until the PM2-managed local E2E passes.
 
 Then use Playwright or browser automation to verify the minimum pass-through path:
 
@@ -84,4 +87,3 @@ Write the result to `tests/acceptance/e2e-smoke-report.md`:
 ## Acceptance Rule
 
 Block the MVP if the student recording loop or teacher courseware upload loop is still mock-only.
-
