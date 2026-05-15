@@ -4,6 +4,8 @@
 > Source status: user-reviewed and approved
 > Control draft date: 2026-05-15
 > Immediate delivery target: 2026-05-15 first MVP demo/public test
+>
+> **Overall status:** T17/T20/T24/T27/T28 ✅ completed; T19/T26 ⏳ partially_completed (mock cleanup for live UI done — no real API participant data; i18n fixed for TeacherClassroomView — cross-page audit pending); CORS PATCH method added; PDF page boundary fixed; Live comments polling added.
 
 ## 0. Product Boundary
 
@@ -100,28 +102,31 @@ Detailed AI-dispatch tasks are encoded in `prd.json`. The implementation status 
 | P0-vocabulary-route (T15) | ✅ completed (VocabularyView API-backed) |
 | P0-teacher-courses (T25) | ✅ completed (upload separated, API-driven) |
 | P1-live (T16) | ⏳ planned (virtual background) |
-| P1-student-live (T17) | 🔶 partially completed (route fixed, no API state) |
+| P1-student-live (T17) | ✅ completed (route fixed, live session API wired, Playwright regression tests) |
 | P1-deploy (T18) | 🔴 blocked (tccli not installed) |
-| P0-live-ui (T19) | 🔶 partially completed (transcript hidden, placeholders remain) |
-| P0-live-pdf-whiteboard (T20) | ⏳ planned (no PDF.js) |
+| P0-live-ui (T19) | ⏳ partially_completed (mock data cleaned for live UI, but real API participant list not yet integrated) |
+| P0-live-pdf-whiteboard (T20) | ✅ completed (PDF.js + PdfViewer component with page nav) |
 | P0-live-recording-storage (T21) | ⏳ planned (no MinIO) |
 | P0-live-auto-record (T22) | ⏳ planned (manual only) |
 | P1-live-cast (T23) | ⏳ planned (real screen share pending) |
-| P0-live-routing-guard (T24) | ⏳ planned (no regression test) |
-| P0-i18n-audit (T26) | ⏳ planned (some hardcoded strings remain) |
-| P0-live-api (T27) | ⏳ planned (no live session API) |
-| P0-component-boundary (T28) | 🔶 partially completed (route fixed, file not deleted) |
+| P0-live-routing-guard (T24) | ✅ completed (3 Playwright regression tests committed) |
+| P0-i18n-audit (T26) | ⏳ partially_completed (TeacherClassroomView i18n fixed, but cross-page audit not completed) |
+| P0-live-api (T27) | ✅ completed (live sessions + comments endpoints, frontend wired) |
+| P0-component-boundary (T28) | ✅ completed (route fixed, old component quarantined with deprecation note) |
+| P0-live-pdf-canvas-toggle (T29) | ⏳ planned — canvas 从自动激活改为设置中的按钮 |
+| P0-live-paginator-fix (T30) | ⏳ planned — 底部翻页器仅学生端可见，设置中的 PG 翻页仅教师端 |
+| P0-live-raise-hand-flow (T31) | ⏳ planned — 学生举手→教师授权→解锁摄像头/录音 |
+| P0-live-canvas-quality (T32) | ⏳ planned — 修复画笔偏移和割裂感 |
+| P0-samples-generate (T33) | ⏳ planned — tests/samples 模板(pptx/pdf/图片/excel) |
+| P0-classroom-homework-vocab (T34) | ⏳ planned — 学生端教室中嵌入 homework/vocabulary 练习 |
 
 Highest priority remaining work:
-1. T13: Implement real Excel parser and schema validation
-2. T14/T15: Wire homework and vocabulary views to Excel-derived API data
-3. T20: Implement PDF.js preview, page turning, and annotation canvas
-4. T17/T27: Live session API and live-state routing
-5. T12: Replace embedded logo with root logo.svg
-6. T25: Separate courseware upload from Excel upload
-7. T26: Full i18n/static text audit
-8. T21/T22: MinIO storage and auto-recording
-9. T18: Tencent Cloud deployment
+1. T29: Canvas toggle — 从自动激活改为设置按钮触发
+2. T30: 翻页器权限分离 — 底部给学生(Presentation)，设置中给教师(PG)
+3. T31: 举手流程 — 学生发起→教师授权→解锁摄像头/麦克风
+4. T32: Canvas 质量 — 修复偏移/割裂，精确覆盖 PDF
+5. T33: tests/samples 模板文件 (pptx/pdf/图片/excel)
+6. T34: 学生端教室嵌入 homework 发音练习 + vocabulary 选择题
 
 ### Signals
 
@@ -366,6 +371,50 @@ Create minimal deployment assets for Tencent Cloud public test: env example, Doc
 ### Auditor
 
 Audit against PRD v3.0, not against a broad platform roadmap. Block if the MVP core loop fails, if a demo-critical path is still mock-only, if camera tracks remain active after toggle off/exit, if secrets appear in repo, or if public test health cannot be verified.
+
+## 8.5 New Feature Requirements (2026-05-15 Round 2)
+
+### F15: Canvas Toggle Mode
+- PDF 上传后默认预览 PDF（浏览器原生操作：选择文本、滚动等）
+- Canvas 画笔从自动激活改为 Settings 面板中的按钮触发
+- 点击"画笔"按钮后才可进行 canvas 书写，再次点击关闭
+
+### F16: Paginator Role Separation
+- 底部翻页器（显示 SLIDE 和中英文模式标签）默认仅在 student 角色的 `presentation_active` 模式下显示
+- Settings 面板内的 PG 翻页器仅 teacher 角色可见，用于教师控制课件翻页
+- 消除两个翻页器的功能重叠
+
+### F17: Student Raise-Hand & Permission Flow
+- 学生端默认摄像头和麦克风按钮为禁用状态（灰色锁定）
+- 学生可点击"举手"按钮发起请求
+- 教师端收到举手通知（在顶部或 Participants 面板显示）
+- 教师点击授权后，通过 localStorage 事件通知学生端
+- 学生端接收到授权后解锁摄像头/麦克风按钮
+
+### F18: Canvas Quality Improvement
+- 修复画笔与鼠标指针的坐标偏移问题（canvas 尺寸动态匹配容器）
+- 消除画笔的割裂感，实现平滑连续的笔迹
+- Canvas 精确覆盖在 PDF/PPTX 渲染层之上
+- 支持多级笔触粗细和颜色切换
+
+### F19: Template Samples (tests/samples)
+- 目录结构: tests/samples/{pptx, pdf, images, excel}/
+- PPTX 样例: 基于 analysis/data-analysis/拼音1(1).pptx 的课程课件
+- PDF 样例: 中文课程第一课 PDF（大家好）
+- 课程图片/头像样例: 教师默认头像、课程封面图
+- Excel 样例: 符合 homework_excel_schema 的作业格式，含：
+  - 中文文本列
+  - 中文注音列（拼音）
+  - 俄语翻译列
+  - 录音按钮标识列
+
+### F20: Student Classroom Homework & Vocabulary
+- 学生端教室视图新增 homework 面板：发音练习（录音→保存→删除）
+- 学生端教室视图新增 vocabulary 面板：
+  - 听中文选俄文（选择题）
+  - 听俄文选中文（选择题）
+  - 点击单词可播放发音（TTS）
+- 数据对接 homeworkApi/vocabularyApi 获取教师上传 Excel 生成的练习
 
 ## 9. Acceptance Checklist
 

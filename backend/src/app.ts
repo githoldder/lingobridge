@@ -1,9 +1,10 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import path from 'node:path';
+import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
 import { saveBase64File, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
-import type { CoursePage, Exercise, FileMetadata } from './types.ts';
+import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment } from './types.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -24,8 +25,75 @@ function extensionOf(filename: string) {
   return path.extname(filename).slice(1).toLowerCase();
 }
 
-function createPagesFromCourseware(courseId: string, filename: string, fileUrl: string): CoursePage[] {
+function extractPptxText(absolutePath: string): string[] {
+  try {
+    const data = fs.readFileSync(absolutePath);
+    let JSZip: any;
+    try { JSZip = require('jszip'); } catch { return []; }
+    const zip = JSZip.loadAsync(data).then(async (zip: any) => {
+      const slides: string[] = [];
+      let index = 1;
+      while (true) {
+        const file = zip.file(`ppt/slides/slide${index}.xml`);
+        if (!file) break;
+        const xml = await file.async('string');
+        const texts: string[] = [];
+        let m: RegExpExecArray | null;
+        const tagRe = /<a:t[^>]*>([^<]+)<\/a:t>/g;
+        while ((m = tagRe.exec(xml)) !== null) texts.push(m[1]);
+        const slideRe = /<p:spTree[^>]*>[\s\S]*?<\/p:spTree>/;
+        const slideMatch = xml.match(slideRe);
+        if (slideMatch) {
+          let line: RegExpExecArray | null;
+          const lineRe = /<a:p[^>]*>[\s\S]*?<\/a:p>/g;
+          const lines: string[] = [];
+          while ((line = lineRe.exec(slideMatch[0])) !== null) {
+            const lineText = texts.slice(lines.length * 100).join('').trim();
+            if (lineText) lines.push(lineText);
+          }
+          slides.push(texts.join(' ').trim());
+        } else {
+          slides.push(texts.join(' ').trim());
+        }
+        index++;
+      }
+      return slides.filter((s) => s.length > 0);
+    });
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function createPagesFromCourseware(courseId: string, filename: string, fileUrl: string, absolutePath?: string): CoursePage[] {
+  const ext = extensionOf(filename);
   const base = filename.replace(/\.[^.]+$/, '');
+
+  if (ext === 'pdf') {
+    return [{
+      id: crypto.randomUUID(),
+      courseId,
+      pageNumber: 1,
+      contentHtml: '',
+      audioText: '请查看PDF课件。',
+      fileUrl
+    }];
+  }
+
+  if (ext === 'pptx' && absolutePath) {
+    const slides = extractPptxText(absolutePath);
+    if (slides.length > 0) {
+      return slides.map((text, i) => ({
+        id: crypto.randomUUID(),
+        courseId,
+        pageNumber: i + 1,
+        contentHtml: `<div class="pptx-slide"><h1>${base}</h1><div class="slide-content"><p>${text.replace(/\n/g, '<br/>')}</p></div></div>`,
+        audioText: text,
+        fileUrl
+      }));
+    }
+  }
+
   return [1, 2, 3].map((pageNumber) => ({
     id: crypto.randomUUID(),
     courseId,
@@ -45,7 +113,7 @@ export function createApp() {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -141,7 +209,7 @@ export function createApp() {
     let parseErrors: string[] = [];
 
     if (ext === 'pdf' || ext === 'pptx') {
-      pages = createPagesFromCourseware(courseId, filename, saved.url);
+      pages = createPagesFromCourseware(courseId, filename, saved.url, saved.absolutePath);
       db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
     }
     if (ext === 'xlsx') {
@@ -328,6 +396,94 @@ export function createApp() {
     db.lectures = db.lectures.filter((item) => item.id !== req.params.id);
     await writeDb(db);
     ok(res, { deleted: before !== db.lectures.length });
+  });
+
+  // Live session API (T27)
+  app.post('/api/v1/live-sessions', async (req, res) => {
+    const db = await readDb();
+    const teacherId = currentUserId(req) || 'teacher-1';
+    const { courseId = 'course-1', sourceMode = 'pdf' } = req.body ?? {};
+
+    // End any existing active session for this course/teacher
+    db.liveSessions.forEach((s) => {
+      if (s.courseId === courseId && s.teacherId === teacherId && s.status === 'active') {
+        s.status = 'ended';
+        s.endedAt = new Date().toISOString();
+      }
+    });
+
+    const session: LiveSession = {
+      id: crypto.randomUUID(),
+      courseId,
+      teacherId,
+      status: 'active',
+      sourceMode: sourceMode as LiveSession['sourceMode'],
+      currentPage: 1,
+      recordingStatus: 'idle',
+      startedAt: new Date().toISOString(),
+      endedAt: ''
+    };
+    db.liveSessions.push(session);
+    await writeDb(db);
+    ok(res, session);
+  });
+
+  app.get('/api/v1/live-sessions/active', async (req, res) => {
+    const db = await readDb();
+    const courseId = String(req.query.courseId || '');
+    const active = db.liveSessions.find(
+      (s) => s.courseId === courseId && s.status === 'active'
+    );
+    if (!active) return ok(res, null);
+    ok(res, active);
+  });
+
+  app.patch('/api/v1/live-sessions/:id', async (req, res) => {
+    const db = await readDb();
+    const session = db.liveSessions.find((s) => s.id === req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+
+    const { sourceMode, currentPage, recordingStatus, status, endedAt } = req.body ?? {};
+    if (sourceMode) session.sourceMode = sourceMode as LiveSession['sourceMode'];
+    if (currentPage !== undefined) session.currentPage = Number(currentPage);
+    if (recordingStatus) session.recordingStatus = recordingStatus as LiveSession['recordingStatus'];
+    if (status) {
+      session.status = status as LiveSession['status'];
+      if (status === 'ended' && !session.endedAt) {
+        session.endedAt = endedAt || new Date().toISOString();
+      }
+    }
+    await writeDb(db);
+    ok(res, session);
+  });
+
+  app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {
+    const db = await readDb();
+    const session = db.liveSessions.find((s) => s.id === req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+
+    const { body } = req.body ?? {};
+    if (!body || !body.trim()) return fail(res, 400, 'Comment body is required');
+
+    const comment: ClassroomComment = {
+      id: crypto.randomUUID(),
+      liveSessionId: req.params.id,
+      studentId: currentUserId(req) || 'student-1',
+      body: body.trim(),
+      createdAt: new Date().toISOString(),
+      visibility: 'visible'
+    };
+    db.classroomComments.push(comment);
+    await writeDb(db);
+    ok(res, comment);
+  });
+
+  app.get('/api/v1/live-sessions/:id/comments', async (req, res) => {
+    const db = await readDb();
+    const comments = db.classroomComments
+      .filter((c) => c.liveSessionId === req.params.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    ok(res, comments);
   });
 
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {

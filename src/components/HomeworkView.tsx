@@ -35,7 +35,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
-import { homeworkApi, learningRecordsApi, recordingsApi, type LearningTask, type LearningRecord } from '../services/apiClient.ts';
+import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, type LearningTask, type LearningRecord, type Course } from '../services/apiClient.ts';
 
 // Add decorative components
 const FloatingElement = ({ children, className, duration = 4, delay = 0, yOffset = -15 }: { children: React.ReactNode, className?: string, duration?: number, delay?: number, yOffset?: number }) => (
@@ -255,6 +255,8 @@ const HomeworkView = () => {
   const [learningRecords, setLearningRecords] = useState<LearningRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || 'course-1');
 
   // Task state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -274,10 +276,16 @@ const HomeworkView = () => {
   const currentTask = currentTasks[currentIndex];
 
   useEffect(() => {
-    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    coursesApi.list().then(setCourses).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    setLoading(true);
+    setError(null);
     Promise.all([
-      homeworkApi.tasks(courseId),
-      learningRecordsApi.list(courseId, 'homework')
+      homeworkApi.tasks(selectedCourseId),
+      learningRecordsApi.list(selectedCourseId, 'homework')
     ]).then(([tasks, records]) => {
       setAllTasks(tasks);
       setLearningRecords(records);
@@ -310,7 +318,7 @@ const HomeworkView = () => {
       setError(t('homework.load_error'));
       setLoading(false);
     });
-  }, []);
+  }, [selectedCourseId]);
 
   const allCurrentDone = groups.every(g => g.completedCount === g.totalCount);
   const currentGroupIndex = groups.findIndex(g => g.completedCount < g.totalCount);
@@ -443,30 +451,41 @@ const HomeworkView = () => {
 
   const latestScore = recordings[0]?.score;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 font-medium">{t('homework.loading')}</p>
-        </div>
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
+        <BookOpen size={18} className="text-gray-400" />
+        <select
+          value={selectedCourseId}
+          onChange={(e) => {
+            const cid = e.target.value;
+            setSelectedCourseId(cid);
+            localStorage.setItem('lingobridge_courseId', cid);
+          }}
+          className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
+        >
+          {courses.length === 0 && <option value={selectedCourseId}>{selectedCourseId}</option>}
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>{c.title}</option>
+          ))}
+        </select>
       </div>
-    );
-  }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center max-w-md">
-          <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 font-medium">{error}</p>
+      {loading ? (
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-500 font-medium">{t('homework.loading')}</p>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  if (view === 'path') {
-    return (
+      ) : error ? (
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center max-w-md">
+            <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500 font-medium">{error}</p>
+          </div>
+        </div>
+      ) : view === 'path' ? (
       <div id="homework-path" className="relative animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
         {/* Background Decorations */}
         <FloatingElement className="top-10 left-10 text-blue-200" delay={0}>
@@ -600,11 +619,8 @@ const HomeworkView = () => {
           )}
         </AnimatePresence>
       </div>
-    );
-  }
-
-  return (
-    <div id="homework-task-view" className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
+      ) : (
+      <div id="homework-task-view" className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
        {/* Task Back Nav */}
        <div className="flex items-center gap-4 mb-4">
          <button
@@ -874,6 +890,8 @@ const HomeworkView = () => {
           </div>
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 };

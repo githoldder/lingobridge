@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
-import { vocabularyApi, learningRecordsApi, type VocabularyItem, type LearningRecord } from '../services/apiClient.ts';
+import { vocabularyApi, learningRecordsApi, coursesApi, type VocabularyItem, type LearningRecord, type Course } from '../services/apiClient.ts';
 import {
   Plus,
   Search,
@@ -386,12 +386,20 @@ const VocabularyView = () => {
   const [learningRecords, setLearningRecords] = useState<LearningRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || 'course-1');
 
   useEffect(() => {
-    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    coursesApi.list().then(setCourses).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    setLoading(true);
+    setError(null);
     Promise.all([
-      vocabularyApi.list(courseId),
-      learningRecordsApi.list(courseId, 'vocabulary')
+      vocabularyApi.list(selectedCourseId),
+      learningRecordsApi.list(selectedCourseId, 'vocabulary')
     ]).then(([items, records]) => {
       setVocabItems(items);
       setLearningRecords(records);
@@ -401,7 +409,7 @@ const VocabularyView = () => {
       setError(t('vocab.load_error'));
       setLoading(false);
     });
-  }, []);
+  }, [selectedCourseId]);
 
   const getRecord = (taskId: string): LearningRecord | undefined =>
     learningRecords.find(r => r.taskId === taskId);
@@ -443,42 +451,50 @@ const VocabularyView = () => {
     setView('learning');
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 font-medium">{t('vocab.loading')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center max-w-md">
-          <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 font-medium">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (view === 'learning') {
-    return (
-      <div id="vocabulary-learning" className="min-h-screen py-12 px-4">
-        <LearningSession
-          initialWords={sessionWords}
-          onFinish={() => setView('bank')}
-          groupName={sessionGroup}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div id="vocabulary-view" className="space-y-12 pb-20">
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
+        <Search size={18} className="text-gray-400" />
+        <select
+          value={selectedCourseId}
+          onChange={(e) => {
+            const cid = e.target.value;
+            setSelectedCourseId(cid);
+            localStorage.setItem('lingobridge_courseId', cid);
+          }}
+          className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
+        >
+          {courses.length === 0 && <option value={selectedCourseId}>{selectedCourseId}</option>}
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>{c.title}</option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-500 font-medium">{t('vocab.loading')}</p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center max-w-md">
+            <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500 font-medium">{error}</p>
+          </div>
+        </div>
+      ) : view === 'learning' ? (
+        <div id="vocabulary-learning" className="min-h-screen py-12 px-4">
+          <LearningSession
+            initialWords={sessionWords}
+            onFinish={() => setView('bank')}
+            groupName={sessionGroup}
+          />
+        </div>
+      ) : (
+        <div id="vocabulary-view" className="space-y-12 pb-20">
       {/* Header & Stats */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-10">
         <div className="space-y-2">
@@ -645,6 +661,8 @@ const VocabularyView = () => {
         </div>
       </div>
     </div>
+    )}
+  </div>
   );
 };
 

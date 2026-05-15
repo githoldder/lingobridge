@@ -50,7 +50,8 @@ test('courseware upload creates pages and excel exercises', async () => {
     });
     const pdfJson = await pdf.json();
     assert.equal(pdfJson.code, 0);
-    assert.equal(pdfJson.data.pages.length, 3);
+    assert.equal(pdfJson.data.pages.length, 1);
+    assert.equal(pdfJson.data.pages[0].fileUrl, pdfJson.data.file.storageUrl);
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([[

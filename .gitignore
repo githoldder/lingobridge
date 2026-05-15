@@ -18,3 +18,4 @@ tmp/
 *.mp3
 .playwright-cli/
 output/playwright/screenshots/
+test-results/

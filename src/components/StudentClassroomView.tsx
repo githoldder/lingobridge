@@ -1,3 +1,11 @@
+/**
+ * @deprecated This component is NOT the live classroom route.
+ * It was the old course-practice/recording page.
+ * Live classroom uses TeacherClassroomView with role="student".
+ * This file is kept only for reference and should be removed
+ * once all homework/practice pages are migrated to HomeworkView.
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,

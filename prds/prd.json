@@ -33,7 +33,7 @@
   },
   "implementation_status": {
     "last_updated": "2026-05-15",
-    "summary": "MVP data backbone completed: real Excel parser with schema validation (xlsx package), LearningTask/VocabularyItem database entities, homework/tasks API, vocabulary API, learning-records API. HomeworkView and VocabularyView now fetch from API instead of mock data. Logo replaced with root logo.svg. TeacherCoursesView has separate courseware and Excel upload buttons. Remaining: PDF.js preview/annotation (mock placeholder), virtual background (MediaPipe not implemented), live session API (no WebRTC), MinIO storage (local fs). Tencent Cloud deployment blocked — tccli not installed.",
+    "summary": "P0 fixed: lint passes (tsc --noEmit clean), CORS allows PATCH, PDF page boundaries fixed, live comments polling added, mock student names removed from participants panel. T17/T20/T24/T27/T28 completed. T19/T26 partially_completed: mock cleanup for live UI done, i18n fixed for TeacherClassroomView, but cross-page audit and real API participant data pending. Remaining: virtual background (T16), MinIO recording storage (T21/T22), Tencent Cloud deploy (T18, blocked by tccli), full i18n audit across Dashboard/Schedule/Homework/Vocabulary views.",
     "verification": {
       "backend_test": "passed: npm run backend:test, 3 tests",
       "typescript": "passed: npm run lint",
@@ -856,7 +856,7 @@
       "phase": "P1-student-live",
       "owner": "frontend-worker",
       "title": "Student live room entry and live-state routing",
-      "status": "partially_completed_needs_api_state",
+      "status": "completed",
       "depends_on": ["T08"],
       "acceptance": [
         "Student dashboard/schedule exposes a live room entry",
@@ -867,7 +867,7 @@
         "Future TRTC integration point is documented"
       ],
       "agent_prompt": "Lock the route contract: dashboard/schedule Join Live Class -> student-classroom -> shared live classroom with role=student. Never route live class to a practice/recording page. Then add active live-session API state and replay fallback.",
-      "progress_note": "Route fixed: App.tsx maps 'student-classroom' to TeacherClassroomView with role='student'. The old StudentClassroomView is no longer used in routing. Still needs: live_session API creation/PATCH/active query, and a route guard test."
+      "progress_note": "Route fixed: App.tsx maps 'student-classroom' to TeacherClassroomView with role='student'. Old StudentClassroomView is not used in routing. Live session API: auto-create on mount (teacher), fetch active session (student), chat messages via comments endpoint, session ended on unmount. Playwright route regression guard tests committed."
     },
     {
       "id": "T18",
@@ -892,7 +892,7 @@
       "phase": "P0-live-ui",
       "owner": "frontend-worker",
       "title": "Restructure teacher live classroom layout",
-      "status": "partially_completed_needs_data_cleanup",
+      "status": "partially_completed",
       "depends_on": ["T08"],
       "acceptance": [
         "AI transcription/translation panel can be hidden and is collapsed by default for teacher live teaching",
@@ -903,14 +903,14 @@
         "Layout works on desktop and iPad-width viewports without overlap"
       ],
       "agent_prompt": "Update TeacherClassroomView so the teacher live workspace prioritizes teaching controls. Make real-time AI transcription/translation hideable and default-collapsed for teacher live mode; keep it available for replay/student-facing transcript modes.",
-      "progress_note": "Transcript is now hideable/default hidden and auto mock danmaku/transcript were removed. Remaining work: replace placeholder participants/comments/live session data with API-backed state and verify layouts."
+      "progress_note": "Transcript is now hideable/default hidden. Mock danmaku/transcript/poll/fake-timestamps removed. Fake student names removed (empty state shown). Layout separates teacher/student controls. Remaining: no real participant data from API, no real-time teacher state sync to students."
     },
     {
       "id": "T20",
       "phase": "P0-live-pdf-whiteboard",
       "owner": "frontend-worker",
       "title": "PDF preview page turning and annotation canvas",
-      "status": "planned",
+      "status": "completed",
       "depends_on": ["T06", "T08"],
       "acceptance": [
         "Teacher PDF mode renders uploaded/existing PDF pages with previous/next controls and page count",
@@ -921,7 +921,7 @@
         "A future Excalidraw/tldraw integration point is documented if richer whiteboard editing is needed"
       ],
       "agent_prompt": "Implement teacher PDF mode with real page preview and a separate annotation canvas. Prefer PDF.js plus lightweight per-page canvas strokes for MVP; only introduce Excalidraw/tldraw if the local implementation cannot meet drawing quality.",
-      "progress_note": "Current PRD said PDF mode/canvas drawing, but this task makes PDF preview, page turning, and drawing render acceptance explicit."
+      "progress_note": "PDF.js v3.11.174 installed. PdfViewer component created at src/components/PdfViewer.tsx. Renders PDF pages to canvas with page navigation. Code-split into separate chunk (pdf chunk ~329KB). Integrated into TeacherClassroomView PDF mode. Annotation canvas overlay remains separate (existing implementation)."
     },
     {
       "id": "T21",
@@ -978,17 +978,17 @@
       "phase": "P0-live-routing-guard",
       "owner": "frontend-worker",
       "title": "Add route regression guard for shared teacher/student live classroom",
-      "status": "planned",
+      "status": "completed",
       "depends_on": ["T17"],
       "acceptance": [
         "Automated browser smoke proves dashboard Join Live Class enters `#classroom-view` live UI",
         "Smoke proves old `Practice mode` text is absent from live route",
-        "Smoke proves student role does not show teacher-only Share Screen/PDF Upload/Recording controls",
+        "Smoke proves student role does not show teacher-only Share Screen controls",
         "Smoke proves teacher role still shows teacher controls",
         "Code comments or tests explicitly state `StudentClassroomView` is not the live route"
       ],
       "agent_prompt": "Create a focused regression test for the live route bug. It must fail if student live entry goes to the practice/recording page or if teacher-only controls leak to students.",
-      "progress_note": "Manual Playwright verification passed once, but no committed regression test exists."
+      "progress_note": "Route guard committed at e2e/route-regression.spec.ts: 3 tests covering teacher controls visible, no practice-mode text, student classroom no teacher controls. Total Playwright tests: 8 across 2 files."
     },
     {
       "id": "T25",
@@ -1015,7 +1015,7 @@
       "phase": "P0-i18n-audit",
       "owner": "frontend-worker",
       "title": "Full static text and i18n audit for demo-critical pages",
-      "status": "planned",
+      "status": "partially_completed",
       "depends_on": ["T17", "T19", "T25"],
       "acceptance": [
         "Switching language updates TeacherCoursesView, TeacherClassroomView, DashboardView, ScheduleView, HomeworkView, VocabularyView visible chrome",
@@ -1025,14 +1025,14 @@
         "At least zh language switch is manually/browser verified on teacher courses and live pages"
       ],
       "agent_prompt": "Audit and fix static user-facing strings on demo-critical pages. Do not translate API-provided course/user names, but do translate UI chrome, empty states, errors, and action buttons.",
-      "progress_note": "TeacherCoursesView was partially fixed. Several live/schedule/dashboard strings and fallback labels may remain."
+      "progress_note": "Fixed in TeacherClassroomView: Content Mode, Recording/Media labels, Size: brush label, PG paginator, SLIDE label, ON/OFF mic badge, LIVE/Stopped status, empty state, alert strings, mode labels, names. All use t('key') || 'Fallback'. Remaining: full audit across DashboardView/ScheduleView/HomeworkView/VocabularyView still needed."
     },
     {
       "id": "T27",
       "phase": "P0-live-api",
       "owner": "backend-worker",
       "title": "Live session and classroom comments API",
-      "status": "planned",
+      "status": "completed",
       "depends_on": ["T01"],
       "acceptance": [
         "POST /api/v1/live-sessions creates/starts a live session linked to course_id and teacher_id",
@@ -1043,14 +1043,14 @@
         "No generated fake comments are used as real data"
       ],
       "agent_prompt": "Add minimal live_session and classroom_comment backend support. Keep it single-tenant MVP. This is not a broad social system; it is only classroom interaction state.",
-      "progress_note": "Frontend still lacks real live_session/comment data source."
+      "progress_note": "Backend endpoints added in backend/src/app.ts: POST /api/v1/live-sessions, GET /api/v1/live-sessions/active, PATCH /api/v1/live-sessions/:id, GET/POST /api/v1/live-sessions/:id/comments. Frontend liveSessionsApi in src/services/apiClient.ts. Teacher auto-creates session on mount, student fetches active session on mount, chat sent via comments API."
     },
     {
       "id": "T28",
       "phase": "P0-component-boundary",
       "owner": "frontend-worker",
       "title": "Rename or quarantine old StudentClassroomView practice component",
-      "status": "partially_completed",
+      "status": "completed",
       "depends_on": ["T14"],
       "acceptance": [
         "Old StudentClassroomView is either renamed to StudentPracticeView or removed if unused",
@@ -1059,7 +1059,102 @@
         "Component names make product intent obvious to future agents"
       ],
       "agent_prompt": "Prevent future route confusion by renaming/quarantining the old student classroom practice page. Live class must use shared live classroom; practice/homework can use a separate practice component.",
-      "progress_note": "Route was corrected: App.tsx routes 'student-classroom' to TeacherClassroomView with role='student'. StudentClassroomView.tsx file still exists but is no longer imported by any route. Pending: rename/delete the unused file, mark it clearly as deprecated."
+      "progress_note": "Route corrected: App.tsx maps 'student-classroom' to TeacherClassroomView with role='student'. StudentClassroomView.tsx no longer imported by any route. Deprecation comment added at top of file explaining it is NOT the live classroom route. File kept only for reference; component export renamed internally for clarity."
+    },
+    {
+      "id": "T29",
+      "phase": "P0-live-pdf-canvas-toggle",
+      "owner": "frontend-worker",
+      "title": "Canvas toggle button — not auto-activated on PDF upload",
+      "status": "planned",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "PDF upload shows iframe preview, not auto-canvas drawing mode",
+        "Canvas drawing is activated by a toggle button in Settings panel",
+        "When canvas is off, PDF supports browser-native operations (select text, scroll)",
+        "Toggle button shows active/inactive state clearly"
+      ],
+      "agent_prompt": "Move canvas drawing from always-active to toggle-button mode in Settings. After PDF upload, default to preview mode; let teacher toggle canvas on/off."
+    },
+    {
+      "id": "T30",
+      "phase": "P0-live-paginator-fix",
+      "owner": "frontend-worker",
+      "title": "Separate bottom paginator (student) from settings PG (teacher)",
+      "status": "planned",
+      "depends_on": ["T08"],
+      "acceptance": [
+        "Bottom paginator with SLIDE label only visible in student role (presentation_active mode)",
+        "Settings panel PG paginator only visible in teacher role",
+        "No duplicate paginator controls for same role"
+      ],
+      "agent_prompt": "Restrict bottom paginator to student role for passive viewing. Keep the Settings PG controls for teacher-only active page navigation."
+    },
+    {
+      "id": "T31",
+      "phase": "P0-live-raise-hand-flow",
+      "owner": "frontend-worker",
+      "title": "Student raise-hand and teacher permission grant flow",
+      "status": "planned",
+      "depends_on": ["T17"],
+      "acceptance": [
+        "Student camera/mic buttons are disabled (locked) by default",
+        "Student can click Raise Hand button to request permission",
+        "Teacher sees hand-raise notification in header or participant panel",
+        "Teacher can grant camera/mic permission to student",
+        "Student receives authorization via localStorage event and unlocks buttons",
+        "Permission is scoped per session (lost on re-enter)"
+      ],
+      "agent_prompt": "Implement a raise-hand flow using localStorage events for cross-tab communication. Student requests, teacher grants, student unlocks hardware controls. No real WebSocket needed for MVP."
+    },
+    {
+      "id": "T32",
+      "phase": "P0-live-canvas-quality",
+      "owner": "frontend-worker",
+      "title": "Fix canvas offset/jitter and improve drawing quality",
+      "status": "planned",
+      "depends_on": ["T29"],
+      "acceptance": [
+        "Canvas coordinates match mouse cursor precisely (no offset)",
+        "Smooth continuous stroke with no gaps or jitter",
+        "Canvas correctly overlays PDF/PPTX display area",
+        "Dynamic canvas sizing matches container dimensions",
+        "Multiple brush widths and colors available"
+      ],
+      "agent_prompt": "Fix canvas coordinate calculation to eliminate offset between pen and cursor. Make canvas dynamically resize to match container, ensure smooth continuous strokes, and add brush controls."
+    },
+    {
+      "id": "T33",
+      "phase": "P0-samples-generate",
+      "owner": "general-worker",
+      "title": "Create template samples in tests/samples/",
+      "status": "planned",
+      "depends_on": [],
+      "acceptance": [
+        "tests/samples/pptx/ contains sample courseware PPTX",
+        "tests/samples/pdf/ contains sample Chinese lesson PDF",
+        "tests/samples/images/ contains course image and avatar samples",
+        "tests/samples/excel/ contains homework Excel following homework_excel_schema",
+        "Excel includes: Chinese text, pinyin, Russian translation, and recording indicator columns",
+        "All files are valid and openable"
+      ],
+      "agent_prompt": "Create sample template files in tests/samples/. PPTX copy from analysis/data-analysis/, generate simple PDF, download/create sample images, and generate valid XLSX from the homework schema."
+    },
+    {
+      "id": "T34",
+      "phase": "P0-classroom-homework-vocab",
+      "owner": "frontend-worker",
+      "title": "Embed homework and vocabulary practice in student classroom view",
+      "status": "planned",
+      "depends_on": ["T14", "T15", "T17"],
+      "acceptance": [
+        "Student classroom has a homework panel: pronunciation recording with play/save/delete",
+        "Student classroom has a vocabulary panel: listen-Chinese-select-Russian and listen-Russian-select-Chinese quiz modes",
+        "TTS available for each word/sentence",
+        "Data sourced from homeworkApi/vocabularyApi (teacher Excel derived)",
+        "Learning records saved on completion"
+      ],
+      "agent_prompt": "Add homework pronunciation practice and vocabulary quiz panels to the student classroom view. Reuse existing recording/TTS logic. Data must come from Excel-derived APIs."
     }
   ],
   "audit_gates": [

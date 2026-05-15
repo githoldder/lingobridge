@@ -270,3 +270,48 @@ export const learningRecordsApi = {
 export const ttsApi = {
   synthesize: (text: string, lang: string) => request<{ provider: string; audioUrl: string | null; text: string; lang: string }>(`/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}`)
 };
+
+export interface LiveSessionData {
+  id: string;
+  courseId: string;
+  teacherId: string;
+  status: 'active' | 'ended';
+  sourceMode: 'screen' | 'pdf';
+  currentPage: number;
+  recordingStatus: 'idle' | 'recording' | 'saved';
+  startedAt: string;
+  endedAt: string;
+}
+
+export interface ClassroomCommentData {
+  id: string;
+  liveSessionId: string;
+  studentId: string;
+  body: string;
+  createdAt: string;
+  visibility: 'visible' | 'hidden';
+}
+
+export const liveSessionsApi = {
+  create: (courseId: string, sourceMode: 'screen' | 'pdf' = 'pdf') =>
+    request<LiveSessionData>('/live-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ courseId, sourceMode })
+    }),
+  getActive: (courseId: string) =>
+    request<LiveSessionData | null>(`/live-sessions/active?courseId=${courseId}`),
+  patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
+    request<LiveSessionData>(`/live-sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }),
+  comments: {
+    list: (sessionId: string) =>
+      request<ClassroomCommentData[]>(`/live-sessions/${sessionId}/comments`),
+    send: (sessionId: string, body: string) =>
+      request<ClassroomCommentData>(`/live-sessions/${sessionId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body })
+      })
+  }
+};
