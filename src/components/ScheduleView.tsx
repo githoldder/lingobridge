@@ -8,17 +8,32 @@ import {
   ChevronRight,
   MoreVertical,
   Plus,
-  RefreshCw
+  RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { lecturesApi, mediaUrl, type Lecture } from '../services/apiClient.ts';
+import { resolveEntry } from '../services/entryResolver.ts';
 
 interface ScheduleViewProps {
-  onNavigate?: (target: string) => void;
+  onNavigate?: (target: string, ctx?: { lessonNodeId?: string; courseId?: string }) => void;
+  lessonNodeId?: string;
 }
 
-const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
+interface ScheduleItem {
+  id: number;
+  day: number;
+  title: string;
+  time: string;
+  instructor: string;
+  isLive: boolean;
+  courseId?: string;
+  unit?: number;
+  lesson?: number;
+}
+
+const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate, lessonNodeId: _propLessonNodeId }) => {
   const { t } = useLanguage();
   const [isSyncing, setIsSyncing] = useState(false);
   const [synced, setSynced] = useState(false);
@@ -26,6 +41,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   const [selectedDay, setSelectedDay] = useState(30);
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [replayMessage, setReplayMessage] = useState('');
+  const [enteringHomework, setEnteringHomework] = useState<number | null>(null);
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -35,11 +51,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
     }, 1500);
   };
 
-  const scheduleItems = [
-    { id: 1, day: 30, title: t('course.basic'), time: '10:00 AM - 11:30 AM', instructor: 'Li', isLive: true },
-    { id: 2, day: 30, title: t('course.vocab'), time: '02:00 PM - 03:00 PM', instructor: 'Wang', isLive: false },
-    { id: 3, day: 31, title: t('course.culture'), time: '10:00 AM - 11:00 AM', instructor: 'Chen', isLive: true },
-    { id: 4, day: 28, title: 'Tone Mastery', time: '09:00 AM - 10:30 AM', instructor: 'Li', isLive: false },
+  const scheduleItems: ScheduleItem[] = [
+    { id: 1, day: 30, title: t('course.basic'), time: '10:00 AM - 11:30 AM', instructor: 'Li', isLive: true, courseId: 'course-1', unit: 1, lesson: 1 },
+    { id: 2, day: 30, title: t('course.vocab'), time: '02:00 PM - 03:00 PM', instructor: 'Wang', isLive: false, courseId: 'course-1', unit: 1, lesson: 2 },
+    { id: 3, day: 31, title: t('course.culture'), time: '10:00 AM - 11:00 AM', instructor: 'Chen', isLive: true, courseId: 'course-1', unit: 2, lesson: 1 },
+    { id: 4, day: 28, title: 'Tone Mastery', time: '09:00 AM - 10:30 AM', instructor: 'Li', isLive: false, courseId: 'course-1', unit: 1, lesson: 3 },
   ];
 
   useEffect(() => {
@@ -47,6 +63,25 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
       .then(setLectures)
       .catch((error) => setReplayMessage(error.message || 'Unable to load replays.'));
   }, []);
+
+  const handleEnterHomework = async (item: ScheduleItem) => {
+    if (!item.courseId || item.unit === undefined || item.lesson === undefined) {
+      onNavigate?.('homework');
+      return;
+    }
+    setEnteringHomework(item.id);
+    try {
+      const resolved = await resolveEntry({
+        courseId: item.courseId,
+        lessonNodeId: `${item.courseId}-u${item.unit}-l${item.lesson}`,
+      });
+      onNavigate?.('homework', { lessonNodeId: resolved.lessonNodeId, courseId: resolved.courseId });
+    } catch {
+      onNavigate?.('homework');
+    } finally {
+      setEnteringHomework(null);
+    }
+  };
 
   const filteredAgenda = scheduleItems.filter(item => item.day === selectedDay);
   const filteredRecordings = lectures
@@ -200,6 +235,18 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
                               {t('schedule.details')}
                             </button>
                           )}
+                          <button 
+                            onClick={() => handleEnterHomework(item)}
+                            disabled={enteringHomework === item.id}
+                            className="flex-1 md:flex-none px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-100 hover:bg-green-100 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            {enteringHomework === item.id ? (
+                              <div className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" />
+                            ) : (
+                              <FileText size={16} />
+                            )}
+                            {t('schedule.enter_homework')}
+                          </button>
                           <button className="p-2.5 text-gray-400 hover:text-gray-900 border border-gray-100 rounded-xl hover:bg-gray-50">
                             <MoreVertical size={20} />
                           </button>

@@ -1,443 +1,280 @@
-# LingoBridge MVP PRD v3.0 Customer Delivery Control Plan
+# LingoBridge PRD v4.1 修复、后台管理与下一阶段方向
 
-> Source of truth: `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md`
-> Source status: user-reviewed and approved
-> Control draft date: 2026-05-15
-> Immediate delivery target: 2026-05-15 first MVP demo/public test
->
-> **Overall status:** T17/T20/T24/T27/T28 ✅ completed; T19/T26 ⏳ partially_completed (mock cleanup for live UI done — no real API participant data; i18n fixed for TeacherClassroomView — cross-page audit pending); CORS PATCH method added; PDF page boundary fixed; Live comments polling added.
+> 更新日期：2026-05-17  
+> 目标：清理前端 mock、修正 live/课时/作业边界、补齐课程编辑与管理后台。  
+> 原则：简洁、可维护；只覆盖关键逻辑；重点写清模块交界点，不展开内部实现细节。
 
-## 0. Product Boundary
+## 0. 当前进度
 
-**One sentence:** LingoBridge is a Chinese learning tool website for Kazakhstani international students. Students follow the teacher's PPT/courseware and practice pronunciation after class.
+截至 2026-05-17，v4 的 15 个任务已完成并经过三轮 audit。当前状态：
 
-**MVP is not:** a full course management system, online PPT editor, broad social platform, international payment system, or multi-tenant SaaS.
-
-The MVP must stay centered on one core loop:
-
-```
-Teacher uploads PPT/PDF + structured homework Excel
--> system generates course pages + homework/vocabulary tasks
--> student opens course practice/homework/vocabulary -> clicks Chinese TTS
--> records local pronunciation -> uploads recording to cloud
--> plays/deletes/downloads own recordings
-```
-
-## 1. Current Repo Reality
-
-- GitHub repo: `https://github.com/githoldder/lingobridge`
-- Local workspace: `/Users/caolei/Desktop/LingoBridge`
-- Current stack: Vite + React 19 + TypeScript + Tailwind + lucide-react + motion (frontend); Express + TypeScript (backend); Docker Compose + Nginx (deployment); PM2 (local process management).
-- Backend: Express API with health, demo auth, courses CRUD, courseware upload (pptx/pdf/xlsx), recording upload/list/delete, lecture replay upload/list/delete. Local JSON file store for metadata, local filesystem for uploads.
-- Deployment: Dockerfile, docker-compose.yml, nginx.conf, PM2 ecosystem.config.cjs, health-check scripts all exist and verified locally.
-- Current mock surfaces that remain:
-  - `HomeworkView` uses hardcoded `CURRICULUM_DATA` and `MOCK_SENTENCES` — no API integration.
-  - `VocabularyView` uses hardcoded `INITIAL_WORDS` — no API integration.
-  - Backend `createExercisesFromExcel()` returns 2 hardcoded exercises — no real XLSX parsing.
-  - Teacher live PDF mode renders a mock `<h2>Lesson Plan: Page {pdfPage}</h2>` placeholder — no PDF.js.
-  - Teacher live virtual background is not implemented (no MediaPipe/Selfie Segmentation).
-  - Live session API (`live-sessions`, `classroom-comments`) does not exist — classroom is a local recording tool, not a real-time session.
-  - MinIO/S3 object storage adapter does not exist — all files use local filesystem.
-  - Dashboard and report visuals remain static mocks.
-- Fixed surfaces (previously mock, now API-backed):
-  - `LoginView` calls backend demo auth.
-  - `TeacherCoursesView` loads courses from API, creates/upload to real endpoints.
-  - Student course practice calls API for pages, recordings, TTS facade.
-  - Teacher lecture recording uploads to backend (local storage) and replay listing works.
-
-Security note: local server notes contain plaintext secrets. Do not copy them into this repo. Rotate exposed keys before a real public demo.
-
-## 2. OKRTS
-
-### Objective
-
-By 2026-05-15, make the PRD v3.0 MVP demonstrable: teacher can upload courseware and structured Excel, student can follow course pages/homework/vocabulary, use TTS, record pronunciation, manage cloud-backed recordings, and teacher can run/save/replay a live class for demo video capture and Tencent Cloud public test.
-
-### Key Results
-
-| ID | Key Result | Acceptance |
+| 模块 | 状态 | 说明 |
 |---|---|---|
-| KR1 | MVP core learning loop works | PPT/PDF upload -> course page -> TTS -> student record -> upload -> play/delete/download |
-| KR2 | Teacher courseware upload works | teacher can upload `.pptx`, `.pdf`, `.xlsx`; `.pptx/.pdf` become course pages; `.xlsx` syncs as preview/homework exercise data |
-| KR3 | Student practice page works | course pages support page navigation, Chinese TTS button, recording button, and own recording list |
-| KR4 | Recording storage is real | audio is uploaded to backend/object-storage abstraction and linked to student/course/page |
-| KR5 | Teacher recording/replay works | teacher classroom recording auto-starts after media permission, saves to MinIO/object storage, and students can find replay by date in schedule/calendar history |
-| KR6 | Live mode demo works | teacher can choose local screen share or uploaded/existing PDF mode; PDF page turning, annotation canvas drawing, camera, recording controls, and student comments work; AI transcript panel is hideable |
-| KR7 | Camera/mic permission bug is fixed | toggling camera/mic off stops all tracks; browser no longer shows camera in use after exit |
-| KR8 | Three-language UI remains usable | Chinese/Russian/Kazakh switching works on demo-critical pages |
-| KR9 | Public test URL is reachable | Tencent Cloud public URL opens frontend and `/api/v1/health` returns OK |
+| 身份与游客门禁 | 已完成 | `AuthContext`、`GuestGate` 已接入；Anna mock 已清理 |
+| live/课时/作业一对一 | 已完成 | 新增 `lesson_node`、`assignment_node`，live 创建要求 `lessonNodeId` |
+| 学习记录持久化 | 已完成 | homework 保存传入 `lessonNodeId`，录音上传带 `taskId` |
+| 学生/教师 live 权限分离 | 已完成 | 学生端隐藏教师配置按钮，教师端保留控制 |
+| i18n key 暴露修复 | 已完成 | 教师端关键 `classroom.*` 已清理 |
+| PDF 与画笔 | 已完成 | PDF 预缓存/DPI 优化，画笔按页存储、清晰线条、粗细调节 |
+| 教师课程编辑页 | 已完成 | 课程信息、学生、课件、时间、作业、live 六模块 |
+| 管理端后台 | 已完成 | Admin 全宽布局和核心运营模块已接入 |
+| 验证 | 通过 | `npm run lint`、`npm run build`、`npm run backend:test` 3/3 通过 |
 
-### Risks
+非阻断 warning：
 
-| Risk | Level | Control |
+- Vite build 中 PDF.js 使用 eval 的安全/压缩 warning。
+- 主 bundle 超过 500KB 的 chunk warning。
+
+## 0.1 Agent 防回归规则
+
+后续 agent 必须遵守以下规则，防止重复出现本轮低级错误：
+
+1. 组件内不得硬编码 `http://127.0.0.1:3001`。除 `apiClient.ts` 的默认 fallback 外，所有 API 调用都必须走 `src/services/apiClient.ts`。
+2. 不允许导入不存在的扩展名，例如 `apiClient.tsx`。新增文件后必须跑 `npm run build`，不能只跑 TypeScript。
+3. 新增前端调用前，必须确认 `backend/src/app.ts` 里有对应接口；新增接口后至少补一个 smoke/API 验证。
+4. API 字段名变更必须端到端同步：backend type、db seed、apiClient type、组件 local type、请求 body、渲染字段一起改。
+5. `liveSessionsApi.create` 必须传 `lessonNodeId`；没有课时节点时不能创建 live。
+6. 课时相关的学习记录写入必须传 `lessonNodeId`；录音上传必须传 `taskId`。
+7. Admin 入口必须前后端双重鉴权：前端 `user.role === admin`，后端 `requireAdmin`。
+8. 课程时间字段统一使用 `startsAt/endsAt`，不要再引入 `scheduledAt`。
+9. 完成声明前必须跑：`npm run lint`、`npm run build`、`npm run backend:test`。若 sandbox 下 `backend:test` 因 `tsx` IPC pipe 失败，可提权重跑。
+
+## 1. 问题诊断
+
+当前问题不是单个 UI bug，而是数据来源和业务边界没有完全收敛：
+
+1. 用户身份仍混入 mock 展示，例如学生默认显示 Anna。所有用户信息必须来自登录态或游客态，不允许页面组件自带默认学生身份。
+2. 落地页可直接进入产品功能，但没有统一权限门禁。游客可以预览有限功能，点击受保护动作时必须提示“想要解锁其他功能，请进行注册登录”。
+3. 教师上传的作业单词能同步，但 live、课时、作业节点的关系不清。产品规则应固定为：一个 live 对应一个课时；一个课时对应一个作业节点；二者一对一。
+4. 学生学习记录会在跳转后恢复未完成状态，说明完成状态、录音、学习记录的写入或读取没有统一以 `studentId + lessonNodeId + taskId` 为准。
+5. 学生端 live 不应出现“作业映射到 live”“单词映射到 live”这类教师配置按钮。学生只消费课堂内容、评论、获授权的麦克风/摄像头和当前课时练习入口。
+6. 教师端仍暴露 i18n key，例如 `classroom.content_mode`、`classroom.stopped`，说明渲染层没有统一经过 `t(key)` 或缺少兜底检查。
+7. PDF 渲染卡顿且体验不稳定，需要把课件渲染作为独立边界处理：上传、转换/缓存、分页渲染、课堂播放分开。
+8. 画笔不是教学批注所需的圆珠笔效果。应使用清晰连续线条，支持粗细调节。
+9. 清除笔迹与 `classroom.canvas_inactive` 交互重复。关闭画笔模式不应清空笔迹；只有“清除笔迹”才清空当前页或当前课时的批注。
+10. 教师点击课程卡片缺少编辑/管理页，需要把课程信息、学生、课件、时间、作业、live 课时管理统一起来。
+11. 缺少管理端后台，无法统一管理老师、学生、课件、Excel 作业、live、录播、note 弹幕、翻译字幕、schedule、学习进度。
+
+## 2. 产品边界
+
+LingoBridge 当前阶段是中文学习 MVP，不扩展成完整 LMS。v4.0 只做关键闭环：
+
+```text
+登录/游客态
+-> 教师创建课程
+-> 教师上传 PDF/PPTX 课件和 Excel 作业
+-> 教师为课程创建 live 课时
+-> 系统生成一个课时作业节点
+-> 学生进入课程/直播/作业
+-> 学生录音、完成单词/作业
+-> 学习记录持久化
+-> 管理端可查看和维护账号、课件、作业、live、记录
+```
+
+不做：在线 PPT 编辑、复杂多租户、支付、完整 AI 评分、社交社区、实时多人白板协同。
+
+## 3. 核心业务规则
+
+| 编号 | 规则 | 验收标准 |
 |---|---|---|
-| Scope expands into LMS/SaaS | P0 | PRD v3.0 is source of truth; only core loop plus stated live/replay additions |
-| PPTX rendering is hard | P0 | MVP accepts PPTX converted to PDF/pages; direct PPT editing is out of scope |
-| Browser media permission stuck | P0 | centralize `stopMediaStream(stream)` and call on toggle off, exit, unmount, and recording stop |
-| Browser cannot silently cast to hardware | P0 | use `getDisplayMedia()` for real screen share; use Google Cast/desktop wrapper only if external device casting is required |
-| Lecture recordings are too large for backend relay | P1 | use MinIO/S3-compatible presigned PUT upload for production path; keep backend direct upload only as local MVP fallback |
-| Real cloud TTS or object storage not ready | P1 | provide backend facade and local storage fallback; keep env-based provider switch |
-| Secrets leak | P0 | `.env*` ignored, no real keys in repo, rotate already exposed keys |
-| Direct IP lacks HTTPS | P1 | acceptable for public test only; formal launch needs domain + HTTPS |
+| R1 | 页面不得硬编码 Anna 等 mock 身份 | 学生名来自 `/users/me`；游客显示游客态 |
+| R2 | 游客只有部分功能开放 | 受保护按钮统一弹出注册登录提示 |
+| R3 | 一个 live = 一个课时 = 一个作业节点 | `liveSession.lessonNodeId` 必填且唯一 |
+| R4 | 学习记录必须持久化 | 页面跳转、刷新后完成状态不回退 |
+| R5 | 学生端 live 不显示教师配置按钮 | 作业/单词映射按钮仅教师课程编辑页可见 |
+| R6 | 教师端 visible text 必须 i18n 渲染 | 不再出现 `classroom.*` 原始 key |
+| R7 | PDF/PPTX 上传与课堂渲染解耦 | 课堂使用已缓存的 PDF/page 资源 |
+| R8 | 画笔模式只控制是否可书写 | 关闭画笔不清空笔迹，清除按钮才清除 |
+| R9 | 课程卡片进入课程编辑页 | 课程、学生、课件、时间、作业、live 统一管理 |
+| R10 | 管理端只做运营维护 | 管理账号、资源、记录，不进入复杂教学设计 |
 
-### Tasks
+## 4. 模块边界
 
-Detailed AI-dispatch tasks are encoded in `prd.json`. The implementation status by phase:
+### 4.1 身份与权限
 
-| Phase | Status |
+前端只认三种状态：`guest`、`student`、`teacher/admin`。用户信息来自 auth API，不从组件默认值读取。
+
+关键接口：
+
+| 接口 | 用途 |
 |---|---|
-| P0-foundation (T00) | ✅ completed |
-| P0-backend (T01) | ✅ completed |
-| P0-courseware (T02) | ✅ completed (real parser) |
-| P0-student-loop (T03) | ✅ completed (fallback TTS) |
-| P0-replay (T04) | ✅ completed |
-| P0-frontend (T05-T07) | ✅ completed |
-| P0-media-bugfix (T08) | ✅ code_completed (needs browser verification) |
-| P1-replay-ui (T09) | ✅ completed |
-| P1-deploy (T10) | ✅ assets completed (blocked by tccli) |
-| P1-audit (T11) | ✅ code audited |
-| P0-brand-polish (T12) | ✅ completed (logo.svg wired) |
-| P0-data-standard (T13) | ✅ completed (real XLSX parser with schema validation) |
-| P0-homework-route (T14) | ✅ completed (HomeworkView API-backed) |
-| P0-vocabulary-route (T15) | ✅ completed (VocabularyView API-backed) |
-| P0-teacher-courses (T25) | ✅ completed (upload separated, API-driven) |
-| P1-live (T16) | ⏳ planned (virtual background) |
-| P1-student-live (T17) | ✅ completed (route fixed, live session API wired, Playwright regression tests) |
-| P1-deploy (T18) | 🔴 blocked (tccli not installed) |
-| P0-live-ui (T19) | ⏳ partially_completed (mock data cleaned for live UI, but real API participant list not yet integrated) |
-| P0-live-pdf-whiteboard (T20) | ✅ completed (PDF.js + PdfViewer component with page nav) |
-| P0-live-recording-storage (T21) | ⏳ planned (no MinIO) |
-| P0-live-auto-record (T22) | ⏳ planned (manual only) |
-| P1-live-cast (T23) | ⏳ planned (real screen share pending) |
-| P0-live-routing-guard (T24) | ✅ completed (3 Playwright regression tests committed) |
-| P0-i18n-audit (T26) | ⏳ partially_completed (TeacherClassroomView i18n fixed, but cross-page audit not completed) |
-| P0-live-api (T27) | ✅ completed (live sessions + comments endpoints, frontend wired) |
-| P0-component-boundary (T28) | ✅ completed (route fixed, old component quarantined with deprecation note) |
-| P0-live-pdf-canvas-toggle (T29) | ⏳ planned — canvas 从自动激活改为设置中的按钮 |
-| P0-live-paginator-fix (T30) | ⏳ planned — 底部翻页器仅学生端可见，设置中的 PG 翻页仅教师端 |
-| P0-live-raise-hand-flow (T31) | ⏳ planned — 学生举手→教师授权→解锁摄像头/录音 |
-| P0-live-canvas-quality (T32) | ⏳ planned — 修复画笔偏移和割裂感 |
-| P0-samples-generate (T33) | ⏳ planned — tests/samples 模板(pptx/pdf/图片/excel) |
-| P0-classroom-homework-vocab (T34) | ⏳ planned — 学生端教室中嵌入 homework/vocabulary 练习 |
+| `POST /api/v1/auth/login` | 登录并返回用户角色 |
+| `GET /api/v1/users/me` | 当前用户信息 |
+| `POST /api/v1/auth/register` | 注册学生/教师账号，MVP 可先做学生注册 |
 
-Highest priority remaining work:
-1. T29: Canvas toggle — 从自动激活改为设置按钮触发
-2. T30: 翻页器权限分离 — 底部给学生(Presentation)，设置中给教师(PG)
-3. T31: 举手流程 — 学生发起→教师授权→解锁摄像头/麦克风
-4. T32: Canvas 质量 — 修复偏移/割裂，精确覆盖 PDF
-5. T33: tests/samples 模板文件 (pptx/pdf/图片/excel)
-6. T34: 学生端教室嵌入 homework 发音练习 + vocabulary 选择题
+游客门禁规则：
 
-### Signals
+- 可看落地页、课程介绍、部分 demo 预览。
+- 点击录音、提交作业、进入 live、查看学习记录、课程管理、后台管理时，弹出注册登录提示。
 
-- `npm run lint` passes.
-- `npm run build` passes.
-- Backend health check passes.
-- Manual demo path passes:
-  1. Teacher login.
-  2. Upload PPT/PDF.
-  3. Upload Excel practice file.
-  4. Student opens generated course page.
-  5. Student uses TTS.
-  6. Student records, uploads, plays, downloads, deletes recording.
-  7. Teacher starts live local screen mode.
-  8. Teacher switches to PDF mode, flips PDF pages, and draws on the annotation canvas.
-  9. Teacher starts/stops camera and confirms camera indicator closes.
-  10. Teacher enters classroom and recording auto-starts after permission.
-  11. Teacher saves lecture to MinIO/object storage.
-  12. Student finds replay in schedule/history by date.
+### 4.2 课程、课件、作业、live 的关系
 
-## 3. MVP Functional Scope
+统一关系：
 
-### In Scope
-
-| ID | Feature | MVP implementation note |
-|---|---|---|
-| F01 | PPT/PDF import | upload <= 50MB; generate course pages; PDF can be first-class fallback for PPTX |
-| F02 | Course-practice sync | pages include `audio_text`; Excel rows can create practice/homework items by course/page |
-| F03 | Chinese TTS | frontend calls backend TTS facade; browser TTS fallback allowed only if provider missing |
-| F04 | Student recording | `MediaRecorder` audio capture |
-| F05 | Recording storage | upload WebM/Opus to object-storage abstraction; metadata links student/course/page |
-| F06 | Recording management | student can play/delete/download own recordings |
-| F07 | Kazakh adaptation | Chinese/Russian/Kazakh switch on critical pages |
-| F08 | Replay | teacher classroom recording auto-starts after permission; video saves to MinIO/object storage; student can replay from schedule/history |
-| F09 | Teacher live modes | local screen share mode; uploaded/existing PDF mode with PDF.js page turning, annotation canvas drawing, camera preview, recording controls, student comments, and hideable AI transcript panel |
-| F10 | Permission bugfix | camera/mic/screen tracks stop reliably on toggle off and exit |
-| F11 | Teacher virtual background | browser-side camera segmentation/canvas composition for blur or static virtual background |
-| F12 | Excel homework standard | teacher structured Excel creates homework tasks and vocabulary bank items |
-| F13 | Homework/vocabulary data integration | student homework and vocabulary views consume Excel-derived API data instead of mock-only local arrays |
-| F14 | Live recording storage and comments | teacher live room supports student comments, recording metadata, and MinIO-backed media persistence |
-
-### Out Of Scope
-
-- Online PPT editing.
-- Real-time bilingual subtitles.
-- Broad social/community features beyond lightweight classroom comments.
-- Multi-tenant SaaS.
-- ICP filing.
-- International payment.
-- AI pronunciation scoring.
-
-## 3.1 Teacher Live Classroom Requirements
-
-Teacher live mode must behave like a teaching workspace, not a demo dashboard:
-
-- The main area prioritizes PDF/screen content.
-- Camera preview, microphone/camera toggles, recording status/save, and student comments remain visible.
-- Real-time AI transcription/translation is not a teacher-default panel. It must be hideable and default-collapsed for live teaching; it can be shown for replay, captions, or student-facing review.
-- Student comments/danmaku are in scope as lightweight classroom interaction, not as a broad social feature.
-
-PDF and annotation:
-
-- PDF preview must support previous/next page, current page, page count, and responsive fit.
-- MVP technical choice: PDF.js renders the PDF page to a canvas.
-- A separate annotation canvas sits above the PDF layer for brush strokes.
-- Minimum annotation controls: color, brush width, eraser or clear-current-page, undo if time allows.
-- Excalidraw or tldraw can be introduced later for richer whiteboard editing; MVP should prefer PDF.js + lightweight canvas to reduce bundle and integration risk.
-
-Screen share and casting:
-
-- Real local screen share uses `navigator.mediaDevices.getDisplayMedia()` and requires teacher permission.
-- The selected screen/window/tab stream can be recorded or sent through WebRTC/TRTC later.
-- A browser page cannot silently cast to external projectors or conference devices. If hardware casting is required, evaluate Google Cast Web Sender, AirPlay/system casting, or a desktop wrapper separately.
-
-Auto recording and storage:
-
-- Teacher entering the live room should auto-start recording after required media permissions are granted.
-- Browser security prompts cannot be bypassed; if permissions are denied, record available streams and show a warning.
-- Recording should save lecture media to MinIO/S3-compatible object storage for MVP private deployment.
-- Preferred upload path: backend creates presigned PUT URL, frontend uploads media directly to MinIO, then backend writes `lecture_recording` metadata.
-
-## 3.2 Agent Handoff Guardrails
-
-The next agent must treat the following as hard product rules, not suggestions:
-
-- Student live and teacher live are the same live classroom experience with different permissions.
-- `teacher-classroom` is the teacher role. It can manage the class, upload/select PDF, draw annotations, share screen, record, save replay, and moderate comments.
-- `student-classroom` is the student role. It can view the live stage/PDF/screen, use student camera/mic if allowed, send comments, raise hand, and leave.
-- The old `StudentClassroomView` is not the live room. If it remains in the codebase, it must be renamed or routed only as homework/practice.
-- Dashboard and Schedule `Join Live Class` buttons must go to `student-classroom`, and that route must resolve to the shared live classroom in student role.
-
-Forbidden mistakes:
-
-- Do not create a separate fake student live page to satisfy routing.
-- Do not route live class to a practice/recording page.
-- Do not add timer-generated fake danmaku, fake transcript, fake students, fake courses, or fake live sessions as if they were real data.
-- Do not hardcode English UI text in teacher courses/live pages.
-- Do not make AI transcript/translation occupy the teacher default live layout.
-- Do not claim PPTX/PDF rendering is real if the implementation only shows placeholder pages.
-- Do not silently start camera/mic/screen capture; browser permissions are mandatory.
-
-Partially completed context:
-
-- Student live route has been partially corrected in code to use the shared classroom with student role, but live session API/state is still missing.
-- Teacher live transcript is hideable/default hidden and mock auto-danmaku/transcript were removed, but placeholder participants, placeholder PDF visuals, and incomplete API-backed comments remain.
-- Teacher courses uses API list/create/upload and several labels are translated, but course management is still shallow and Excel upload is not a distinct workflow.
-
-Recommended next order:
-
-1. Implement Excel parser and schema validation (T13).
-2. Wire homework and vocabulary to Excel-derived APIs (T14/T15).
-3. Implement PDF.js preview/page turning and annotation canvas (T20).
-4. Implement live session API and route guard (T17/T27/T24).
-5. Replace embedded logo with root logo.svg (T12).
-6. Separate courseware upload from homework Excel upload in TeacherCoursesView (T25).
-7. Run full static text/i18n audit across all demo-critical pages (T26).
-8. Add MinIO recording storage and auto-recording (T21/T22).
-9. Install/configure Tencent Cloud CLI and finish deployment (T18).
-
-## 4. Data Model
-
-Minimum entities from PRD v3.0:
-
-```sql
-user (id, username, password_hash, role, display_name, language_pref, created_at)
-course (id, teacher_id, title, description, created_at)
-course_page (id, course_id, page_number, content_html, audio_text, image_url)
-exercise (id, course_id, page_number, prompt, answer, source_file_id, created_at)
-learning_task (id, course_id, source_file_id, task_id, task_type, unit, lesson, zh_text, pinyin, translation_ru, translation_kk, publish_to_homework, publish_to_vocab, created_at, updated_at)
-vocabulary_item (id, course_id, task_id, zh_text, pinyin, translation_ru, translation_kk, initial, final, tone, rhyme_group, source_file_id, created_at)
-learning_record (id, student_id, task_id, context, status, score, attempts_count, last_recording_id, completed_at, updated_at)
-recording (id, student_id, course_id, page_number, task_id, audio_url, duration_sec, created_at)
-lecture_recording (id, course_id, teacher_id, live_session_id, video_url, storage_provider, object_key, duration_sec, auto_started_at, saved_at, created_at)
-live_session (id, course_id, teacher_id, status, source_mode, current_page, recording_status, started_at, ended_at)
-classroom_comment (id, live_session_id, student_id, body, created_at, visibility)
-file_metadata (id, owner_id, course_id, type, filename, mime_type, size_bytes, storage_url, created_at)
+```text
+course
+  -> lessonNode[]            # 课时节点
+      -> liveSession?        # 一对一
+      -> assignmentNode      # 一对一
+      -> coursewarePages[]   # 当前课时使用的课件页
+      -> learningTask[]      # Excel 导入的任务/单词/录音题
 ```
 
-Storage:
+关键实体：
 
-| Data | Storage |
+| 实体 | 关键字段 |
 |---|---|
-| generated page images/html | object storage or local upload directory for MVP |
-| student audio | WebM/Opus object |
-| lecture video | WebM object in MinIO/S3-compatible storage for MVP |
-| structured metadata | PostgreSQL preferred; SQLite/local JSON acceptable only as emergency demo fallback |
+| `course` | `id, teacherId, title, description, status` |
+| `lesson_node` | `id, courseId, title, startsAt, styleSeed, colorToken, shapeToken` |
+| `live_session` | `id, courseId, lessonNodeId, status, currentPage, recordingStatus` |
+| `assignment_node` | `id, courseId, lessonNodeId, title, dueAt` |
+| `learning_task` | `id, assignmentNodeId, taskType, zhText, pinyin, translationRu, translationKk` |
+| `learning_record` | `id, studentId, lessonNodeId, taskId, status, attemptsCount, lastRecordingId` |
 
-## 5. API Contract
+节点颜色与样式：
 
-Response envelope:
+- 每个 `lesson_node` 创建时生成 `styleSeed`。
+- 前端根据 `styleSeed` 稳定映射颜色和节点样式。
+- “随机”只发生在创建课时节点时；之后刷新不变化。
+- 节点内容以教师上传录音和 Excel 单词/作业同步结果为准。
 
-```json
-{ "code": 0, "data": {}, "message": "success" }
-```
+### 4.3 直播间
 
-Core routes:
+学生端：
 
-| Method | Route | Purpose |
+- 保留：观看课件/屏幕、评论/note、举手、被授权后开麦/摄像头、进入当前课时作业。
+- 移除：作业映射到 live、单词映射到 live、上传课件、清除全班笔迹、录播保存等教师控制。
+
+教师端：
+
+- 保留：选择课件、翻页、画笔、清除笔迹、录制、结束课程、查看学生、授权举手。
+- 修复：所有文案走 i18n；PDF 使用缓存页；画笔为清晰线条；关闭画笔不清空。
+
+画笔规则：
+
+- `penMode=false`：不能新增笔迹，但已有笔迹继续显示。
+- `clearInk`：清空当前页笔迹。
+- `brushWidth`：支持至少 1/2/4/6 四档。
+- `brushStyle`：默认圆珠笔线条，禁用喷墨/水墨扩散效果。
+
+### 4.4 课程编辑页
+
+从教师课程卡片进入 `teacher/courses/:courseId`。
+
+页面模块：
+
+| 模块 | 功能 |
+|---|---|
+| 课程信息 | 标题、描述、状态、封面 |
+| 入会学生 | 学生列表、加入/移除、进度摘要 |
+| 上传课件 | PDF/PPTX 上传、转换状态、课件页预览 |
+| 课程时间 | 课时节点、开课时间、live 状态 |
+| 课程作业 | Excel 上传、任务预览、发布状态 |
+| 直播管理 | 创建/进入 live、录播记录、note/字幕记录入口 |
+
+### 4.5 管理端后台
+
+路由：`/admin`，仅 `admin` 可访问。
+
+MVP 管理范围：
+
+| 模块 | 关键能力 |
+|---|---|
+| 老师账号 | 列表、新增、禁用、重置密码 |
+| 学生账号 | 列表、课程绑定、学习记录查看 |
+| 课程管理 | 课程 CRUD、状态、所属教师 |
+| 课件管理 | PDF/PPTX 文件、转换状态、关联课程 |
+| Excel 作业 | 上传记录、解析状态、任务数量、错误行 |
+| Live 管理 | live 列表、状态、课程/课时绑定 |
+| 录播记录 | 查看、删除、关联 live |
+| Note 弹幕 | 查看、隐藏、导出 |
+| 翻译字幕 | 查看、导出、关联录播 |
+| Schedule | 课程时间、live 时间、作业截止时间 |
+| 学习进度 | 作业、单词、录音、完成状态 |
+
+## 5. API 边界
+
+只新增或修正关键接口：
+
+| 方法 | 路径 | 用途 |
 |---|---|---|
-| GET | `/api/v1/health` | deployment check |
-| POST | `/api/v1/auth/login` | demo login |
-| GET | `/api/v1/users/me` | current user |
-| GET | `/api/v1/courses` | course list |
-| POST | `/api/v1/courses` | teacher creates course |
-| GET | `/api/v1/courses/:id/pages` | course pages |
-| POST | `/api/v1/coursewares` | upload pptx/pdf/xlsx |
-| GET | `/api/v1/exercises?courseId=&page=` | student practice items from Excel |
-| GET | `/api/v1/homework/tasks?courseId=&unit=&lesson=` | Excel-derived homework learning path |
-| GET | `/api/v1/vocabulary?courseId=&q=&initial=&final=&tone=` | Excel-derived vocabulary self-study bank |
-| POST | `/api/v1/learning-records` | save homework/vocabulary progress and bind latest recording |
-| GET | `/api/v1/tts?text=&lang=` | TTS facade |
-| POST | `/api/v1/recordings` | upload student recording |
-| GET | `/api/v1/recordings?courseId=&page=` | list own/student recordings |
-| DELETE | `/api/v1/recordings/:id` | delete own recording |
-| POST | `/api/v1/lectures` | upload teacher lecture recording |
-| GET | `/api/v1/lectures?courseId=&date=` | list replays |
-| DELETE | `/api/v1/lectures/:id` | teacher deletes replay |
-| POST | `/api/v1/live-sessions` | create/start teacher live session and recording state |
-| PATCH | `/api/v1/live-sessions/:id` | update source mode/current PDF page/recording status |
-| GET | `/api/v1/live-sessions/active?courseId=` | student live room entry |
-| GET | `/api/v1/live-sessions/:id/comments` | list student comments |
-| POST | `/api/v1/live-sessions/:id/comments` | student sends classroom comment |
-| POST | `/api/v1/uploads/presigned-url` | create MinIO/S3-compatible presigned upload URL |
+| `GET` | `/api/v1/users/me` | 当前用户，替代前端默认 Anna |
+| `GET` | `/api/v1/courses/:id` | 课程详情 |
+| `PATCH` | `/api/v1/courses/:id` | 编辑课程 |
+| `GET` | `/api/v1/courses/:id/lesson-nodes` | 课时节点列表 |
+| `POST` | `/api/v1/courses/:id/lesson-nodes` | 创建课时，同时创建作业节点 |
+| `PATCH` | `/api/v1/lesson-nodes/:id` | 修改时间/标题/状态 |
+| `POST` | `/api/v1/coursewares` | 上传 PDF/PPTX |
+| `POST` | `/api/v1/assignments/import` | 上传 Excel 作业 |
+| `GET` | `/api/v1/assignments?lessonNodeId=` | 当前课时作业节点 |
+| `GET` | `/api/v1/homework/tasks?assignmentNodeId=` | 作业任务 |
+| `POST` | `/api/v1/learning-records` | upsert 学习记录 |
+| `GET` | `/api/v1/learning-records?studentId=&lessonNodeId=` | 学生学习状态 |
+| `POST` | `/api/v1/live-sessions` | 创建 live，绑定 lessonNodeId |
+| `PATCH` | `/api/v1/live-sessions/:id` | 翻页/状态/录制状态 |
+| `GET` | `/api/v1/admin/*` | 管理端聚合接口，按模块拆分实现 |
 
-## 6. Frontend Integration Priorities
+## 6. 任务拆分
 
-Replace only demo-critical mocks first:
+### P0 必须先修
 
-- `src/components/LoginView.tsx`: real demo login.
-- `src/components/TeacherCoursesView.tsx`: course list, create course, upload PPT/PDF/Excel.
-- `src/components/StudentClassroomView.tsx`: legacy practice component only. Do not use for live class. Rename to `StudentPracticeView` or route it only from homework/practice after it is API-backed.
-- `src/components/HomeworkView.tsx`: reuse recording workflow or show Excel-derived practice items.
-- `src/components/TeacherClassroomView.tsx`: fix camera/mic/screen track lifecycle; hideable AI transcript; student comments; PDF preview/page turning; annotation canvas; auto recording; MinIO lecture upload.
-- `src/components/ScheduleView.tsx`: show lecture replay history by date.
-- `src/services/ttsService.ts`: call backend first, fallback to browser TTS.
+| ID | 任务 | 交付 |
+|---|---|---|
+| T01 | 清理身份 mock 与游客门禁 | Anna 消失；游客受保护动作弹注册登录提示 |
+| T02 | 固化 live/课时/作业一对一模型 | `lesson_node`、`assignment_node`、`live_session.lessonNodeId` |
+| T03 | 修复学习记录持久化 | 完成状态刷新/跳转不回退 |
+| T04 | 学生端 live 去除教师配置按钮 | 作业/单词映射按钮不在学生端出现 |
+| T05 | 教师 live i18n 审计 | 不出现 `classroom.*` key |
+| T06 | PDF 渲染性能边界 | 使用已上传/转换/缓存的分页资源 |
+| T07 | 画笔交互重做 | 圆珠笔线条、粗细、关闭不清空、清除才清空 |
 
-Dashboards, reports, rankings, and non-core analytics can remain visual mocks for the MVP video if they do not block the core loop.
+### P1 课程管理闭环
 
-## 7. Deployment Plan
+| ID | 任务 | 交付 |
+|---|---|---|
+| T08 | 教师课程详情/编辑页 | 课程信息、学生、课件、时间、作业、live |
+| T09 | PDF/PPTX 与 Excel 上传拆分 | 课件和作业上传入口分开 |
+| T10 | 课时节点随机样式 | 创建后稳定显示颜色/样式 |
+| T11 | 学生课程/作业入口统一 | 从课程、schedule、live 都能进同一课时作业 |
 
-### Local
+### P2 管理端后台
 
-1. Start backend on `127.0.0.1:3001`.
-2. Run frontend on Vite.
-3. Configure `VITE_API_BASE_URL=http://127.0.0.1:3001/api/v1`.
-4. Verify the manual path.
+| ID | 任务 | 交付 |
+|---|---|---|
+| T12 | Admin 路由与权限 | 仅 admin 可进入 |
+| T13 | 账号管理 | 老师/学生 CRUD 基础能力 |
+| T14 | 课程与资源管理 | 课程、PDF/PPTX、Excel 解析记录 |
+| T15 | Live 与内容记录管理 | live、录播、note、字幕 |
+| T16 | 学习进度管理 | 作业、单词、录音、完成记录 |
 
-### Tencent Cloud Public Test
+## 7. 验收清单
 
-1. Build frontend with `npm run build`.
-2. Deploy backend + static frontend behind Nginx.
-3. Use Docker Compose if available; PM2 fallback is acceptable for the one-day demo.
-4. Open only required ports.
-5. Verify:
-   - frontend URL
-   - `/api/v1/health`
-   - upload endpoint
-   - media playback URL
+- [x] 学生账号默认不再显示 Anna，登录后显示测试账号个人信息。
+- [x] 从落地页直接进入时，游客只能预览；受保护操作弹注册登录提示。
+- [x] 每个 live 必须绑定且只绑定一个课时节点。
+- [x] 每个课时节点有且只有一个作业节点。
+- [x] 课时节点颜色/样式创建后稳定，不随刷新变化。
+- [x] 学生完成第一个节点作业后，跳转页面再回来仍是已完成。
+- [x] 学生端 live 不显示作业/单词映射按钮。
+- [x] 教师端不暴露 `classroom.content_mode`、`classroom.stopped` 等 key。
+- [x] PDF/PPTX 课件上传后课堂可流畅翻页，失败时有明确状态。
+- [x] 画笔为清晰圆珠笔效果，可调粗细。
+- [x] 关闭画笔不会清空笔迹，清除笔迹按钮才清空。
+- [x] 教师点击课程卡片进入课程编辑页。
+- [x] 课程编辑页统一管理课程信息、学生、课件、时间、作业、live。
+- [x] 管理端可管理老师、学生、课程、课件、Excel、live、录播、note、字幕、schedule、学习进度。
 
-## 8. AI Delegation Prompts
+## 8. 下一阶段方向问题
 
-### Backend Worker
+下一阶段不应继续扩大自研 live 课堂，而应先做技术路线决策：
 
-Use PRD v3.0 as source of truth. Implement only the single-tenant CZU MVP backend: auth demo users, course/courseware upload, page generation fallback, Excel-to-homework/vocabulary parsing, TTS facade, student recordings, live sessions/comments, MinIO-backed teacher lecture replays, and health. Do not implement multi-tenant SaaS, AI scoring, payments, or broad social features. Do not commit real secrets.
+1. 直播课堂是否改为“外部会议平台集成优先”：Teams 或腾讯会议负责音视频会议、入会链接、录制/转写能力，本系统负责课程、作业、学习记录、权限与后台。
+2. TTS 是否采用 Azure Speech 作为主 provider：后端保留 provider adapter，前端只调用本项目 TTS facade，避免以后更换服务影响页面。
+3. 录音波形与 AI 评测应拆开：波形图本地生成或脚本预处理，AI 评测走异步任务，不阻塞录音提交。
+4. ASR/实时翻译不应在 MVP 中直接押注自部署大模型。优先用托管 ASR/翻译服务跑通 pipeline，再评估本地模型在成本、延迟、准确率和运维上的收益。
 
-### Frontend Worker
+建议下一轮 PRD 只做一个 Spike：
 
-Replace mock behavior only on demo-critical pages: login, teacher courseware upload, student course practice/TTS/recordings, homework/vocabulary from Excel, teacher live/replay, and schedule replay history. Preserve existing UI style. Fix camera/mic/screen lifecycle so tracks stop on toggle off, exit, and unmount. In teacher live mode, collapse AI transcript by default, keep student comments and recording controls visible, render PDF with page turning, and draw annotations on a canvas layer.
-
-### Live Route Worker
-
-Fix and protect the live route contract. `student-classroom` must enter the same live classroom as `teacher-classroom`, but with student permissions. It must not render the old practice/recording page. Add a regression check that proves student live entry reaches `#classroom-view`, old `Practice mode` is absent, student teacher-only controls are hidden, and teacher controls still appear in teacher role.
-
-### Teacher Courses Worker
-
-Finish TeacherCoursesView as a real management page. Remove mock/default course cards and fake default titles. Use API data for courses, counts, status, and upload results. Separate courseware upload (`pptx/pdf`) from homework Excel upload (`xlsx`). Every visible label, empty state, error, and action must use `t(...)`; API course/user names may remain as user content.
-
-### Deployment Worker
-
-Create minimal deployment assets for Tencent Cloud public test: env example, Docker Compose or PM2 fallback, Nginx proxy/static hosting, upload-size config, and health-check commands. Never include real secrets.
-
-### Auditor
-
-Audit against PRD v3.0, not against a broad platform roadmap. Block if the MVP core loop fails, if a demo-critical path is still mock-only, if camera tracks remain active after toggle off/exit, if secrets appear in repo, or if public test health cannot be verified.
-
-## 8.5 New Feature Requirements (2026-05-15 Round 2)
-
-### F15: Canvas Toggle Mode
-- PDF 上传后默认预览 PDF（浏览器原生操作：选择文本、滚动等）
-- Canvas 画笔从自动激活改为 Settings 面板中的按钮触发
-- 点击"画笔"按钮后才可进行 canvas 书写，再次点击关闭
-
-### F16: Paginator Role Separation
-- 底部翻页器（显示 SLIDE 和中英文模式标签）默认仅在 student 角色的 `presentation_active` 模式下显示
-- Settings 面板内的 PG 翻页器仅 teacher 角色可见，用于教师控制课件翻页
-- 消除两个翻页器的功能重叠
-
-### F17: Student Raise-Hand & Permission Flow
-- 学生端默认摄像头和麦克风按钮为禁用状态（灰色锁定）
-- 学生可点击"举手"按钮发起请求
-- 教师端收到举手通知（在顶部或 Participants 面板显示）
-- 教师点击授权后，通过 localStorage 事件通知学生端
-- 学生端接收到授权后解锁摄像头/麦克风按钮
-
-### F18: Canvas Quality Improvement
-- 修复画笔与鼠标指针的坐标偏移问题（canvas 尺寸动态匹配容器）
-- 消除画笔的割裂感，实现平滑连续的笔迹
-- Canvas 精确覆盖在 PDF/PPTX 渲染层之上
-- 支持多级笔触粗细和颜色切换
-
-### F19: Template Samples (tests/samples)
-- 目录结构: tests/samples/{pptx, pdf, images, excel}/
-- PPTX 样例: 基于 analysis/data-analysis/拼音1(1).pptx 的课程课件
-- PDF 样例: 中文课程第一课 PDF（大家好）
-- 课程图片/头像样例: 教师默认头像、课程封面图
-- Excel 样例: 符合 homework_excel_schema 的作业格式，含：
-  - 中文文本列
-  - 中文注音列（拼音）
-  - 俄语翻译列
-  - 录音按钮标识列
-
-### F20: Student Classroom Homework & Vocabulary
-- 学生端教室视图新增 homework 面板：发音练习（录音→保存→删除）
-- 学生端教室视图新增 vocabulary 面板：
-  - 听中文选俄文（选择题）
-  - 听俄文选中文（选择题）
-  - 点击单词可播放发音（TTS）
-- 数据对接 homeworkApi/vocabularyApi 获取教师上传 Excel 生成的练习
-
-## 9. Acceptance Checklist
-
-- [ ] Teacher can upload PPT/PDF <= 50MB.
-- [ ] Teacher can upload Excel exercise file and students can see derived practice items.
-- [ ] Student dashboard/schedule live entry opens the shared live classroom in student role, not a practice page.
-- [ ] Student live route hides teacher-only screen share/PDF upload/annotation/recording/end-class controls.
-- [ ] Teacher live route keeps teacher controls visible.
-- [ ] Teacher courses page has no mock course cards or default fake course titles.
-- [ ] Teacher courses upload flows separate courseware (`pptx/pdf`) from homework Excel (`xlsx`).
-- [ ] Student can browse course pages and flip pages smoothly.
-- [ ] Teacher PDF mode supports preview, page turning, and annotation rendering.
-- [ ] Teacher live transcript/translation panel can be hidden and is collapsed by default.
-- [ ] Teacher live room shows camera, recording status/save, and student comments.
-- [ ] No timer-generated fake danmaku, fake transcript, fake students, fake courses, or fake live sessions appear as real data.
-- [ ] Language switch updates demo-critical UI chrome with no hardcoded English leftovers.
-- [ ] TTS starts within acceptable demo latency.
-- [ ] Student recording flow supports record/upload/play/delete/download.
-- [ ] Teacher recording flow auto-starts after permission, supports screen/camera/PDF capture, uploads to MinIO/object storage, and supports replay.
-- [ ] Student schedule/history shows replay by date.
-- [ ] Chinese/Russian/Kazakh switch works on critical pages.
-- [ ] Camera/mic/screen tracks stop on toggle off, exit, and unmount.
-- [ ] No secrets are committed.
-- [ ] Frontend build passes.
-- [ ] Backend health check passes.
-- [ ] Tencent Cloud public test URL works.
+- 比较 Teams、腾讯会议、Azure Speech、腾讯云/其他 ASR 的集成成本、权限门槛、费用、数据可控性。
+- 输出“自研课堂 vs 外部会议平台”的取舍表。
+- 做一个最小 adapter demo：课程页创建会议链接、学生点击入会、会后把录播/字幕/出勤元数据回填到课程课时。

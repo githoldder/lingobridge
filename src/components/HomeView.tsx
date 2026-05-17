@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 import LanguageSwitcher from './LanguageSwitcher.tsx';
 
 import Logo from './Logo.tsx';
@@ -27,7 +28,14 @@ interface HomeViewProps {
 
 const HomeView = ({ onNavigate }: HomeViewProps) => {
   const { t } = useLanguage();
+  const { requireAuth } = useAuth();
   const [activeIndex, setActiveIndex] = React.useState(0);
+
+  const handleProtectedNavigate = (target: string) => {
+    if (requireAuth()) {
+      onNavigate(target);
+    }
+  };
 
   const showcaseItems = [
     {
@@ -123,7 +131,7 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
             
             <div className="flex flex-col sm:flex-row gap-6 pt-4">
               <button 
-                onClick={() => onNavigate('dashboard')}
+                onClick={() => handleProtectedNavigate('dashboard')}
                 className="group relative overflow-hidden px-10 py-5 rounded-2xl font-bold text-lg text-gray-700 border-2 border-gray-100 backdrop-blur-md bg-white/30 transition-all flex items-center justify-center gap-3 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,86,210,0.15)] ring-1 ring-white/20"
               >
                 <div className="absolute inset-0 bg-gradient-to-tl from-[#0056D2] to-[#3b82f6] translate-x-[101%] translate-y-[101%] group-hover:translate-x-0 group-hover:translate-y-0 transition-transform duration-500 ease-out" />
@@ -132,7 +140,7 @@ const HomeView = ({ onNavigate }: HomeViewProps) => {
               </button>
               
               <button 
-                onClick={() => onNavigate('teacher-dashboard')}
+                onClick={() => handleProtectedNavigate('teacher-dashboard')}
                 className="group relative overflow-hidden px-10 py-5 rounded-2xl font-bold text-lg text-gray-700 border-2 border-gray-100 backdrop-blur-md bg-white/30 transition-all flex items-center justify-center gap-3 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(227,30,36,0.15)] ring-1 ring-white/20"
               >
                 <div className="absolute inset-0 bg-gradient-to-tl from-[#E31E24] to-[#f87171] translate-x-[101%] translate-y-[101%] group-hover:translate-x-0 group-hover:translate-y-0 transition-transform duration-500 ease-out" />

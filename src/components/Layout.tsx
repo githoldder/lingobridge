@@ -15,11 +15,13 @@ import {
   Video,
   Menu,
   X,
-  Calendar
+  Calendar,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole } from './App.tsx';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 import Logo from './Logo.tsx';
 
 import LanguageSwitcher from './LanguageSwitcher.tsx';
@@ -51,8 +53,16 @@ const SidebarItem = ({ icon: Icon, label, id, active, onClick }: any) => (
 
 export default function Layout({ children, activeTab, setActiveTab, role }: LayoutProps) {
   const { t } = useLanguage();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const displayName = user?.displayName || t('auth.guest');
+  const roleLabel = user
+    ? role === 'teacher'
+      ? `${t('register.teacher')} • ${t('auth.senior')}`
+      : `${t('register.student')} • ${t('auth.hsk_level')}`
+    : t('auth.guest_label');
 
   const studentItems = [
     { id: 'dashboard', label: t('nav.home'), icon: LayoutDashboard },
@@ -65,11 +75,14 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
     { id: 'teacher-dashboard', label: t('nav.home'), icon: LayoutDashboard },
     { id: 'teacher-courses', label: t('nav.courses'), icon: GraduationCap },
     { id: 'students', label: t('nav.students'), icon: Users },
-    { id: 'teacher-classroom', label: t('nav.classroom'), icon: Video },
     { id: 'reports', label: t('nav.reports'), icon: BarChart3 },
   ];
 
-  const menuItems = role === 'teacher' ? teacherItems : studentItems;
+  const adminItems = [
+    { id: 'admin', label: t('admin.title'), icon: Settings },
+  ];
+
+  const menuItems = role === 'teacher' ? teacherItems : role === 'admin' ? adminItems : studentItems;
 
   const navigateTo = (tab: string) => {
     setActiveTab(tab);
@@ -149,11 +162,11 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
             <span>{t('classroom.settings')}</span>
           </button>
           <button 
-            onClick={() => navigateTo('landing')}
+            onClick={() => { logout(); navigateTo('landing'); }}
             className="flex items-center gap-3 px-4 py-2 w-full text-gray-500 hover:text-red-600 text-sm transition-colors mt-1"
           >
             <LogOut size={18} />
-            <span>{t('nav.login')}</span>
+            <span>{t('nav.logout')}</span>
           </button>
         </div>
       </aside>
@@ -232,21 +245,23 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
             <div id="user-profile" className="flex items-center gap-3 border-l border-gray-200 pl-4 md:pl-6 ml-2">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-gray-900 leading-tight">
-                  {role === 'teacher' ? 'Teacher Li' : 'Anna Zhang'}
+                  {displayName}
                 </p>
                 <p className="text-[10px] text-gray-500 font-medium">
-                  {role === 'teacher' ? 'Instructor • Senior' : 'Student • Level HSK 3'}
+                  {roleLabel}
                 </p>
               </div>
-              <img 
-                src={role === 'teacher' 
-                  ? "https://images.unsplash.com/photo-1544717297-ba2ef95029ee?q=80&w=400&auto=format&fit=crop"
-                  : "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=800&auto=format&fit=crop&q=60"
-                } 
-                alt="Profile" 
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-gray-200"
-                referrerPolicy="no-referrer"
-              />
+              {user ? (
+                <img 
+                  src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=0056D2&textColor=ffffff`}
+                  alt="Profile" 
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-gray-200"
+                />
+              ) : (
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-200 flex items-center justify-center border border-gray-200">
+                  <UserIcon size={18} className="text-gray-400" />
+                </div>
+              )}
             </div>
           </div>
         </header>

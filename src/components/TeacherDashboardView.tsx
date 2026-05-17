@@ -40,15 +40,18 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
           <p className="text-sm md:text-base text-gray-500 font-medium">{t('dashboard.overview')}</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          <button className="flex-1 md:flex-none px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => onNavigate?.('teacher-courses')}
+            className="flex-1 md:flex-none px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
             {t('dashboard.schedule')}
           </button>
           <button 
-            onClick={() => onNavigate?.('teacher-classroom')}
+            onClick={() => onNavigate?.('teacher-courses')}
             className="flex-1 md:flex-none px-6 py-2 bg-[#0056D2] text-white rounded-xl text-sm font-bold hover:shadow-lg shadow-blue-100 transition-all flex items-center gap-2"
           >
             <Play size={18} fill="currentColor" />
-            <span className="whitespace-nowrap">{t('nav.classroom')}</span>
+            <span className="whitespace-nowrap">{t('nav.courses')}</span>
           </button>
         </div>
       </div>
@@ -90,7 +93,11 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
           
           <div className="space-y-4">
             {upcomingClasses.map((item, i) => (
-              <div key={i} className="bg-white p-4 md:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group hover:border-[#0056D2] transition-colors cursor-pointer">
+              <button
+                key={i}
+                onClick={() => onNavigate?.('teacher-courses')}
+                className="w-full text-left bg-white p-4 md:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group hover:border-[#0056D2] transition-colors cursor-pointer"
+              >
                 <div className="flex items-center gap-4 md:gap-6">
                   <div className="bg-gray-50 px-3 py-2 md:px-4 md:py-3 rounded-2xl text-center border border-gray-100 group-hover:bg-blue-50 transition-colors min-w-[60px]">
                     <div className="text-[10px] md:text-xs font-black text-[#0056D2]">{item.time.split(' ')[1]}</div>
@@ -109,7 +116,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
                   </div>
                   <ChevronRight size={20} className="text-gray-300 group-hover:text-[#0056D2]" />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

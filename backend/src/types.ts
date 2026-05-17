@@ -7,6 +7,15 @@ export interface User {
   role: UserRole;
   displayName: string;
   languagePref: 'zh' | 'ru' | 'kk' | 'en';
+  email?: string;
+}
+
+export interface CourseMember {
+  id: string;
+  courseId: string;
+  userId: string;
+  role: 'student' | 'teacher' | 'assistant';
+  joinedAt: string;
 }
 
 export interface Course {
@@ -39,6 +48,7 @@ export interface Exercise {
 export interface LearningTask {
   id: string;
   courseId: string;
+  lessonNodeId?: string;
   sourceFileId: string;
   taskId: string;
   taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';
@@ -68,6 +78,7 @@ export interface LearningTask {
 export interface VocabularyItem {
   id: string;
   courseId: string;
+  lessonNodeId?: string;
   taskId: string;
   zhText: string;
   pinyin: string;
@@ -87,6 +98,7 @@ export interface LearningRecord {
   id: string;
   studentId: string;
   taskId: string;
+  lessonNodeId?: string;
   context: 'homework' | 'vocabulary' | 'practice';
   status: 'not_started' | 'in_progress' | 'completed';
   score: number;
@@ -123,6 +135,7 @@ export interface LiveSession {
   id: string;
   courseId: string;
   teacherId: string;
+  lessonNodeId: string;
   status: 'active' | 'ended';
   sourceMode: 'screen' | 'pdf';
   currentPage: number;
@@ -144,11 +157,50 @@ export interface FileMetadata {
   id: string;
   ownerId: string;
   courseId: string;
+  lessonNodeId?: string;
   type: 'pptx' | 'pdf' | 'xlsx' | 'audio' | 'video' | 'other';
   filename: string;
   mimeType: string;
   sizeBytes: number;
   storageUrl: string;
+  createdAt: string;
+}
+
+export interface LessonNode {
+  id: string;
+  courseId: string;
+  title: string;
+  startsAt?: string;
+  endsAt?: string;
+  styleSeed: number;
+  colorToken: string;
+  shapeToken: string;
+  status: 'draft' | 'scheduled' | 'active' | 'completed';
+  assignmentNodeId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssignmentNode {
+  id: string;
+  courseId: string;
+  lessonNodeId: string;
+  title: string;
+  dueAt?: string;
+  status: 'draft' | 'published' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoursewareFile {
+  id: string;
+  courseId: string;
+  lessonNodeId?: string;
+  type: 'pdf' | 'pptx' | 'xlsx';
+  filename: string;
+  storageUrl: string;
+  renderStatus: 'pending' | 'processing' | 'ready' | 'failed';
+  pageCount?: number;
   createdAt: string;
 }
 
@@ -165,5 +217,8 @@ export interface Database {
   liveSessions: LiveSession[];
   classroomComments: ClassroomComment[];
   files: FileMetadata[];
+  lessonNodes: LessonNode[];
+  assignmentNodes: AssignmentNode[];
+  coursewareFiles: CoursewareFile[];
+  courseMembers: CourseMember[];
 }
-

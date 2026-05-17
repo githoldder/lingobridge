@@ -70,3 +70,87 @@ Frontend:
 
 Use `docs/03-testing-deployment/e2e-agent-prompt.md` for browser pass-through testing.
 
+---
+
+# LingoBridge Context Update
+
+Date: 2026-05-17
+Workspace: `/Users/caolei/Desktop/LingoBridge`
+Current PRD: `prds/prd.md` and `prds/prd.json` v4 fix/admin plan
+
+## 2026-05-16 至 2026-05-17 PRD v4 Scope
+
+The product focus shifted from a narrow MVP upload/recording demo to fixing the system boundary between identity, course management, lesson nodes, live sessions, homework, learning records, and admin operations.
+
+Hard product rules added:
+
+- User identity must come from auth/current-user state. Do not hardcode Anna or other mock user names in student views.
+- Guest users may preview limited landing/demo content only. Protected actions must show the registration/login gate.
+- One live session maps to exactly one lesson node. One lesson node maps to exactly one assignment node.
+- Learning records must persist by `studentId + lessonNodeId + taskId`.
+- Student live room must not show teacher configuration controls such as mapping homework/vocabulary to live.
+- Teacher course cards open a course detail/edit page with course info, students, courseware, schedule, homework Excel, and live management.
+- Admin dashboard covers teachers, students, courses, courseware, Excel imports, live sessions, recordings, notes, transcripts, schedule, and learning progress.
+
+## Implemented v4 Files
+
+New files:
+
+- `src/context/AuthContext.tsx`
+- `src/components/GuestGate.tsx`
+- `src/components/TeacherCourseDetailView.tsx`
+- `src/components/AdminDashboardView.tsx`
+- `src/utils/styleFromSeed.ts`
+- `src/services/entryResolver.ts`
+
+Major modified files:
+
+- `backend/src/app.ts`
+- `backend/src/types.ts`
+- `backend/src/db.ts`
+- `src/services/apiClient.ts`
+- `src/components/App.tsx`
+- `src/components/TeacherClassroomView.tsx`
+- `src/components/HomeworkView.tsx`
+- `src/components/TeacherCoursesView.tsx`
+- `src/components/CoursesView.tsx`
+- `src/components/ScheduleView.tsx`
+- `src/context/LanguageContext.tsx`
+
+## Audit Findings And Fixes
+
+Three audit rounds were performed after the 15-task implementation.
+
+Resolved issues:
+
+- `AdminDashboardView.tsx` imported `../services/apiClient.tsx`; fixed to `apiClient.ts`.
+- `TeacherCourseDetailView.tsx` had hardcoded `http://127.0.0.1:3001` fetch calls; replaced with unified `apiClient.ts` wrappers.
+- Missing backend endpoints were added: `PATCH /api/v1/courses/:id`, course member CRUD, `GET /api/v1/coursewares`, `POST /api/v1/assignments/import`.
+- `liveSessionsApi.create` and front-end live creation now require/pass `lessonNodeId`.
+- Course detail live list has an enter action that navigates with `courseId + lessonNodeId`.
+- Admin route now checks `user.role === admin` on the frontend in addition to backend `requireAdmin`.
+- `HomeworkView` now passes `lessonNodeId` to learning-record saves.
+- `recordingsApi.upload` now includes `taskId`.
+- Lesson schedule create/render now aligns on `startsAt`; avoid reintroducing `scheduledAt`.
+
+Guardrails for future agents:
+
+- Do not call backend routes directly with `fetch()` inside components unless there is a clear exception. Add a typed wrapper in `src/services/apiClient.ts`.
+- Do not hardcode `127.0.0.1:3001` outside the default `API_BASE_URL` fallback in `apiClient.ts`.
+- When adding or changing an API field, update backend type, API client type, component local type, request body, and render field together.
+- If a backend endpoint is referenced in UI, verify it exists in `backend/src/app.ts` and has at least a smoke/API test.
+- `liveSession` creation must always include `lessonNodeId`.
+- Learning record writes must include `lessonNodeId` whenever the action belongs to a lesson node.
+- Admin access must be guarded both in frontend routing and backend middleware.
+- Run `npm run lint`, `npm run build`, and `npm run backend:test` before claiming completion. In the sandbox, `backend:test` may fail because `tsx` cannot create an IPC pipe under `/var/folders`; rerun with escalation if that happens.
+
+## Latest Verification
+
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run backend:test`: passed 3/3 after sandbox escalation for `tsx` IPC pipe.
+- Build warnings remain non-blocking: PDF.js eval warning and large bundle/chunk warning.
+
+## Open Strategic Questions
+
+The user asked whether to avoid self-building live class infrastructure and instead integrate Teams or Tencent Meeting APIs; whether TTS quota will run out; whether Azure Speech should be used for TTS with waveform rendering and AI evaluation; and whether a 3B-class ASR/translation/filtering pipeline is reliable. These should be treated as the next product direction discussion, not as already-approved implementation scope.

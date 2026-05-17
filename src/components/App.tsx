@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import Layout from './Layout.tsx';
 import DashboardView from './DashboardView.tsx';
 import ScheduleView from './ScheduleView.tsx';
@@ -15,34 +15,70 @@ import TeacherCoursesView from './TeacherCoursesView.tsx';
 import TeacherClassroomView from './TeacherClassroomView.tsx';
 import TeacherStudentsView from './TeacherStudentsView.tsx';
 import TeacherReportsView from './TeacherReportsView.tsx';
+import TeacherCourseDetailView from './TeacherCourseDetailView.tsx';
+import AdminDashboardView from './AdminDashboardView.tsx';
 import LoginView from './LoginView.tsx';
 import RegisterView from './RegisterView.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { LanguageProvider } from '../context/LanguageContext.tsx';
+import { AuthProvider, useAuth } from '../context/AuthContext.tsx';
+import GuestGate from './GuestGate.tsx';
 
-export type UserRole = 'student' | 'teacher' | 'landing';
+export type UserRole = 'student' | 'teacher' | 'landing' | 'admin';
 
-export default function App() {
+export interface NavigationContext {
+  lessonNodeId?: string;
+  courseId?: string;
+}
+
+const PROTECTED_TABS = [
+  'dashboard', 'schedule', 'vocabulary', 'homework', 'student-classroom',
+  'teacher-dashboard', 'teacher-courses', 'students', 'teacher-classroom', 'reports', 'teacher-course-detail',
+  'admin',
+];
+
+function AppContent() {
   const [activeTab, setActiveTab] = useState('landing');
   const [userRole, setUserRole] = useState<UserRole>('landing');
   const [prevTab, setPrevTab] = useState('dashboard');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [navContext, setNavContext] = useState<NavigationContext>({});
+  const { requireAuth, user, showGuestGate, setShowGuestGate } = useAuth();
 
-  const handleNavigate = (target: string) => {
+  const handleNavigate = useCallback((target: string, ctx?: NavigationContext) => {
+    if (PROTECTED_TABS.includes(target)) {
+      if (!requireAuth()) return;
+    }
+
     if (target === 'dashboard' || target === 'schedule' || target === 'vocabulary' || target === 'homework' || target === 'student-classroom') setUserRole('student');
-    if (target === 'teacher-dashboard' || target === 'teacher-courses' || target === 'students' || target === 'teacher-classroom' || target === 'reports') setUserRole('teacher');
+    if (target === 'teacher-dashboard' || target === 'teacher-courses' || target === 'students' || target === 'teacher-classroom' || target === 'reports' || target === 'teacher-course-detail') setUserRole('teacher');
+    if (target === 'admin') {
+      if (user?.role !== 'admin') {
+        console.warn('Non-admin user attempted to access admin panel');
+        return;
+      }
+      setUserRole('admin');
+    }
     if (target === 'landing') setUserRole('landing');
     
-    // Track previous tab for classroom return
     if (activeTab !== 'teacher-classroom' && activeTab !== 'student-classroom') {
       setPrevTab(activeTab);
     }
     
+    if (ctx) {
+      setNavContext((prev) => ({ ...prev, ...ctx }));
+    }
     setActiveTab(target);
-  };
+  }, [activeTab, requireAuth]);
 
   const handleClassExit = () => {
     setActiveTab(prevTab);
+  };
+
+  const handleOpenCourseDetail = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    handleNavigate('teacher-course-detail');
   };
 
   const renderContent = () => {
@@ -56,33 +92,37 @@ export default function App() {
       case 'dashboard':
         return <DashboardView onNavigate={handleNavigate} />;
       case 'schedule':
-        return <ScheduleView onNavigate={handleNavigate} />;
+        return <ScheduleView onNavigate={handleNavigate} lessonNodeId={navContext.lessonNodeId} />;
       case 'homework':
-        return <HomeworkView />;
+        return <HomeworkView lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
       case 'vocabulary':
         return <VocabularyView />;
       case 'teacher-dashboard':
         return <TeacherDashboardView onNavigate={handleNavigate} />;
       case 'teacher-courses':
-        return <TeacherCoursesView onNavigate={handleNavigate} />;
+        return <TeacherCoursesView onNavigate={handleNavigate} onOpenCourse={handleOpenCourseDetail} />;
       case 'teacher-classroom':
-        return <TeacherClassroomView onExit={handleClassExit} role="teacher" />;
+        return <TeacherClassroomView onExit={handleClassExit} role="teacher" lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
       case 'student-classroom':
-        return <TeacherClassroomView onExit={handleClassExit} role="student" />;
+        return <TeacherClassroomView onExit={handleClassExit} role="student" lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
       case 'students':
         return <TeacherStudentsView />;
       case 'reports':
         return <TeacherReportsView />;
+      case 'teacher-course-detail':
+        return <TeacherCourseDetailView courseId={selectedCourseId} onNavigate={handleNavigate} onBack={() => handleNavigate('teacher-courses')} onEnterLive={(courseId, lessonNodeId) => { setNavContext({ courseId, lessonNodeId }); handleNavigate('teacher-classroom'); }} />;
+      case 'admin':
+        return <AdminDashboardView />;
       default:
         return userRole === 'teacher' ? <TeacherDashboardView /> : <DashboardView />;
     }
   };
 
   const isClassroom = activeTab === 'teacher-classroom' || activeTab === 'student-classroom';
-  const isFullScreen = activeTab === 'landing' || activeTab === 'login' || activeTab === 'register' || isClassroom;
+  const isFullScreen = activeTab === 'landing' || activeTab === 'login' || activeTab === 'register' || isClassroom || activeTab === 'admin';
 
   return (
-    <LanguageProvider>
+    <>
       {isFullScreen ? (
         <AnimatePresence mode="wait">
           <motion.div
@@ -111,6 +151,22 @@ export default function App() {
           </AnimatePresence>
         </Layout>
       )}
+      <GuestGate
+        open={showGuestGate}
+        onClose={() => setShowGuestGate(false)}
+        onLogin={() => { setShowGuestGate(false); handleNavigate('login'); }}
+        onRegister={() => { setShowGuestGate(false); handleNavigate('register'); }}
+      />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </LanguageProvider>
   );
 }

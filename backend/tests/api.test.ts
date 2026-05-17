@@ -116,3 +116,51 @@ test('recording upload list delete works', async () => {
   });
 });
 
+test('homework import binds tasks to a live class', async () => {
+  await withServer(async (baseUrl) => {
+    const liveClass = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: 'Live Class - Self Introduction' })
+    });
+    const liveClassJson = await liveClass.json();
+    assert.equal(liveClassJson.code, 0);
+    const lessonNodeId = liveClassJson.data.lessonNode.id;
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[
+      'course_code', 'unit', 'lesson', 'task_id', 'task_type',
+      'zh_text', 'pinyin', 'translation_ru', 'translation_kk',
+      'publish_to_homework', 'publish_to_vocab'
+    ], [
+      'CZU-CHN-001', 1, 1, 'CZU-CHN-001-L01-001', 'pronunciation',
+      '大家好，我叫阿合买提。', 'Dajia hao, wo jiao Ahemaiti.',
+      'Здравствуйте, меня зовут Ахмет.', 'Сәлеметсіз бе, менің атым Ахмет.',
+      'TRUE', 'FALSE'
+    ]]);
+    XLSX.utils.book_append_sheet(wb, ws, 'homework');
+    const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const upload = await fetch(`${baseUrl}/api/v1/assignments/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        lessonNodeId,
+        filename: 'live-class-homework.xlsx',
+        base64: xlsxBuffer.toString('base64')
+      })
+    });
+    const uploadJson = await upload.json();
+    assert.equal(uploadJson.code, 0);
+    assert.equal(uploadJson.data.tasksCount, 1);
+    assert.equal(uploadJson.data.lessonNodeId, lessonNodeId);
+
+    const tasks = await fetch(`${baseUrl}/api/v1/homework/tasks?courseId=course-1&lessonNodeId=${lessonNodeId}`);
+    const tasksJson = await tasks.json();
+    assert.equal(tasksJson.code, 0);
+    assert.equal(tasksJson.data.length, 1);
+    assert.equal(tasksJson.data[0].lessonNodeId, lessonNodeId);
+    assert.equal(tasksJson.data[0].zhText, '大家好，我叫阿合买提。');
+  });
+});

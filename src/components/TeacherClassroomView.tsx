@@ -20,7 +20,6 @@ import {
   Minimize2,
   Send,
   Plus,
-  RefreshCw,
   FileText,
   Loader2,
   Loader,
@@ -34,7 +33,6 @@ import {
   BookOpen,
   Layers,
   Check,
-  RotateCcw,
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,9 +45,17 @@ import { ttsService } from '../services/ttsService.ts';
 interface TeacherClassroomViewProps {
   onExit: () => void;
   role?: 'teacher' | 'student';
+  lessonNodeId?: string;
+  courseId?: string;
 }
 
-const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, role = 'teacher' }) => {
+interface Stroke {
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+}
+
+const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, role = 'teacher', lessonNodeId, courseId: propCourseId }) => {
   const { t } = useLanguage();
   const isTeacher = role === 'teacher';
   const [showPoll, setShowPoll] = useState(false);
@@ -79,6 +85,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [pdfFile, setPdfFile] = useState<string | null>(null);
   const [pdfPage, setPdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfRenderState, setPdfRenderState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [coursewareStatus, setCoursewareStatus] = useState<'pending' | 'processing' | 'ready' | 'failed' | null>(null);
   const [coursePages, setCoursePages] = useState<CoursePage[]>([]);
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [pagesLoading, setPagesLoading] = useState(false);
@@ -92,10 +100,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
 
-  // Canvas toggle — not auto-activated
+  // Canvas/pen states
   const [isCanvasEnabled, setIsCanvasEnabled] = useState(false);
-  const [brushColor, setBrushColor] = useState('#3b82f6');
-  const [brushWidth, setBrushWidth] = useState(3);
+  const [brushColor, setBrushColor] = useState('#000000');
+  const [brushWidth, setBrushWidth] = useState(4);
+  const [pageStrokes, setPageStrokes] = useState<Map<number, Stroke[]>>(new Map());
+  const currentStroke = useRef<Stroke | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +113,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [isPermissionGranted, setIsPermissionGranted] = useState(false);
   const [pendingHandRaise, setPendingHandRaise] = useState(false);
-  const [studentName, setStudentName] = useState(t('classroom.student_label') || 'Student');
+  const [studentName, setStudentName] = useState(t('classroom.student_label'));
 
   // Student homework/vocabulary panels
   const [showHomeworkPanel, setShowHomeworkPanel] = useState(false);
@@ -227,7 +237,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'lingobridge_hand_raised' && e.newValue === 'true') {
         setPendingHandRaise(true);
-        setStudentName(e.newValue === 'true' ? (t('classroom.student_label') || 'Student') : (t('classroom.student_label') || 'Student'));
+        setStudentName(e.newValue === 'true' ? t('classroom.student_label') : t('classroom.student_label'));
       }
     };
 
@@ -250,11 +260,16 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   // Live session lifecycle
   useEffect(() => {
-    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || 'course-1';
+    const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || '';
     let ended = false;
 
     if (isTeacher) {
-      liveSessionsApi.create(courseId, liveMode === 'local' ? 'screen' : 'pdf')
+      if (!activeLessonNodeId) {
+        console.warn('No lessonNodeId available for live session');
+        return;
+      }
+      liveSessionsApi.create(courseId, activeLessonNodeId, liveMode === 'local' ? 'screen' : 'pdf')
         .then((s) => { setLiveSession(s); liveSessionRef.current = s; })
         .catch(() => {});
     } else {
@@ -307,7 +322,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             if (!newComments.length) return prev;
             return [...prev, ...newComments.map((c: any) => ({
               id: c.id,
-              user: c.studentName || (t('classroom.student_label') || 'Student'),
+              user: c.studentName || t('classroom.student_label'),
               text: c.body,
               isSelf: false,
             }))];
@@ -339,7 +354,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const text = inputText;
 
     // Send to local Chat
-    setChatMessages(prev => [...prev, { id, user: isTeacher ? (t('classroom.teacher_label') || 'Teacher') : (t('classroom.student_label') || 'Student'), text, isSelf: true }]);
+    setChatMessages(prev => [...prev, { id, user: isTeacher ? t('classroom.teacher_label') : t('classroom.student_label'), text, isSelf: true }]);
 
     // Send to API if live session exists
     if (liveSession?.id) {
@@ -388,7 +403,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     } catch (err: any) {
       console.error("Mic access denied", err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert(t('classroom.mic_denied') || "Mic access denied. Please enable microphone permissions.");
+        alert(t('classroom.mic_denied'));
       }
     }
   };
@@ -421,7 +436,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     } catch (err: any) {
       console.error("Camera access denied", err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert(t('classroom.cam_denied') || "Camera access denied. Please enable camera permissions.");
+        alert(t('classroom.cam_denied'));
       }
     }
   };
@@ -433,7 +448,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       try {
         const stream = (liveMode === 'local' && screenStream) ? screenStream : localStream;
         if (!stream) {
-          alert(t('classroom.no_stream') || 'No stream available to record. Please turn on camera or share screen.');
+          alert(t('classroom.no_stream'));
           return;
         }
         const recorder = new MediaRecorder(stream);
@@ -448,10 +463,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               blob,
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
             });
-            alert(t('classroom.recording_uploaded') || 'Recording uploaded! Students can view it in schedule replays.');
+            alert(t('classroom.recording_uploaded'));
           } catch (error: any) {
             console.error("Failed to upload recording", error);
-            alert(error.message || (t('classroom.recording_upload_failed') || 'Recording upload failed. Is the backend running?'));
+            alert(error.message || t('classroom.recording_upload_failed'));
           }
         };
         recorder.start();
@@ -505,38 +520,97 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
     try {
       setPagesLoading(true);
+      setCoursewareStatus('processing');
       const result = await coursesApi.uploadCourseware(courseId, file);
-      const fileMeta = result.file as { mimeType?: string; storageUrl?: string } | undefined;
-      setIsPdfType(fileMeta?.mimeType === 'application/pdf' || file.name.endsWith('.pdf'));
+      const fileMeta = result.file as { mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
+      const isPdf = fileMeta?.mimeType === 'application/pdf' || file.name.endsWith('.pdf');
+      const isPptx = fileMeta?.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.endsWith('.pptx');
+      setIsPdfType(isPdf);
       setPdfFile(mediaUrl(fileMeta?.storageUrl));
       setPdfPage(1);
       const pages = result.pages || [];
       setCoursePages(pages);
       setCurrentPageIdx(0);
       setLiveMode('multimedia');
+      const status = fileMeta?.renderStatus as 'pending' | 'processing' | 'ready' | 'failed' | undefined;
+      setCoursewareStatus(status || 'ready');
+      if (isPptx) {
+        setCoursewareStatus('ready');
+      }
     } catch (err: any) {
-      alert(err.message || (t('classroom.upload_failed') || 'Upload failed'));
+      setCoursewareStatus('failed');
+      alert(err.message || t('classroom.upload_failed'));
     } finally {
       setPagesLoading(false);
     }
   };
 
-  // Canvas Drawing logic — improved smoothness and precision
+  // Canvas Drawing logic — stroke-based with per-page storage
+  const getCurrentPageKey = useCallback((): number => {
+    return isPdfType ? pdfPage : currentPageIdx + 1;
+  }, [isPdfType, pdfPage, currentPageIdx]);
+
+  const redrawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const pageKey = getCurrentPageKey();
+    const strokes = pageStrokes.get(pageKey) || [];
+
+    for (const stroke of strokes) {
+      if (stroke.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      ctx.stroke();
+    }
+  }, [pageStrokes, getCurrentPageKey]);
+
+  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'clientX' in e ? e.clientX : (e.touches && e.touches[0].clientX);
+    const clientY = 'clientY' in e ? e.clientY : (e.touches && e.touches[0].clientY);
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isTeacher || !isCanvasEnabled) return;
     e.preventDefault();
-    setIsDrawing(true);
     const pos = getPos(e);
+    setIsDrawing(true);
     setLastPos(pos);
+    currentStroke.current = {
+      points: [pos],
+      color: brushColor,
+      width: brushWidth,
+    };
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isTeacher || !isCanvasEnabled) return;
-    if (!isDrawing || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
+    if (!isTeacher || !isCanvasEnabled || !isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const pos = getPos(e);
+    currentStroke.current?.points.push(pos);
+
     ctx.beginPath();
     ctx.strokeStyle = brushColor;
     ctx.lineWidth = brushWidth;
@@ -548,26 +622,54 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     setLastPos(pos);
   };
 
-  const stopDrawing = () => setIsDrawing(false);
+  const stopDrawing = () => {
+    if (!isDrawing) {
+      setIsDrawing(false);
+      return;
+    }
+    if (currentStroke.current && currentStroke.current.points.length > 1) {
+      const pageKey = getCurrentPageKey();
+      setPageStrokes(prev => {
+        const next = new Map<number, Stroke[]>(prev);
+        const strokes = next.get(pageKey);
+        next.set(pageKey, strokes ? [...strokes, currentStroke.current!] : [currentStroke.current!]);
+        return next;
+      });
+    }
+    currentStroke.current = null;
+    setIsDrawing(false);
+  };
 
-  const clearCanvas = () => {
+  const clearInk = () => {
     if (!isTeacher) return;
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
-    ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const pageKey = getCurrentPageKey();
+    setPageStrokes(prev => {
+      const next = new Map<number, Stroke[]>(prev);
+      next.set(pageKey, []);
+      return next;
+    });
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
-  const getPos = (e: any) => {
+  // Redraw strokes when canvas resizes
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    return {
-      x: (clientX - rect.left) * (canvas.width / rect.width),
-      y: (clientY - rect.top) * (canvas.height / rect.height)
-    };
-  };
+    if (!canvas) return;
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(redrawCanvas);
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [redrawCanvas]);
+
+  // Redraw strokes when page changes
+  useEffect(() => {
+    redrawCanvas();
+  }, [pdfPage, currentPageIdx, redrawCanvas]);
 
   return (
     <div id="classroom-view" className="fixed inset-0 bg-[#0F172A] text-white z-[60] flex flex-col font-sans">
@@ -651,7 +753,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 text-center">{t('classroom.poll_not_started') || 'Start a poll to see live results'}</p>
+                <p className="text-xs text-gray-400 text-center">{t('classroom.poll_not_started')}</p>
                 <button
                   onClick={() => setShowPoll(false)}
                   className="w-full py-4 bg-[#0056D2] text-white rounded-2xl font-bold hover:shadow-xl transition-all"
@@ -683,7 +785,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               <div className="flex flex-col items-center justify-center py-12 text-gray-500">
                 <Users size={32} className="mb-3 opacity-30" />
-                <p className="text-xs font-medium">{t('classroom.no_participants') || 'Waiting for participants to join...'}</p>
+                <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
               </div>
             </div>
           </motion.div>
@@ -716,7 +818,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse"
             >
               <Hand size={18} />
-              <span className="hidden sm:inline">{t('classroom.hand_raised') || 'Hand Raised'}</span>
+              <span className="hidden sm:inline">{t('classroom.hand_raised')}</span>
             </button>
           )}
           <button
@@ -754,7 +856,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                 ) : (
                   <div className="text-gray-500 text-center">
                     <Monitor size={48} className="mx-auto mb-4 opacity-20" />
-                    <p className="text-sm font-bold">{t('classroom.start_screen_hint') || 'Ready to share screen'}</p>
+                    <p className="text-sm font-bold">{t('classroom.start_screen_hint')}</p>
                   </div>
                 )}
                 <div className="absolute top-8 left-8 z-[100] flex items-center gap-2">
@@ -776,11 +878,25 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   </div>
                 ) : isPdfType && pdfFile ? (
                   <div className="relative w-full h-full flex items-center justify-center bg-gray-50">
+                    {coursewareStatus === 'processing' && (
+                      <div className="absolute inset-0 flex items-center justify-center z-20 bg-white/90">
+                        <div className="text-center">
+                          <Loader2 size={32} className="animate-spin text-blue-600 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-gray-600">{t('classroom.pptx_converting')}</p>
+                        </div>
+                      </div>
+                    )}
                     <PdfViewer
                       url={pdfFile}
                       page={pdfPage}
                       onPageCount={setPdfPageCount}
+                      onRenderState={setPdfRenderState}
                     />
+                    {pdfRenderState === 'loading' && pdfPageCount > 0 && (
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-black/60 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm">
+                        {t('classroom.pdf_loading')}
+                      </div>
+                    )}
                   </div>
                 ) : coursePages.length > 0 && coursePages[currentPageIdx] ? (
                   <div
@@ -807,16 +923,16 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                           <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gray-800/50 flex items-center justify-center">
                             <Presentation size={32} className="text-gray-500" />
                           </div>
-                          <h2 className="text-xl md:text-2xl font-bold mb-3 text-gray-300">{t('classroom.empty_teacher_title') || 'No Content Yet'}</h2>
-                          <p className="text-sm md:text-base text-gray-500 max-w-md">{t('classroom.empty_teacher_desc') || 'Upload a PDF from your courses page or share your screen to start teaching.'}</p>
+                          <h2 className="text-xl md:text-2xl font-bold mb-3 text-gray-300">{t('classroom.empty_teacher_title')}</h2>
+                          <p className="text-sm md:text-base text-gray-500 max-w-md">{t('classroom.empty_teacher_desc')}</p>
                         </>
                       ) : (
                         <>
                           <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gray-800/50 flex items-center justify-center">
                             <Loader size={32} className="text-gray-500 animate-pulse" />
                           </div>
-                          <h2 className="text-xl md:text-2xl font-bold mb-3 text-gray-300">{t('classroom.empty_student_title') || 'Waiting for Class to Start'}</h2>
-                          <p className="text-sm md:text-base text-gray-500 max-w-md">{t('classroom.empty_student_desc') || 'The teacher has not started sharing content yet. Please wait...'}</p>
+                          <h2 className="text-xl md:text-2xl font-bold mb-3 text-gray-300">{t('classroom.empty_student_title')}</h2>
+                          <p className="text-sm md:text-base text-gray-500 max-w-md">{t('classroom.empty_student_desc')}</p>
                         </>
                       )}
                     </motion.div>
@@ -825,18 +941,20 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               </div>
             )}
 
-            {/* Canvas Drawing Layer — only active when toggled on */}
+            {/* Canvas Drawing Layer — always rendered for display, input gated by pen mode */}
             <div ref={canvasContainerRef} className="absolute inset-0 z-40 w-full h-full pointer-events-none">
-              {isCanvasEnabled && isTeacher && (
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  className="absolute inset-0 w-full h-full cursor-crosshair pointer-events-auto"
-                />
-              )}
+              <canvas
+                ref={canvasRef}
+                onMouseDown={isCanvasEnabled && isTeacher ? startDrawing : undefined}
+                onMouseMove={isCanvasEnabled && isTeacher ? draw : undefined}
+                onMouseUp={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
+                onMouseLeave={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
+                onTouchStart={isCanvasEnabled && isTeacher ? startDrawing : undefined}
+                onTouchMove={isCanvasEnabled && isTeacher ? draw : undefined}
+                onTouchEnd={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
+                onTouchCancel={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
+                className={`absolute inset-0 w-full h-full pointer-events-auto ${isCanvasEnabled && isTeacher ? 'cursor-crosshair' : 'pointer-events-none'}`}
+              />
             </div>
 
             {/* Control Sidebar (Left) */}
@@ -858,7 +976,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border border-gray-200 shadow-2xl flex flex-col gap-5 pointer-events-auto w-64"
                   >
                     <div className="flex flex-col gap-2">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{t('classroom.content_mode') || 'Content Mode'}</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{t('classroom.content_mode')}</span>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => setLiveMode('local')}
@@ -866,7 +984,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                             liveMode === 'local' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'
                           }`}
                         >
-                          {t('classroom.recording_mode') || 'Recording'}
+                          {t('classroom.recording_mode')}
                         </button>
                         <button
                           onClick={() => setLiveMode('multimedia')}
@@ -874,7 +992,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                             liveMode === 'multimedia' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'
                           }`}
                         >
-                          {t('classroom.media_mode') || 'Media'}
+                          {t('classroom.media_mode')}
                         </button>
                       </div>
                     </div>
@@ -897,7 +1015,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
                       <label className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-all">
                          <Plus size={16} />
-                         {t('classroom.upload_pdf') || 'Upload PDF'}
+                         {t('classroom.upload_pdf')}
                          <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
                       </label>
 
@@ -910,7 +1028,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       >
                         <div className="flex items-center gap-3">
                           <Pen size={16} />
-                          {isCanvasEnabled ? (t('classroom.canvas_active') || 'Drawing ON') : (t('classroom.canvas_inactive') || 'Drawing OFF')}
+                          {isCanvasEnabled ? t('classroom.canvas_active') : t('classroom.canvas_inactive')}
                         </div>
                         <div className={`w-2 h-2 rounded-full ${isCanvasEnabled ? 'bg-green-500' : 'bg-gray-300'}`} />
                       </button>
@@ -930,8 +1048,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                             ))}
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                            <span>{t('classroom.brush_size') || 'Size'}:</span>
-                            {[2, 4, 6, 10].map(w => (
+                            <span>{t('classroom.brush_size')}:</span>
+                            {[2, 4, 6, 8].map(w => (
                               <button
                                 key={w}
                                 onClick={() => setBrushWidth(w)}
@@ -945,32 +1063,36 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       )}
 
                       {/* Teacher-only PG paginator */}
-                      {(pdfFile || coursePages.length > 0) && liveMode === 'multimedia' && (
-                        <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 p-2">
-                           <button
-                            onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                            className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                           >
-                            <ChevronLeft size={16} />
-                           </button>
-                           <span className="text-[11px] font-black text-gray-700 min-w-[60px] text-center">{(t('classroom.pg') || 'PG')} {isPdfType ? pdfPage : currentPageIdx + 1}</span>
-                           <button
-                             onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
+                       {(pdfFile || coursePages.length > 0) && liveMode === 'multimedia' && (
+                         <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 p-2">
+                            <button
+                             onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
                              className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
                             >
-                            <ChevronRight size={16} />
-                           </button>
-                        </div>
-                      )}
+                             <ChevronLeft size={16} />
+                            </button>
+                            <span className="text-[11px] font-black text-gray-700 min-w-[60px] text-center">
+                              {isPdfType
+                                ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
+                                : `${t('classroom.pg')} ${currentPageIdx + 1}`}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
+                              className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
+                             >
+                             <ChevronRight size={16} />
+                            </button>
+                         </div>
+                       )}
                     </div>
 
                     <div className="h-[1px] w-full bg-gray-100" />
 
                     <button
-                      onClick={clearCanvas}
+                      onClick={clearInk}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xl"
                     >
-                      <RefreshCw size={16} /> {t('classroom.clear_canvas') || 'Clear Ink'}
+                      <Trash2 size={16} /> {t('classroom.clear_canvas')}
                     </button>
                   </motion.div>
                 )}
@@ -1001,10 +1123,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <div className="hidden md:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white/60">
                 <Monitor size={14} />
                 {liveMode === 'local'
-                  ? (t('classroom.ppt_recording_mode') || 'PPT RECORDING')
+                  ? t('classroom.ppt_recording_mode')
                   : isTeacher
-                    ? (t('classroom.multimedia') || 'MULTIMEDIA')
-                    : (t('classroom.presentation_active') || 'PRESENTATION')}
+                    ? t('classroom.multimedia')
+                    : t('classroom.presentation_active')}
               </div>
 
               {/* Pagination controls — visible to both but label differs */}
@@ -1017,8 +1139,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   <ChevronLeft size={24} />
                 </button>
                 <div className="text-center min-w-[60px]">
-                  <div className="text-xs font-black">{isPdfType ? pdfPage : (coursePages.length > 0 ? currentPageIdx + 1 : 1)}</div>
-                  <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">{t('classroom.slide') || 'SLIDE'}</div>
+                  <div className="text-xs font-black">
+                    {isPdfType
+                      ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
+                      : (coursePages.length > 0 ? currentPageIdx + 1 : 1)}
+                  </div>
+                  <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">{t('classroom.slide')}</div>
                 </div>
                 <button
                   onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
@@ -1055,7 +1181,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
              <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-4">
                 {transcript.map((line, i) => (
                   <div key={i} className="flex gap-6 items-start">
-                      <div className="text-[10px] font-mono text-gray-700 mt-0.5 tracking-tighter">{t('classroom.rec') || 'REC'}</div>
+                       <div className="text-[10px] font-mono text-gray-700 mt-0.5 tracking-tighter">{t('classroom.rec')}</div>
                      <div className="flex-1 grid grid-cols-2 gap-8 border-l border-white/5 pl-4">
                         <p className="text-xs text-blue-100 font-medium border-l border-blue-500 pl-3">{line.zh}</p>
                         <p className="text-xs text-gray-400 italic border-l border-white/10 pl-3">{line.ru}</p>
@@ -1101,11 +1227,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             <div className="absolute top-2 right-2 flex gap-1">
                <div className={`${isMicOn ? 'bg-blue-600' : 'bg-gray-700'} rounded px-2 py-0.5 text-[8px] font-bold flex items-center gap-1 shadow-lg transition-colors`}>
                   <Mic size={8} className={isMicOn ? 'animate-pulse' : ''} />
-                  {isMicOn ? (t('classroom.on') || 'ON') : (t('classroom.off') || 'OFF')}
+                   {isMicOn ? t('classroom.on') : t('classroom.off')}
                </div>
             </div>
             <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
-              {isTeacher ? (t('classroom.teacher_label') || 'Teacher') : t('classroom.waiting_teacher')}
+              {isTeacher ? t('classroom.teacher_label') : t('classroom.waiting_teacher')}
             </div>
           </motion.div>
         </div>
@@ -1175,7 +1301,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <div className="h-16 px-6 border-b border-gray-800 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <BookOpen size={16} className="text-blue-400" />
-                  <h4 className="font-bold text-sm">{t('homework.title') || 'Homework'}</h4>
+                  <h4 className="font-bold text-sm">{t('homework.title')}</h4>
                 </div>
                 <button onClick={() => setShowHomeworkPanel(false)} className="text-gray-500 hover:text-white">
                   <X size={18} />
@@ -1224,11 +1350,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                                 };
                                 mr.start();
                                 setHwRecording(true);
-                              } catch { alert(t('classroom.mic_denied') || 'Microphone access denied'); }
+                              } catch { alert(t('classroom.mic_denied')); }
                             }}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all"
                           >
-                            <Mic size={14} /> {t('homework.record') || 'Record'}
+                            <Mic size={14} /> {t('homework.record')}
                           </button>
                         ) : (
                           <button
@@ -1238,7 +1364,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                             }}
                             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold animate-pulse"
                           >
-                            <StopCircle size={14} /> {t('homework.stop') || 'Stop'}
+                            <StopCircle size={14} /> {t('homework.stop')}
                           </button>
                         )}
                         {hwAudioUrl && (
@@ -1256,7 +1382,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       <div className="mt-2 space-y-1">
                         {hwRecordings.map((rec, ri) => (
                           <div key={ri} className="flex items-center gap-2 text-[10px] text-gray-400">
-                            <span>{t('homework.recording') || 'Recording'} #{ri + 1}</span>
+                            <span>{t('homework.recording')} #{ri + 1}</span>
                             <button
                               onClick={() => {
                                 URL.revokeObjectURL(rec.url);
@@ -1309,7 +1435,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <div className="h-16 px-6 border-b border-gray-800 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <Layers size={16} className="text-purple-400" />
-                  <h4 className="font-bold text-sm">{t('nav.vocabulary') || 'Vocabulary'}</h4>
+                  <h4 className="font-bold text-sm">{t('nav.vocabulary')}</h4>
                 </div>
                 <button onClick={() => setShowVocabPanel(false)} className="text-gray-500 hover:text-white">
                   <X size={18} />
@@ -1323,7 +1449,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       vocabQuizMode === 'zh2ru' ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                     }`}
                   >
-                    {t('vocab.translate_to_ru') || '中文→俄文'}
+                    {t('vocab.translate_to_ru')}
                   </button>
                   <button
                     onClick={() => setVocabQuizMode('ru2zh')}
@@ -1331,7 +1457,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       vocabQuizMode === 'ru2zh' ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                     }`}
                   >
-                    {t('vocab.translate_to_zh') || '俄文→中文'}
+                    {t('vocab.translate_to_zh')}
                   </button>
                 </div>
 
@@ -1387,7 +1513,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                               <X size={20} className="text-red-400" />
                             )}
                             <span className={`text-xs font-bold ${vocabResult ? 'text-green-400' : 'text-red-400'}`}>
-                              {vocabResult ? (t('vocab.correct') || 'Correct!') : `${t('vocab.correct_is') || 'Correct:'} ${correctAnswer}`}
+                              {vocabResult ? t('vocab.correct') : `${t('vocab.correct_is')} ${correctAnswer}`}
                             </span>
                           </div>
                           <button
@@ -1404,14 +1530,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                             }}
                             className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-all"
                           >
-                            {vocabQuizIdx < vocabItems.length - 1 ? (t('vocab.continue') || 'Next') : (t('vocab.finish') || 'Restart')}
+                            {vocabQuizIdx < vocabItems.length - 1 ? t('vocab.continue') : t('vocab.finish')}
                           </button>
                         </div>
                       )}
 
                       <div className="flex items-center justify-between text-[10px] text-gray-500 pt-4">
                         <span>{vocabQuizIdx + 1}/{vocabItems.length}</span>
-                        <span>{t('vocab.score') || 'Score'}: {vocabScore}</span>
+                        <span>{t('vocab.score')}: {vocabScore}</span>
                       </div>
                     </div>
                   );
@@ -1505,22 +1631,24 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                 <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showHomeworkPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
                   <BookOpen size={18} />
                 </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('homework.title') || 'HW'}</span>
+                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('homework.title')}</span>
               </div>
               <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowVocabPanel(!showVocabPanel)}>
                 <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showVocabPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
                   <Layers size={18} />
                 </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('nav.vocabulary') || 'VOC'}</span>
+                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('nav.vocabulary')}</span>
               </div>
             </>
           )}
+          {isTeacher && (
           <div className="flex flex-col items-center gap-1 group cursor-pointer">
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center group-hover:bg-white/5 transition-all text-gray-400">
               <Settings size={18} />
             </div>
             <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('classroom.settings')}</span>
           </div>
+          )}
         </div>
 
         {isTeacher ? (
@@ -1536,7 +1664,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold whitespace-nowrap animate-pulse"
             >
               <Hand size={14} />
-              {studentName} {t('classroom.hand_raised') || 'raised hand'}
+              {studentName} {t('classroom.hand_raised')}
             </button>
           )}
           <button
@@ -1545,7 +1673,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
           >
               <div className="text-right">
                 <div className={`text-[10px] font-black uppercase tracking-tighter ${isRecording ? 'text-red-500' : 'text-gray-500'}`}>{t('classroom.recording')}</div>
-                <div className="text-xs font-bold font-mono">{isRecording ? (t('classroom.live') || 'LIVE') : (t('classroom.stopped') || 'Stopped')}</div>
+                <div className="text-xs font-bold font-mono">{isRecording ? t('classroom.live') : t('classroom.stopped')}</div>
               </div>
               <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-gray-500'}`} />
           </button>
@@ -1555,7 +1683,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             {isPermissionGranted ? (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400 text-[10px] font-bold">
                 <Check size={14} />
-                {t('classroom.permission_granted') || 'Mic & Cam OK'}
+                {t('classroom.permission_granted')}
               </div>
             ) : (
               <button
@@ -1572,7 +1700,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               >
                 <Hand size={16} />
                 <span className="text-[10px] font-black uppercase tracking-tighter">
-                  {isHandRaised ? (t('classroom.hand_raised') || 'Raised!') : (t('classroom.raise_hand') || 'Raise Hand')}
+                  {isHandRaised ? t('classroom.hand_raised') : t('classroom.raise_hand')}
                 </span>
               </button>
             )}

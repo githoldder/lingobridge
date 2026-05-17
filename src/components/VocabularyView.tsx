@@ -399,7 +399,7 @@ const VocabularyView = () => {
     setError(null);
     Promise.all([
       vocabularyApi.list(selectedCourseId),
-      learningRecordsApi.list(selectedCourseId, 'vocabulary')
+      learningRecordsApi.list(selectedCourseId, { context: 'vocabulary' })
     ]).then(([items, records]) => {
       setVocabItems(items);
       setLearningRecords(records);

@@ -11,9 +11,11 @@ import {
   Calendar,
   BarChart,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  User as UserIcon
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 
 interface DashboardViewProps {
   onNavigate?: (target: string) => void;
@@ -21,6 +23,13 @@ interface DashboardViewProps {
 
 const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
+
+  const leaderboard = [
+    { rank: 2, name: t('leaderboard.li_min'), points: '2,940', avatar: 'Li Min' },
+    { rank: 1, name: user?.displayName || t('leaderboard.you'), points: user ? '3,120' : '—', avatar: user?.displayName || t('leaderboard.you'), isUser: true },
+    { rank: 3, name: t('leaderboard.zhang_wei'), points: '2,810', avatar: 'Zhang Wei' },
+  ];
 
   return (
     <div id="dashboard-view" className="space-y-8">
@@ -28,7 +37,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       <section id="dashboard-hero" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div id="hero-welcome" className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative p-8">
           <div className="relative z-10">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{t('dashboard.greeting_student')} 👋</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">{t('dashboard.greeting', { name: user?.displayName || t('auth.guest') })} 👋</h1>
             <p className="text-xs md:text-sm text-gray-600 mb-6 max-w-sm">{t('dashboard.quote')}</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <button className="bg-[#0056D2] text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-sm">
@@ -185,55 +194,49 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex justify-between items-end gap-2 md:gap-8 min-h-[140px] mb-8">
-              {/* Rank 2 */}
-              <div className="flex flex-col items-center gap-3 flex-1">
-                <div className="relative">
-                  <img 
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop" 
-                    className="w-14 h-14 rounded-full border-2 border-gray-100 object-cover" 
-                    alt="R2"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute -bottom-2 -right-1 w-6 h-6 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] font-bold border-2 border-white">2</div>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-900">Li Min</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">2,940 pt</p>
-                </div>
-              </div>
-              {/* Rank 1 */}
-              <div className="flex flex-col items-center gap-3 flex-1 mb-4">
-                <div className="relative">
-                  <Star size={32} className="text-yellow-400 fill-yellow-400 absolute -top-8 left-1/2 -translate-x-1/2 drop-shadow-sm" />
-                  <img 
-                    src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&auto=format&fit=crop" 
-                    className="w-20 h-20 rounded-full border-4 border-yellow-400 object-cover shadow-lg" 
-                    alt="R1"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-yellow-400 text-white flex items-center justify-center text-sm font-bold border-2 border-white shadow-sm">1</div>
-                </div>
-                <div className="text-center">
-                  <p className="text-base font-bold text-gray-900">Anna Zhang</p>
-                  <p className="text-xs font-bold text-[#0056D2] uppercase">3,120 pt</p>
-                </div>
-              </div>
-              {/* Rank 3 */}
-              <div className="flex flex-col items-center gap-3 flex-1">
-                <div className="relative">
-                  <img 
-                    src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop" 
-                    className="w-12 h-12 rounded-full border-2 border-orange-200 object-cover" 
-                    alt="R3"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute -bottom-2 -left-1 w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-bold border-2 border-white">3</div>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-900">Zhang Wei</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">2,810 pt</p>
-                </div>
-              </div>
+              {leaderboard.map((entry) => {
+                const isFirst = entry.rank === 1;
+                const borderClass = isFirst
+                  ? 'border-4 border-yellow-400 shadow-lg'
+                  : entry.rank === 2
+                    ? 'border-2 border-gray-100'
+                    : 'border-2 border-orange-200';
+                const sizeClass = isFirst ? 'w-20 h-20' : entry.rank === 2 ? 'w-14 h-14' : 'w-12 h-12';
+                const badgeBg = isFirst ? 'bg-yellow-400 text-white' : entry.rank === 2 ? 'bg-gray-200 text-gray-700' : 'bg-orange-100 text-orange-700';
+                const badgeSize = isFirst ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-[10px]';
+                const nameSize = isFirst ? 'text-base font-bold' : 'text-sm font-semibold';
+                const pointsColor = isFirst ? 'text-[#0056D2]' : 'text-gray-400';
+                const pointsSize = isFirst ? 'text-xs' : 'text-[10px]';
+                const mbClass = isFirst ? 'mb-4' : '';
+
+                return (
+                  <div key={entry.rank} className={`flex flex-col items-center gap-3 flex-1 ${mbClass}`}>
+                    <div className="relative">
+                      {isFirst && (
+                        <Star size={32} className="text-yellow-400 fill-yellow-400 absolute -top-8 left-1/2 -translate-x-1/2 drop-shadow-sm" />
+                      )}
+                      {entry.isUser && user ? (
+                        <img
+                          src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(entry.avatar)}&backgroundColor=0056D2&textColor=ffffff`}
+                          className={`${sizeClass} rounded-full ${borderClass} object-cover`}
+                          alt={`R${entry.rank}`}
+                        />
+                      ) : (
+                        <div className={`${sizeClass} rounded-full ${borderClass} bg-gray-100 flex items-center justify-center`}>
+                          <UserIcon size={isFirst ? 32 : entry.rank === 2 ? 22 : 18} className="text-gray-400" />
+                        </div>
+                      )}
+                      <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 ${badgeSize} rounded-full ${badgeBg} flex items-center justify-center font-bold border-2 border-white shadow-sm`}>
+                        {entry.rank}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className={`${nameSize} text-gray-900`}>{entry.name}</p>
+                      <p className={`${pointsSize} font-bold ${pointsColor} uppercase`}>{entry.points} pt</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             
             <div className="flex justify-center gap-1.5">

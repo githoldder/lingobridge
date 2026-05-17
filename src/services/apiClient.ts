@@ -81,7 +81,24 @@ async function request<T>(path: string, options: RequestInit = {}) {
       ...(options.headers || {})
     }
   });
-  const payload = await response.json() as ApiEnvelope<T>;
+
+  const contentType = response.headers.get('content-type') || '';
+  const raw = await response.text();
+  let payload: ApiEnvelope<T>;
+  if (contentType.includes('application/json')) {
+    try {
+      payload = JSON.parse(raw) as ApiEnvelope<T>;
+    } catch {
+      throw new Error(`API returned invalid JSON for ${path}`);
+    }
+  } else {
+    const preview = raw.trim().slice(0, 80).replace(/\s+/g, ' ');
+    throw new Error(
+      response.ok
+        ? `API route ${path} returned non-JSON content. Check VITE_API_BASE_URL/backend deployment.`
+        : `API request failed: ${response.status} ${response.statusText} (${preview || 'non-JSON response'})`
+    );
+  }
   if (!response.ok || payload.code !== 0) {
     throw new Error(payload.message || `API request failed: ${path}`);
   }
@@ -129,19 +146,108 @@ export const coursesApi = {
     method: 'POST',
     body: JSON.stringify({ title, description })
   }),
+  update: (id: string, updates: { title?: string; description?: string; status?: 'Published' | 'Draft' }) =>
+    request<Course>(`/courses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }),
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
-  async uploadCourseware(courseId: string, file: File) {
+  async uploadCourseware(courseId: string, file: File, lessonNodeId?: string) {
     return request<{ file: unknown; pages: CoursePage[]; exercises: Exercise[]; tasks: LearningTask[]; vocabulary: VocabularyItem[]; warnings?: string[] }>('/coursewares', {
       method: 'POST',
       body: JSON.stringify({
         courseId,
+        lessonNodeId,
         filename: file.name,
         mimeType: file.type || 'application/octet-stream',
         base64: await fileToBase64(file)
       })
     });
   }
+};
+
+export interface CourseMemberData {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  email: string;
+  role: string;
+  joinedAt: string;
+}
+
+export const courseMembersApi = {
+  list: (courseId: string) => request<CourseMemberData[]>(`/courses/${courseId}/members`),
+  add: (courseId: string, email: string) => request<CourseMemberData>(`/courses/${courseId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  }),
+  remove: (courseId: string, memberId: string) => request<{ deleted: boolean }>(`/courses/${courseId}/members/${memberId}`, {
+    method: 'DELETE'
+  })
+};
+
+export interface CoursewareFileData {
+  id: string;
+  filename: string;
+  mimeType: string;
+  type?: string;
+  lessonNodeId?: string;
+  liveClassTitle?: string;
+  pageCount: number;
+  status: 'processing' | 'ready' | 'error';
+  createdAt: string;
+}
+
+export const coursewareFilesApi = {
+  list: (courseId: string, lessonNodeId?: string) =>
+    request<CoursewareFileData[]>(`/coursewares?courseId=${courseId}${lessonNodeId ? `&lessonNodeId=${lessonNodeId}` : ''}`)
+};
+
+export interface HomeworkImportResult {
+  tasksCount: number;
+  vocabCount: number;
+  warnings: string[];
+  errorRows: string[];
+  lessonNodeId?: string;
+}
+
+export const assignmentsApi = {
+  import: (courseId: string, filename: string, base64: string, lessonNodeId?: string) =>
+    request<HomeworkImportResult>('/assignments/import', {
+      method: 'POST',
+      body: JSON.stringify({ courseId, filename, base64, lessonNodeId })
+    })
+};
+
+export interface LessonNodeData {
+  id: string;
+  courseId: string;
+  title: string;
+  startsAt?: string;
+  endsAt?: string;
+  styleSeed: number;
+  colorToken: string;
+  shapeToken: string;
+  status: string;
+  assignmentNodeId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const lessonNodesApi = {
+  list: (courseId: string) => request<LessonNodeData[]>(`/courses/${courseId}/lesson-nodes`),
+  create: (courseId: string, data: { title: string; startsAt?: string }) =>
+    request<{ lessonNode: LessonNodeData; assignmentNode: unknown }>(`/courses/${courseId}/lesson-nodes`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  update: (id: string, data: { title?: string; startsAt?: string; endsAt?: string; status?: string }) =>
+    request<LessonNodeData>(`/lesson-nodes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
 };
 
 export const recordingsApi = {
@@ -152,6 +258,7 @@ export const recordingsApi = {
       body: JSON.stringify({
         courseId: params.courseId,
         pageNumber: params.pageNumber,
+        taskId: params.taskId,
         filename: params.filename || `recording-${Date.now()}.webm`,
         durationSec: params.durationSec,
         base64: await fileToBase64(params.blob)
@@ -180,6 +287,7 @@ export const lecturesApi = {
 export interface LearningTask {
   id: string;
   courseId: string;
+  lessonNodeId?: string;
   sourceFileId: string;
   taskId: string;
   taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';
@@ -225,6 +333,7 @@ export interface LearningRecord {
   id: string;
   studentId: string;
   taskId: string;
+  lessonNodeId?: string;
   context: 'homework' | 'vocabulary' | 'practice';
   status: 'not_started' | 'in_progress' | 'completed';
   score: number;
@@ -235,10 +344,11 @@ export interface LearningRecord {
 }
 
 export const homeworkApi = {
-  tasks: (courseId: string, unit?: number, lesson?: number) => {
+  tasks: (courseId: string, unit?: number, lesson?: number, lessonNodeId?: string) => {
     let path = `/homework/tasks?courseId=${courseId}`;
     if (unit !== undefined) path += `&unit=${unit}`;
     if (lesson !== undefined) path += `&lesson=${lesson}`;
+    if (lessonNodeId) path += `&lessonNodeId=${lessonNodeId}`;
     return request<LearningTask[]>(path);
   }
 };
@@ -255,20 +365,65 @@ export const vocabularyApi = {
 };
 
 export const learningRecordsApi = {
-  save: (taskId: string, params: { context?: string; status?: string; score?: number; recordingId?: string }) =>
+  save: (taskId: string, params: { context?: string; status?: string; score?: number; recordingId?: string; lessonNodeId?: string }) =>
     request<LearningRecord>('/learning-records', {
       method: 'POST',
       body: JSON.stringify({ taskId, ...params })
     }),
-  list: (courseId: string, context?: string) => {
+  list: (courseId: string, params?: { context?: string; lessonNodeId?: string }) => {
     let path = `/learning-records?courseId=${courseId}`;
-    if (context) path += `&context=${context}`;
+    if (params?.context) path += `&context=${params.context}`;
+    if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
     return request<LearningRecord[]>(path);
   }
 };
 
+export interface TTSSynthesizeResult {
+  provider: string;
+  audioUrl: string | null;
+  text: string;
+  lang: string;
+  cached: boolean;
+  charCount: number;
+  billingChars: number;
+  latencyMs: number;
+}
+
+export interface TTSUsageRecord {
+  id: string;
+  timestamp: string;
+  provider: string;
+  text: string;
+  lang: string;
+  charCount: number;
+  billingChars: number;
+  cached: boolean;
+  latencyMs: number;
+  costUsd: number;
+}
+
+export interface TTSProviderStatus {
+  primary: 'healthy' | 'unhealthy';
+  fallback: 'healthy' | 'unhealthy';
+  overLimit: boolean;
+}
+
 export const ttsApi = {
-  synthesize: (text: string, lang: string) => request<{ provider: string; audioUrl: string | null; text: string; lang: string }>(`/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}`)
+  synthesize: (text: string, lang: string, voice?: string, speed?: number) => {
+    let path = `/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}`;
+    if (voice) path += `&voice=${encodeURIComponent(voice)}`;
+    if (speed) path += `&speed=${speed}`;
+    return request<TTSSynthesizeResult>(path);
+  },
+  getUsage: (startDate?: string, endDate?: string) => {
+    let path = '/tts/usage';
+    const params: string[] = [];
+    if (startDate) params.push(`startDate=${startDate}`);
+    if (endDate) params.push(`endDate=${endDate}`);
+    if (params.length) path += '?' + params.join('&');
+    return request<TTSUsageRecord[]>(path);
+  },
+  getStatus: () => request<TTSProviderStatus>('/tts/status')
 };
 
 export interface LiveSessionData {
@@ -292,11 +447,21 @@ export interface ClassroomCommentData {
   visibility: 'visible' | 'hidden';
 }
 
+export interface AdminUser {
+  id: string;
+  username: string;
+  role: Role;
+  displayName: string;
+  languagePref: string;
+  disabled?: boolean;
+  createdAt: string;
+}
+
 export const liveSessionsApi = {
-  create: (courseId: string, sourceMode: 'screen' | 'pdf' = 'pdf') =>
+  create: (courseId: string, lessonNodeId: string, sourceMode: 'screen' | 'pdf' = 'pdf') =>
     request<LiveSessionData>('/live-sessions', {
       method: 'POST',
-      body: JSON.stringify({ courseId, sourceMode })
+      body: JSON.stringify({ courseId, lessonNodeId, sourceMode })
     }),
   getActive: (courseId: string) =>
     request<LiveSessionData | null>(`/live-sessions/active?courseId=${courseId}`),
@@ -314,4 +479,159 @@ export const liveSessionsApi = {
         body: JSON.stringify({ body })
       })
   }
+};
+
+export interface AdminLiveSession {
+  id: string;
+  courseId: string;
+  teacherId: string;
+  lessonNodeId: string;
+  status: 'active' | 'ended';
+  sourceMode: 'screen' | 'pdf';
+  currentPage: number;
+  recordingStatus: 'idle' | 'recording' | 'saved';
+  startedAt: string;
+  endedAt: string;
+  courseTitle: string;
+  lessonTitle: string;
+  teacherName: string;
+}
+
+export interface AdminRecording {
+  type: 'lecture' | 'student';
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  createdAt: string;
+  durationSec: number;
+  filename: string;
+  title?: string;
+  teacherName?: string;
+  studentName?: string;
+  studentId?: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  pageNumber?: number;
+  taskId?: string;
+}
+
+export interface AdminNote {
+  id: string;
+  liveSessionId: string;
+  studentId: string;
+  body: string;
+  createdAt: string;
+  visibility: 'visible' | 'hidden';
+  sessionTitle: string;
+  studentName: string;
+}
+
+export interface AdminTranscriptSegment {
+  id: string;
+  sourceText: string;
+  translatedText: string;
+  language: string;
+  createdAt: string;
+}
+
+export interface AdminTranscript {
+  liveSessionId: string;
+  courseTitle: string;
+  segments: AdminTranscriptSegment[];
+}
+
+export interface AdminCourseware {
+  id: string;
+  ownerId: string;
+  courseId: string;
+  type: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageUrl: string;
+  createdAt: string;
+  courseTitle: string;
+  pageCount: number;
+  renderStatus: 'pending' | 'processing' | 'ready' | 'failed';
+}
+
+export interface AdminAssignmentImport {
+  fileId: string;
+  filename: string;
+  courseTitle: string;
+  tasksCount: number;
+  vocabCount: number;
+  errors: string[];
+  createdAt: string;
+}
+
+export interface LessonProgress {
+  lessonNodeId: string;
+  lessonTitle: string;
+  totalTasks: number;
+  completedTasks: number;
+  completionRate: number;
+  recordings: number;
+  avgScore: number;
+}
+
+export interface CourseProgress {
+  courseId: string;
+  courseTitle: string;
+  lessonProgress: LessonProgress[];
+}
+
+export interface StudentProgress {
+  studentId: string;
+  displayName: string;
+  courseProgress: CourseProgress[];
+}
+
+export interface AdminLearningProgress {
+  students: StudentProgress[];
+}
+
+export const adminApi = {
+  listUsers: (role?: string, q?: string) => {
+    let path = '/admin/users';
+    const params: string[] = [];
+    if (role) params.push(`role=${role}`);
+    if (q) params.push(`q=${encodeURIComponent(q)}`);
+    if (params.length) path += '?' + params.join('&');
+    return request<AdminUser[]>(path);
+  },
+  createUser: (username: string, password: string, role: Role, displayName: string) =>
+    request<AdminUser>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, role, displayName })
+    }),
+  updateUser: (id: string, updates: { disabled?: boolean; password?: string; displayName?: string; role?: Role }) =>
+    request<AdminUser>(`/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }),
+  deleteUser: (id: string) =>
+    request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
+  getUserRecords: (id: string) =>
+    request<LearningRecord[]>(`/admin/users/${id}/records`),
+  liveSessions: () => request<AdminLiveSession[]>('/admin/live-sessions'),
+  recordings: (courseId?: string) => request<AdminRecording[]>(`/admin/recordings${courseId ? `?courseId=${courseId}` : ''}`),
+  notes: () => request<AdminNote[]>('/admin/notes'),
+  transcripts: (liveSessionId?: string) => request<AdminTranscript[]>(`/admin/transcripts${liveSessionId ? `?liveSessionId=${liveSessionId}` : ''}`),
+  coursewares: () => request<AdminCourseware[]>('/admin/coursewares'),
+  assignmentImports: () => request<AdminAssignmentImport[]>('/admin/assignment-imports'),
+  learningProgress: (params?: { studentId?: string; courseId?: string; lessonNodeId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.studentId) qs.set('studentId', params.studentId);
+    if (params?.courseId) qs.set('courseId', params.courseId);
+    if (params?.lessonNodeId) qs.set('lessonNodeId', params.lessonNodeId);
+    const query = qs.toString();
+    return request<AdminLearningProgress>(`/admin/learning-progress${query ? `?${query}` : ''}`);
+  },
+  toggleNoteVisibility: (noteId: string, visibility: 'visible' | 'hidden') =>
+    request<AdminNote>(`/admin/notes/${noteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ visibility })
+    }),
+  deleteRecording: (id: string) => request<{ deleted: boolean }>(`/recordings/${id}`, { method: 'DELETE' })
 };

@@ -44,7 +44,7 @@ function str(value: unknown, fallback = ''): string {
   return String(value).trim();
 }
 
-export function parseExcel(filePath: string, courseId: string, sourceFileId: string): ParseResult {
+export function parseExcel(filePath: string, courseId: string, sourceFileId: string, lessonNodeId?: string): ParseResult {
   const errors: string[] = [];
   let fileBuffer: Buffer;
   try {
@@ -122,6 +122,7 @@ export function parseExcel(filePath: string, courseId: string, sourceFileId: str
     const learningTask: LearningTask = {
       id: crypto.randomUUID(),
       courseId,
+      ...(lessonNodeId ? { lessonNodeId } : {}),
       sourceFileId,
       taskId,
       taskType: taskType as LearningTask['taskType'],
@@ -153,6 +154,7 @@ export function parseExcel(filePath: string, courseId: string, sourceFileId: str
       const vocabItem: VocabularyItem = {
         id: crypto.randomUUID(),
         courseId,
+        ...(lessonNodeId ? { lessonNodeId } : {}),
         taskId,
         zhText,
         pinyin: str(get('pinyin')),

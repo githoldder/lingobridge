@@ -246,7 +246,12 @@ interface Recording {
   timestamp: Date;
 }
 
-const HomeworkView = () => {
+interface HomeworkViewProps {
+  lessonNodeId?: string;
+  courseId?: string;
+}
+
+const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNodeId, courseId: propCourseId }) => {
   const { t } = useLanguage();
   const [view, setView] = useState<'path' | 'task'>('path');
   const [selectedGroup, setSelectedGroup] = useState<LessonGroup | null>(null);
@@ -256,7 +261,8 @@ const HomeworkView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || 'course-1');
+  const [selectedCourseId, setSelectedCourseId] = useState(() => propCourseId || localStorage.getItem('lingobridge_courseId') || 'course-1');
+  const [activeLessonNodeId, setActiveLessonNodeId] = useState<string | undefined>(propLessonNodeId);
 
   // Task state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -276,6 +282,17 @@ const HomeworkView = () => {
   const currentTask = currentTasks[currentIndex];
 
   useEffect(() => {
+    if (propCourseId) {
+      setSelectedCourseId(propCourseId);
+      localStorage.setItem('lingobridge_courseId', propCourseId);
+    }
+  }, [propCourseId]);
+
+  useEffect(() => {
+    setActiveLessonNodeId(propLessonNodeId);
+  }, [propLessonNodeId]);
+
+  useEffect(() => {
     coursesApi.list().then(setCourses).catch(() => {});
   }, []);
 
@@ -283,14 +300,28 @@ const HomeworkView = () => {
     if (!selectedCourseId) return;
     setLoading(true);
     setError(null);
+
+    const recordsContext = activeLessonNodeId
+      ? { context: 'homework' as const, lessonNodeId: activeLessonNodeId }
+      : { context: 'homework' as const };
+
     Promise.all([
       homeworkApi.tasks(selectedCourseId),
-      learningRecordsApi.list(selectedCourseId, 'homework')
+      learningRecordsApi.list(selectedCourseId, recordsContext)
     ]).then(([tasks, records]) => {
-      setAllTasks(tasks);
+      let filteredTasks = tasks;
+      if (activeLessonNodeId) {
+        const parts = activeLessonNodeId.replace(`${selectedCourseId}-`, '').split('-');
+        const targetUnit = parseInt(parts[0].replace('u', ''), 10);
+        const targetLesson = parseInt(parts[1].replace('l', ''), 10);
+        filteredTasks = tasks.filter(
+          (task) => task.unit === targetUnit && task.lesson === targetLesson
+        );
+      }
+      setAllTasks(filteredTasks);
       setLearningRecords(records);
       const lessonMap = new Map<string, LearningTask[]>();
-      for (const task of tasks) {
+      for (const task of filteredTasks) {
         const key = `${task.unit}-${task.lesson}`;
         if (!lessonMap.has(key)) lessonMap.set(key, []);
         lessonMap.get(key)!.push(task);
@@ -318,7 +349,7 @@ const HomeworkView = () => {
       setError(t('homework.load_error'));
       setLoading(false);
     });
-  }, [selectedCourseId]);
+  }, [selectedCourseId, activeLessonNodeId]);
 
   const allCurrentDone = groups.every(g => g.completedCount === g.totalCount);
   const currentGroupIndex = groups.findIndex(g => g.completedCount < g.totalCount);
@@ -359,7 +390,8 @@ const HomeworkView = () => {
             await learningRecordsApi.save(currentTask.taskId, {
               context: 'homework',
               status: 'in_progress',
-              recordingId: rec.id
+              recordingId: rec.id,
+              lessonNodeId: activeLessonNodeId
             });
           } catch (err) {
             console.error('Failed to upload recording:', err);
@@ -405,7 +437,8 @@ const HomeworkView = () => {
       await learningRecordsApi.save(currentTask.taskId, {
         context: 'homework',
         status: 'completed',
-        score
+        score,
+        lessonNodeId: activeLessonNodeId
       });
       setLearningRecords(prev => {
         const existing = prev.find(r => r.taskId === currentTask.taskId);
@@ -460,6 +493,7 @@ const HomeworkView = () => {
           onChange={(e) => {
             const cid = e.target.value;
             setSelectedCourseId(cid);
+            setActiveLessonNodeId(undefined);
             localStorage.setItem('lingobridge_courseId', cid);
           }}
           className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
@@ -470,6 +504,24 @@ const HomeworkView = () => {
           ))}
         </select>
       </div>
+
+      {activeLessonNodeId && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
+          <BookOpen size={14} className="text-[#0056D2]" />
+          <span className="text-sm font-semibold text-[#0056D2]">
+            {t('homework.lesson_context', { title: groups[0]?.lessonTitle || activeLessonNodeId })}
+          </span>
+          <button
+            onClick={() => {
+              setActiveLessonNodeId(undefined);
+              setGroups([]);
+            }}
+            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            {t('homework.back_path')}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-screen">

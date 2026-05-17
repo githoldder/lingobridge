@@ -2,21 +2,28 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, UserCheck, ChevronLeft, Globe, ArrowRight, School } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 interface RegisterViewProps {
-  onNavigate: (view: 'landing' | 'login' | 'dashboard') => void;
+  onNavigate: (view: string) => void;
 }
 
 const RegisterView = ({ onNavigate }: RegisterViewProps) => {
   const { t } = useLanguage();
+  const { login } = useAuth();
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onNavigate('dashboard');
+    try {
+      const user = await login(email, password);
+      onNavigate(user.role === 'teacher' ? 'teacher-dashboard' : 'dashboard');
+    } catch {
+      onNavigate('dashboard');
+    }
   };
 
   return (

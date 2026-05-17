@@ -84,7 +84,11 @@ const seed: Database = {
   lectures: [],
   liveSessions: [],
   classroomComments: [],
-  files: []
+  files: [],
+  lessonNodes: [],
+  assignmentNodes: [],
+  coursewareFiles: [],
+  courseMembers: []
 };
 
 let cached: Database | null = null;

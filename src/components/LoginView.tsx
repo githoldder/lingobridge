@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, LogIn, ChevronLeft, Globe } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
-import { authApi } from '../services/apiClient.ts';
+import { useAuth } from '../context/AuthContext';
 
 interface LoginViewProps {
   onNavigate: (view: string) => void;
@@ -10,6 +10,7 @@ interface LoginViewProps {
 
 const LoginView = ({ onNavigate }: LoginViewProps) => {
   const { t } = useLanguage();
+  const { login } = useAuth();
   const [email, setEmail] = useState('student_a@test.com');
   const [password, setPassword] = useState('Test@123456');
   const [error, setError] = useState('');
@@ -20,7 +21,7 @@ const LoginView = ({ onNavigate }: LoginViewProps) => {
     setError('');
     setIsSubmitting(true);
     try {
-      const { user } = await authApi.login(email, password);
+      const user = await login(email, password);
       onNavigate(user.role === 'teacher' ? 'teacher-dashboard' : 'dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed. Use teacher@test.com or student_a@test.com with Test@123456.');

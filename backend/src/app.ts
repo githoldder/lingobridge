@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
 import { saveBase64File, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
-import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment } from './types.ts';
+import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course } from './types.ts';
+import { ttsFacade } from './providers/ttsFacade.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -23,6 +24,16 @@ function currentUserId(req: Request) {
 
 function extensionOf(filename: string) {
   return path.extname(filename).slice(1).toLowerCase();
+}
+
+function deriveStyleTokens(styleSeed: number): { colorToken: string; shapeToken: string } {
+  const colors = ['#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316', '#64748B'];
+  const shapes = ['circle', 'square', 'diamond', 'hexagon', 'star', 'triangle', 'pentagon', 'octagon'];
+  const hash = ((styleSeed * 2654435761) >>> 0) % 2147483647;
+  return {
+    colorToken: colors[hash % colors.length],
+    shapeToken: shapes[hash % shapes.length]
+  };
 }
 
 function extractPptxText(absolutePath: string): string[] {
@@ -110,6 +121,10 @@ export function createApp() {
   app.use(express.json({ limit: '90mb' }));
   app.use('/uploads', express.static(storageRoot));
 
+  const ttsCacheDir = path.resolve(process.cwd(), 'backend/data/tts-cache');
+  if (!fs.existsSync(ttsCacheDir)) fs.mkdirSync(ttsCacheDir, { recursive: true });
+  app.use('/uploads/tts-cache', express.static(ttsCacheDir));
+
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -179,10 +194,13 @@ export function createApp() {
   });
 
   app.post('/api/v1/coursewares', async (req, res) => {
-    const { courseId = 'course-1', filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+    const { courseId = 'course-1', lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
     if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
 
     const db = await readDb();
+    if (lessonNodeId && !db.lessonNodes.find((n) => n.id === lessonNodeId && n.courseId === courseId)) {
+      return fail(res, 404, 'Live class not found for this course');
+    }
     const ext = extensionOf(filename);
     if (!['pptx', 'pdf', 'xlsx'].includes(ext)) return fail(res, 415, 'Only pptx, pdf and xlsx are supported');
 
@@ -193,6 +211,7 @@ export function createApp() {
       id: saved.id,
       ownerId: currentUserId(req) || 'teacher-1',
       courseId,
+      lessonNodeId: lessonNodeId || undefined,
       type: ext as FileMetadata['type'],
       filename,
       mimeType,
@@ -201,6 +220,21 @@ export function createApp() {
       createdAt: new Date().toISOString()
     };
     db.files.unshift(fileMeta);
+    if (['pdf', 'pptx', 'xlsx'].includes(ext)) {
+      db.coursewareFiles.unshift({
+        id: fileMeta.id,
+        courseId,
+        lessonNodeId: lessonNodeId || undefined,
+        type: ext as 'pdf' | 'pptx' | 'xlsx',
+        filename,
+        storageUrl: saved.url,
+        renderStatus: 'processing',
+        pageCount: 0,
+        createdAt: fileMeta.createdAt
+      });
+    }
+
+    let renderStatus: 'pending' | 'processing' | 'ready' | 'failed' = 'ready';
 
     let pages: CoursePage[] = [];
     let exercises: Exercise[] = [];
@@ -209,11 +243,17 @@ export function createApp() {
     let parseErrors: string[] = [];
 
     if (ext === 'pdf' || ext === 'pptx') {
-      pages = createPagesFromCourseware(courseId, filename, saved.url, saved.absolutePath);
-      db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
+      renderStatus = 'processing';
+      try {
+        pages = createPagesFromCourseware(courseId, filename, saved.url, saved.absolutePath);
+        db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
+        renderStatus = 'ready';
+      } catch {
+        renderStatus = 'failed';
+      }
     }
     if (ext === 'xlsx') {
-      const result = parseExcel(saved.absolutePath, courseId, fileMeta.id);
+      const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, lessonNodeId || undefined);
       if (result.errors.length > 0) {
         parseErrors = result.errors;
       }
@@ -223,8 +263,155 @@ export function createApp() {
       vocab = result.vocabularyItems;
     }
 
+    const coursewareRecord = db.coursewareFiles.find((f) => f.id === fileMeta.id);
+    if (coursewareRecord) {
+      coursewareRecord.renderStatus = renderStatus;
+      coursewareRecord.pageCount = pages.length;
+    }
+
     await writeDb(db);
-    ok(res, { file: fileMeta, pages, exercises, tasks, vocabulary: vocab, warnings: parseErrors.length > 0 ? parseErrors : undefined });
+    ok(res, { file: { ...fileMeta, renderStatus }, pages, exercises, tasks, vocabulary: vocab, warnings: parseErrors.length > 0 ? parseErrors : undefined });
+  });
+
+  app.patch('/api/v1/courses/:id', async (req, res) => {
+    const db = await readDb();
+    const course = db.courses.find((c) => c.id === req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    const { title, description, status } = req.body ?? {};
+    if (title !== undefined) course.title = String(title);
+    if (description !== undefined) course.description = String(description);
+    if (status !== undefined && ['Published', 'Draft'].includes(status)) course.status = status as Course['status'];
+    await writeDb(db);
+    ok(res, course);
+  });
+
+  app.get('/api/v1/courses/:id/members', async (req, res) => {
+    const db = await readDb();
+    const members = db.courseMembers
+      .filter((m) => m.courseId === req.params.id)
+      .map((m) => {
+        const user = db.users.find((u) => u.id === m.userId);
+        return {
+          id: m.id,
+          userId: m.userId,
+          username: user?.username || '',
+          displayName: user?.displayName || '',
+          email: user?.username || '',
+          role: m.role,
+          joinedAt: m.joinedAt
+        };
+      });
+    ok(res, members);
+  });
+
+  app.post('/api/v1/courses/:id/members', async (req, res) => {
+    const db = await readDb();
+    const course = db.courses.find((c) => c.id === req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    const { email } = req.body ?? {};
+    if (!email) return fail(res, 400, 'email is required');
+    const user = db.users.find((u) => u.username === email || u.email === email);
+    if (!user) return fail(res, 404, 'User not found');
+    const existing = db.courseMembers.find((m) => m.courseId === req.params.id && m.userId === user.id);
+    if (existing) return fail(res, 409, 'User is already a member');
+    const member = {
+      id: crypto.randomUUID(),
+      courseId: req.params.id,
+      userId: user.id,
+      role: 'student' as const,
+      joinedAt: new Date().toISOString()
+    };
+    db.courseMembers.push(member);
+    await writeDb(db);
+    ok(res, {
+      id: member.id,
+      userId: member.userId,
+      username: user.username,
+      displayName: user.displayName,
+      email: user.username,
+      role: member.role,
+      joinedAt: member.joinedAt
+    });
+  });
+
+  app.delete('/api/v1/courses/:id/members/:memberId', async (req, res) => {
+    const db = await readDb();
+    const before = db.courseMembers.length;
+    db.courseMembers = db.courseMembers.filter((m) => m.id !== req.params.memberId);
+    await writeDb(db);
+    ok(res, { deleted: before !== db.courseMembers.length });
+  });
+
+  app.get('/api/v1/coursewares', async (req, res) => {
+    const db = await readDb();
+    const courseId = String(req.query.courseId || '');
+    const lessonNodeId = String(req.query.lessonNodeId || '');
+    let files = db.files;
+    if (courseId) files = files.filter((f) => f.courseId === courseId);
+    if (lessonNodeId) files = files.filter((f) => f.lessonNodeId === lessonNodeId);
+    const items = files.map((f) => {
+      const pages = db.coursePages.filter((p) => p.courseId === f.courseId && p.fileUrl === f.storageUrl);
+      const lesson = f.lessonNodeId ? db.lessonNodes.find((n) => n.id === f.lessonNodeId) : undefined;
+      return {
+        id: f.id,
+        filename: f.filename,
+        mimeType: f.mimeType,
+        type: f.type,
+        lessonNodeId: f.lessonNodeId || '',
+        liveClassTitle: lesson?.title || '',
+        pageCount: pages.length,
+        status: ['pdf', 'pptx'].includes(f.type) ? 'ready' : 'ready' as const,
+        createdAt: f.createdAt
+      };
+    });
+    ok(res, items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
+
+  app.post('/api/v1/assignments/import', async (req, res) => {
+    const { courseId, lessonNodeId, filename, base64 } = req.body ?? {};
+    if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
+    const db = await readDb();
+    if (lessonNodeId && !db.lessonNodes.find((n) => n.id === lessonNodeId && n.courseId === courseId)) {
+      return fail(res, 404, 'Live class not found for this course');
+    }
+    const ext = extensionOf(filename);
+    if (!['xlsx', 'xls'].includes(ext)) return fail(res, 415, 'Only xlsx files are supported');
+    const saved = await saveBase64File({ base64, filename, folder: 'assignments' });
+    const fileMeta: FileMetadata = {
+      id: saved.id,
+      ownerId: currentUserId(req) || 'teacher-1',
+      courseId,
+      lessonNodeId: lessonNodeId || undefined,
+      type: 'xlsx' as FileMetadata['type'],
+      filename,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      sizeBytes: saved.sizeBytes,
+      storageUrl: saved.url,
+      createdAt: new Date().toISOString()
+    };
+    db.files.unshift(fileMeta);
+    db.coursewareFiles.unshift({
+      id: fileMeta.id,
+      courseId,
+      lessonNodeId: lessonNodeId || undefined,
+      type: 'xlsx',
+      filename,
+      storageUrl: saved.url,
+      renderStatus: 'ready',
+      pageCount: 0,
+      createdAt: fileMeta.createdAt
+    });
+    const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, lessonNodeId || undefined);
+    upsertTasks(db, result.learningTasks);
+    upsertVocabulary(db, result.vocabularyItems);
+    await writeDb(db);
+    ok(res, {
+      tasksCount: result.learningTasks.length,
+      vocabCount: result.vocabularyItems.length,
+      lessonNodeId: lessonNodeId || undefined,
+      warnings: result.errors.length > 0 ? result.errors : [],
+      errorRows: []
+    });
   });
 
   app.get('/api/v1/exercises', async (req, res) => {
@@ -237,10 +424,12 @@ export function createApp() {
   app.get('/api/v1/homework/tasks', async (req, res) => {
     const db = await readDb();
     const courseId = String(req.query.courseId || '');
+    const lessonNodeId = String(req.query.lessonNodeId || '');
     const unit = req.query.unit ? Number(req.query.unit) : undefined;
     const lesson = req.query.lesson ? Number(req.query.lesson) : undefined;
     let items = db.learningTasks.filter((t) => t.publishToHomework);
     if (courseId) items = items.filter((t) => t.courseId === courseId);
+    if (lessonNodeId) items = items.filter((t) => t.lessonNodeId === lessonNodeId);
     if (unit !== undefined) items = items.filter((t) => t.unit === unit);
     if (lesson !== undefined) items = items.filter((t) => t.lesson === lesson);
     items.sort((a, b) => a.sortOrder - b.sortOrder);
@@ -264,12 +453,12 @@ export function createApp() {
   });
 
   app.post('/api/v1/learning-records', async (req, res) => {
-    const { taskId, context = 'homework', status = 'completed', score = 0 } = req.body ?? {};
+    const { taskId, context = 'homework', status = 'completed', score = 0, lessonNodeId } = req.body ?? {};
     if (!taskId) return fail(res, 400, 'taskId is required');
     const db = await readDb();
     const studentId = currentUserId(req) || 'student-1';
     const existing = db.learningRecords.find(
-      (r) => r.studentId === studentId && r.taskId === taskId
+      (r) => r.studentId === studentId && r.taskId === taskId && (lessonNodeId ? r.lessonNodeId === lessonNodeId : !r.lessonNodeId)
     );
     const now = new Date().toISOString();
     if (existing) {
@@ -292,7 +481,8 @@ export function createApp() {
         attemptsCount: 1,
         lastRecordingId: req.body?.recordingId || '',
         completedAt: status === 'completed' ? now : '',
-        updatedAt: now
+        updatedAt: now,
+        ...(lessonNodeId ? { lessonNodeId } : {})
       };
       db.learningRecords.push(record);
       await writeDb(db);
@@ -305,8 +495,10 @@ export function createApp() {
     const studentId = currentUserId(req) || 'student-1';
     const courseId = String(req.query.courseId || '');
     const context = String(req.query.context || '');
+    const lessonNodeId = String(req.query.lessonNodeId || '');
     let records = db.learningRecords.filter((r) => r.studentId === studentId);
     if (context) records = records.filter((r) => r.context === context);
+    if (lessonNodeId) records = records.filter((r) => r.lessonNodeId === lessonNodeId);
     if (courseId) {
       const taskIds = db.learningTasks.filter((t) => t.courseId === courseId).map((t) => t.taskId);
       records = records.filter((r) => taskIds.includes(r.taskId));
@@ -314,13 +506,42 @@ export function createApp() {
     ok(res, records);
   });
 
-  app.get('/api/v1/tts', (req, res) => {
-    ok(res, {
-      provider: 'browser-fallback',
-      text: String(req.query.text || ''),
-      lang: String(req.query.lang || 'zh-CN'),
-      audioUrl: null
-    }, 'TTS provider not configured; use browser fallback');
+  app.get('/api/v1/tts', async (req, res) => {
+    const text = String(req.query.text || '');
+    const lang = String(req.query.lang || 'zh-CN');
+    const voice = req.query.voice ? String(req.query.voice) : undefined;
+    const speed = req.query.speed ? Number(req.query.speed) : undefined;
+
+    if (!text) return fail(res, 400, 'text is required');
+
+    try {
+      const result = await ttsFacade.synthesize({ text, lang, voice, speed });
+      ok(res, {
+        provider: result.provider,
+        text,
+        lang,
+        audioUrl: result.audioUrl,
+        cached: result.cached,
+        charCount: result.charCount,
+        billingChars: result.billingChars,
+        latencyMs: result.latencyMs
+      });
+    } catch (error: any) {
+      fail(res, 500, 'TTS synthesis failed', error.message);
+    }
+  });
+
+  app.get('/api/v1/tts/usage', requireAdmin, async (req, res) => {
+    const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+    const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
+    const usage = await ttsFacade.getUsage(startDate, endDate);
+    const redacted = usage.map(r => ({ ...r, text: '[redacted]' }));
+    ok(res, redacted);
+  });
+
+  app.get('/api/v1/tts/status', async (req, res) => {
+    const status = await ttsFacade.getProviderStatus();
+    ok(res, status);
   });
 
   app.post('/api/v1/recordings', async (req, res) => {
@@ -398,13 +619,98 @@ export function createApp() {
     ok(res, { deleted: before !== db.lectures.length });
   });
 
+  // Lesson node API (T02)
+  app.get('/api/v1/courses/:id/lesson-nodes', async (req, res) => {
+    const db = await readDb();
+    const nodes = db.lessonNodes.filter((n) => n.courseId === req.params.id);
+    ok(res, nodes);
+  });
+
+  app.post('/api/v1/courses/:id/lesson-nodes', async (req, res) => {
+    const db = await readDb();
+    const courseId = req.params.id;
+    const course = db.courses.find((c) => c.id === courseId);
+    if (!course) return fail(res, 404, 'Course not found');
+
+    const now = new Date().toISOString();
+    const styleSeed = Math.floor(Math.random() * 1000000);
+    const { colorToken, shapeToken } = deriveStyleTokens(styleSeed);
+
+    const lessonNode: LessonNode = {
+      id: crypto.randomUUID(),
+      courseId,
+      title: String(req.body?.title || 'New Lesson'),
+      startsAt: req.body?.startsAt || undefined,
+      endsAt: req.body?.endsAt || undefined,
+      styleSeed,
+      colorToken,
+      shapeToken,
+      status: (req.body?.status || 'draft') as LessonNode['status'],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const assignmentNode: AssignmentNode = {
+      id: crypto.randomUUID(),
+      courseId,
+      lessonNodeId: lessonNode.id,
+      title: String(req.body?.assignmentTitle || `${lessonNode.title} - Homework`),
+      dueAt: req.body?.dueAt || undefined,
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    lessonNode.assignmentNodeId = assignmentNode.id;
+
+    db.lessonNodes.unshift(lessonNode);
+    db.assignmentNodes.unshift(assignmentNode);
+    await writeDb(db);
+    ok(res, { lessonNode, assignmentNode });
+  });
+
+  app.patch('/api/v1/lesson-nodes/:id', async (req, res) => {
+    const db = await readDb();
+    const node = db.lessonNodes.find((n) => n.id === req.params.id);
+    if (!node) return fail(res, 404, 'Lesson node not found');
+
+    const { title, startsAt, endsAt, status } = req.body ?? {};
+    if (title !== undefined) node.title = String(title);
+    if (startsAt !== undefined) node.startsAt = startsAt || undefined;
+    if (endsAt !== undefined) node.endsAt = endsAt || undefined;
+    if (status !== undefined) node.status = status as LessonNode['status'];
+    node.updatedAt = new Date().toISOString();
+
+    await writeDb(db);
+    ok(res, node);
+  });
+
+  app.get('/api/v1/assignments', async (req, res) => {
+    const db = await readDb();
+    const lessonNodeId = String(req.query.lessonNodeId || '');
+    if (lessonNodeId) {
+      const node = db.assignmentNodes.find((a) => a.lessonNodeId === lessonNodeId);
+      return ok(res, node || null);
+    }
+    ok(res, db.assignmentNodes);
+  });
+
   // Live session API (T27)
   app.post('/api/v1/live-sessions', async (req, res) => {
     const db = await readDb();
     const teacherId = currentUserId(req) || 'teacher-1';
-    const { courseId = 'course-1', sourceMode = 'pdf' } = req.body ?? {};
+    const { courseId = 'course-1', sourceMode = 'pdf', lessonNodeId } = req.body ?? {};
 
-    // End any existing active session for this course/teacher
+    if (!lessonNodeId) return fail(res, 400, 'lessonNodeId is required');
+
+    const lessonNode = db.lessonNodes.find((n) => n.id === lessonNodeId);
+    if (!lessonNode) return fail(res, 404, 'Lesson node not found');
+
+    const existingActive = db.liveSessions.find(
+      (s) => s.lessonNodeId === lessonNodeId && s.status === 'active'
+    );
+    if (existingActive) return fail(res, 409, 'An active live session already exists for this lesson node');
+
     db.liveSessions.forEach((s) => {
       if (s.courseId === courseId && s.teacherId === teacherId && s.status === 'active') {
         s.status = 'ended';
@@ -416,6 +722,7 @@ export function createApp() {
       id: crypto.randomUUID(),
       courseId,
       teacherId,
+      lessonNodeId,
       status: 'active',
       sourceMode: sourceMode as LiveSession['sourceMode'],
       currentPage: 1,
@@ -486,6 +793,250 @@ export function createApp() {
     ok(res, comments);
   });
 
+  // Admin routes
+  app.get('/api/v1/admin/users', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const roleFilter = req.query.role ? String(req.query.role) : undefined;
+    const search = req.query.q ? String(req.query.q).toLowerCase() : undefined;
+    let users = db.users.map(u => ({ id: u.id, username: u.username, role: u.role, displayName: u.displayName, languagePref: u.languagePref, createdAt: (u as any).createdAt || '' }));
+    if (roleFilter) users = users.filter(u => u.role === roleFilter);
+    if (search) users = users.filter(u => u.username.toLowerCase().includes(search) || u.displayName.toLowerCase().includes(search));
+    ok(res, users);
+  });
+
+  app.post('/api/v1/admin/users', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const { username, password, role, displayName } = req.body ?? {};
+    if (!username || !password || !role) return fail(res, 400, 'username, password, and role are required');
+    if (!['student', 'teacher', 'admin'].includes(role)) return fail(res, 400, 'Invalid role');
+    const existing = db.users.find(u => u.username === username);
+    if (existing) return fail(res, 409, 'Username already exists');
+    const user = {
+      id: crypto.randomUUID(),
+      username: String(username),
+      password: String(password),
+      role: role as UserRole,
+      displayName: String(displayName || username),
+      languagePref: 'en' as const,
+      createdAt: new Date().toISOString()
+    };
+    db.users.push(user);
+    await writeDb(db);
+    ok(res, { id: user.id, username: user.username, role: user.role, displayName: user.displayName, languagePref: user.languagePref, createdAt: user.createdAt });
+  });
+
+  app.patch('/api/v1/admin/users/:id', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const user = db.users.find(u => u.id === req.params.id);
+    if (!user) return fail(res, 404, 'User not found');
+    const { disabled, password, displayName, role } = req.body ?? {};
+    if (displayName !== undefined) user.displayName = String(displayName);
+    if (password !== undefined) user.password = String(password);
+    if (role !== undefined && ['student', 'teacher', 'admin'].includes(role)) user.role = role as UserRole;
+    if (disabled !== undefined) (user as any).disabled = Boolean(disabled);
+    await writeDb(db);
+    ok(res, { id: user.id, username: user.username, role: user.role, displayName: user.displayName, languagePref: user.languagePref, disabled: !!(user as any).disabled });
+  });
+
+  app.delete('/api/v1/admin/users/:id', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const before = db.users.length;
+    db.users = db.users.filter(u => u.id !== req.params.id);
+    await writeDb(db);
+    ok(res, { deleted: before !== db.users.length });
+  });
+
+  app.get('/api/v1/admin/users/:id/records', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const records = db.learningRecords.filter(r => r.studentId === req.params.id);
+    ok(res, records);
+  });
+
+  // Admin middleware
+  function requireAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const db = readDbSync();
+    const user = db.users.find((u) => u.id === userId);
+    if (!user || user.role !== 'admin') return fail(res, 403, 'Admin access required');
+    next();
+  }
+
+  function readDbSync() {
+    const raw = fs.readFileSync(path.resolve(process.cwd(), 'backend/data/db.json'), 'utf8');
+    return JSON.parse(raw) as import('./types.ts').Database;
+  }
+
+  // T14: Admin - Live sessions list
+  app.get('/api/v1/admin/live-sessions', requireAdmin, async (_req, res) => {
+    const db = await readDb();
+    const items = db.liveSessions.map((s) => {
+      const course = db.courses.find((c) => c.id === s.courseId);
+      const lesson = db.lessonNodes.find((n) => n.id === s.lessonNodeId);
+      const teacher = db.users.find((u) => u.id === s.teacherId);
+      return {
+        ...s,
+        courseTitle: course?.title || '',
+        lessonTitle: lesson?.title || '',
+        teacherName: teacher?.displayName || ''
+      };
+    });
+    ok(res, items);
+  });
+
+  // T14: Admin - Recordings list (lectures + student recordings)
+  app.get('/api/v1/admin/recordings', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const courseId = String(req.query.courseId || '');
+    const lectures = db.lectures
+      .filter((l) => !courseId || l.courseId === courseId)
+      .map((l) => {
+        const course = db.courses.find((c) => c.id === l.courseId);
+        const teacher = db.users.find((u) => u.id === l.teacherId);
+        return { type: 'lecture' as const, ...l, courseTitle: course?.title || '', teacherName: teacher?.displayName || '' };
+      });
+    const recordings = db.recordings
+      .filter((r) => !courseId || r.courseId === courseId)
+      .map((r) => {
+        const course = db.courses.find((c) => c.id === r.courseId);
+        const student = db.users.find((u) => u.id === r.studentId);
+        return { type: 'student' as const, ...r, courseTitle: course?.title || '', studentName: student?.displayName || '' };
+      });
+    ok(res, [...lectures, ...recordings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
+
+  // T14: Admin - Notes (classroom comments/danmaku)
+  app.get('/api/v1/admin/notes', requireAdmin, async (_req, res) => {
+    const db = await readDb();
+    const items = db.classroomComments.map((c) => {
+      const session = db.liveSessions.find((s) => s.id === c.liveSessionId);
+      const student = db.users.find((u) => u.id === c.studentId);
+      return {
+        ...c,
+        sessionTitle: session ? `Live ${session.id.slice(0, 8)}` : '',
+        studentName: student?.displayName || ''
+      };
+    });
+    ok(res, items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
+
+  // T14: Admin - Transcript segments (stub: returns live sessions with transcript metadata)
+  app.get('/api/v1/admin/transcripts', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const liveSessionId = String(req.query.liveSessionId || '');
+    const sessions = db.liveSessions.filter((s) => !liveSessionId || s.id === liveSessionId);
+    const items = sessions.map((s) => {
+      const course = db.courses.find((c) => c.id === s.courseId);
+      const comments = db.classroomComments.filter((c) => c.liveSessionId === s.id);
+      return {
+        liveSessionId: s.id,
+        courseTitle: course?.title || '',
+        segments: comments.map((c) => ({
+          id: c.id,
+          sourceText: c.body,
+          translatedText: `[AI] ${c.body}`,
+          language: 'zh-CN',
+          createdAt: c.createdAt
+        }))
+      };
+    });
+    ok(res, items);
+  });
+
+  // T14: Admin - Courseware files
+  app.get('/api/v1/admin/coursewares', requireAdmin, async (_req, res) => {
+    const db = await readDb();
+    const items = db.files.map((f) => {
+      const course = db.courses.find((c) => c.id === f.courseId);
+      const pages = db.coursePages.filter((p) => p.courseId === f.courseId && p.fileUrl === f.storageUrl);
+      return {
+        ...f,
+        courseTitle: course?.title || '',
+        pageCount: pages.length,
+        renderStatus: ['pdf', 'pptx'].includes(f.type) ? 'ready' : 'ready' as const
+      };
+    });
+    ok(res, items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
+
+  // T14: Admin - Assignment imports (Excel parse results)
+  app.get('/api/v1/admin/assignment-imports', requireAdmin, async (_req, res) => {
+    const db = await readDb();
+    const xlsxFiles = db.files.filter((f) => f.type === 'xlsx');
+    const items = xlsxFiles.map((f) => {
+      const course = db.courses.find((c) => c.id === f.courseId);
+      const tasks = db.learningTasks.filter((t) => t.sourceFileId === f.id);
+      const vocab = db.vocabularyItems.filter((v) => v.sourceFileId === f.id);
+      return {
+        fileId: f.id,
+        filename: f.filename,
+        courseTitle: course?.title || '',
+        tasksCount: tasks.length,
+        vocabCount: vocab.length,
+        errors: [] as string[],
+        createdAt: f.createdAt
+      };
+    });
+    ok(res, items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
+
+  // T14: Admin - Toggle note visibility
+  app.patch('/api/v1/admin/notes/:id', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const comment = db.classroomComments.find((c) => c.id === req.params.id);
+    if (!comment) return fail(res, 404, 'Note not found');
+    const { visibility } = req.body ?? {};
+    if (visibility) comment.visibility = visibility as ClassroomComment['visibility'];
+    await writeDb(db);
+    ok(res, comment);
+  });
+
+  // T15: Admin - Learning progress
+  app.get('/api/v1/admin/learning-progress', requireAdmin, async (req, res) => {
+    const db = await readDb();
+    const studentId = String(req.query.studentId || '');
+    const courseId = String(req.query.courseId || '');
+    const lessonNodeId = String(req.query.lessonNodeId || '');
+
+    let students = db.users.filter((u) => u.role === 'student');
+    if (studentId) students = students.filter((u) => u.id === studentId);
+
+    let courses = db.courses;
+    if (courseId) courses = courses.filter((c) => c.id === courseId);
+
+    const result = students.map((student) => {
+      const courseProgress = courses.map((course) => {
+        const nodes = db.lessonNodes.filter((n) => n.courseId === course.id);
+        const filteredNodes = lessonNodeId ? nodes.filter((n) => n.id === lessonNodeId) : nodes;
+        const lessonProgress = filteredNodes.map((node) => {
+          const tasks = db.learningTasks.filter((t) => t.courseId === course.id);
+          const records = db.learningRecords.filter((r) => r.studentId === student.id && r.lessonNodeId === node.id);
+          const completedTasks = records.filter((r) => r.status === 'completed').length;
+          const recordings = db.recordings.filter((r) => r.studentId === student.id && r.courseId === course.id).length;
+          const scores = records.filter((r) => r.score > 0).map((r) => r.score);
+          const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+          return {
+            lessonNodeId: node.id,
+            lessonTitle: node.title,
+            totalTasks: tasks.length,
+            completedTasks,
+            completionRate: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
+            recordings,
+            avgScore: Math.round(avgScore * 10) / 10
+          };
+        });
+        return { courseId: course.id, courseTitle: course.title, lessonProgress };
+      });
+      return {
+        studentId: student.id,
+        displayName: student.displayName,
+        courseProgress
+      };
+    });
+
+    ok(res, { students: result });
+  });
+
   app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
     console.error(error);
     fail(res, 500, 'Internal server error');
@@ -493,4 +1044,3 @@ export function createApp() {
 
   return app;
 }
-

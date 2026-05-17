@@ -6,9 +6,6 @@ import {
   CheckCircle,
   BarChart2,
   BookOpen,
-  UploadCloud,
-  FileSpreadsheet,
-  Loader2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { coursesApi, type Course } from '../services/apiClient.ts';
@@ -16,15 +13,15 @@ import { useLanguage } from '../context/LanguageContext.tsx';
 
 interface TeacherCoursesViewProps {
   onNavigate?: (target: string) => void;
+  onOpenCourse?: (courseId: string) => void;
 }
 
-const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate }) => {
+const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onOpenCourse }) => {
   const { t } = useLanguage();
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState('course-1');
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState('');
 
   const loadCourses = async () => {
@@ -56,50 +53,6 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate }) =
     }
   };
 
-  const uploadCourseware = async (file?: File) => {
-    if (!file) return;
-    setIsUploading(true);
-    setMessage('');
-    try {
-      const result = await coursesApi.uploadCourseware(selectedCourseId, file);
-      const pages = result.pages?.length || 0;
-      const tasks = (result as any).tasks?.length || 0;
-      setMessage(t('course.upload_result')
-        .replace('{filename}', file.name)
-        .replace('{pages}', String(pages))
-        .replace('{exercises}', String(tasks)));
-      await loadCourses();
-    } catch (error: any) {
-      setMessage(error.message || t('course.upload_failed'));
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const uploadExcel = async (file?: File) => {
-    if (!file) return;
-    setIsUploading(true);
-    setMessage('');
-    try {
-      const result = await coursesApi.uploadCourseware(selectedCourseId, file);
-      const tasks = (result as any).tasks?.length || 0;
-      const vocab = (result as any).vocabulary?.length || 0;
-      const warnings = (result as any).warnings;
-      setMessage(t('course.excel_result')
-        .replace('{filename}', file.name)
-        .replace('{tasks}', String(tasks))
-        .replace('{vocab}', String(vocab)));
-      if (warnings) {
-        setMessage(prev => prev + ' ' + t('course.excel_warnings') + ': ' + warnings.join('; '));
-      }
-      await loadCourses();
-    } catch (error: any) {
-      setMessage(error.message || t('course.upload_failed'));
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   return (
     <div id="teacher-courses" className="space-y-8">
       <div className="flex flex-col lg:flex-row justify-between gap-6 lg:items-end">
@@ -122,32 +75,12 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate }) =
             <Plus size={18} />
             {t('course.create')}
           </button>
-          <label className="bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
-            {isUploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
-            {t('course.upload_courseware')}
-            <input
-              type="file"
-              accept=".pptx,.pdf"
-              className="hidden"
-              onChange={(event) => uploadCourseware(event.target.files?.[0])}
-            />
-          </label>
-          <label className="bg-green-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
-            {isUploading ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
-            {t('course.upload_excel')}
-            <input
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              onChange={(event) => uploadExcel(event.target.files?.[0])}
-            />
-          </label>
         </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-100 text-[#0056D2] rounded-2xl px-5 py-4 text-sm font-bold flex items-center gap-3">
-        <FileSpreadsheet size={18} />
-        {message || t('course.upload_hint')}
+        <BookOpen size={18} />
+        {message || t('course.click_to_manage')}
       </div>
 
       {isLoading ? (
@@ -158,7 +91,7 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate }) =
             <motion.div
               key={course.id}
               whileHover={{ y: -5 }}
-              onClick={() => setSelectedCourseId(course.id)}
+              onClick={() => onOpenCourse?.(course.id)}
               className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col group cursor-pointer ${
                 selectedCourseId === course.id ? 'border-[#0056D2] ring-4 ring-blue-50' : 'border-gray-100'
               }`}
