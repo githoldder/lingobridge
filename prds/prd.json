@@ -8,18 +8,36 @@
     "不展开非关键内部实现细节"
   ],
   "implementationStatus": {
-    "summary": "P0-P2 的 15 个任务已完成并经过三轮 audit。身份与游客门禁、live/课时/作业一对一、学习记录持久化、学生/教师 live 权限分离、教师课程编辑页、Admin 后台均已接入。",
+    "summary": "P0-P2 的 15 个任务 + E2E 测试已完成。15/15 Playwright 测试通过。身份与游客门禁、live/课时/作业一对一、学习记录持久化、学生/教师 live 权限分离、教师课程编辑页、Admin 后台、TTS provider facade 均已接入。",
     "verification": {
       "lint": "passed: npm run lint",
       "build": "passed: npm run build",
-      "backendTests": "passed: npm run backend:test, 3/3 tests. In sandbox this may need escalation because tsx creates an IPC pipe under /var/folders.",
+      "backendTests": "passed: npm run backend:test, 3/3 tests",
+      "e2eTests": "passed: npx playwright test e2e/mvp-pipeline.spec.ts, 15/15 tests",
       "prdJson": "passed: JSON parse"
     },
     "nonBlockingWarnings": [
       "PDF.js build warning about eval usage.",
       "Vite chunk-size warning because main bundle is larger than 500KB."
     ],
-    "lastAuditResult": "No P0/P1 blocker found after scheduledAt -> startsAt fix. Remaining work is strategic direction and deeper browser/manual E2E."
+    "lastAuditResult": "No P0/P1 blocker. E2E pipeline fully passing.",
+    "e2ePipeline": [
+      "01: Backend health check",
+      "02: Course CRUD API",
+      "03: Lesson nodes CRUD API",
+      "04: Live session requires lessonNodeId",
+      "05: Course members API",
+      "06: TTS provider facade",
+      "07: TTS usage requires admin",
+      "08: Teacher login → dashboard",
+      "09: Teacher → courses page",
+      "10: Student login → dashboard",
+      "11: Student → homework page",
+      "12: Student → vocabulary page",
+      "13: Admin login → dashboard",
+      "14: Student cannot access admin",
+      "15: Learning record persists after refresh"
+    ]
   },
   "productBoundary": {
     "positioning": "LingoBridge 是面向哈萨克斯坦留学生的中文学习 MVP。",
@@ -44,6 +62,48 @@
     ]
   },
   "diagnosis": [
+    {
+      "id": "D16",
+      "problem": "db.courseMembers 字段缺失导致后端崩溃。",
+      "boundary": "db.ts 必须自动迁移缺失字段。",
+      "fix": "ensureDb() 添加 courseMembers/coursewareFiles 默认值。"
+    },
+    {
+      "id": "D17",
+      "problem": "登录后页面不自动跳转 Dashboard，停留在 Landing。",
+      "boundary": "App.tsx 必须监听 user 变化并自动导航。",
+      "fix": "添加 useEffect 监听 user，根据 role 自动 setActiveTab。"
+    },
+    {
+      "id": "D18",
+      "problem": "学生可通过 URL 直接访问 /#/admin 页面。",
+      "boundary": "admin 路由必须在渲染前检查 user.role。",
+      "fix": "App.tsx renderContent 中 admin case 添加 user.role !== 'admin' 守卫。"
+    },
+    {
+      "id": "D19",
+      "problem": "TTS 缓存 key 忽略 speed，文件扩展名 .wav 与 Azure MP3 不匹配。",
+      "boundary": "缓存键必须包含所有影响输出的参数。",
+      "fix": "缓存键改为 lang:voice:speed:text，扩展名 .mp3。"
+    },
+    {
+      "id": "D20",
+      "problem": "F0 额度保护 overshoot，用量重启后丢失。",
+      "boundary": "用量必须持久化，额度检查必须预判。",
+      "fix": "用量写入 tts-usage.json，检查 used + billingChars > limit。"
+    },
+    {
+      "id": "D21",
+      "problem": "/tts/status 健康检查消耗 Azure 配额。",
+      "boundary": "健康检查不应调用外部 API。",
+      "fix": "改为验证配置格式，60s 缓存结果。"
+    },
+    {
+      "id": "D22",
+      "problem": "/tts/usage 无鉴权且返回用户文本。",
+      "boundary": "用量数据必须 admin-only，文本必须脱敏。",
+      "fix": "添加 requireAdmin 中间件，返回文本替换为 [redacted]。"
+    },
     {
       "id": "D01",
       "problem": "学生账号信息默认显示 Anna，前端身份 mock 未清干净。",
