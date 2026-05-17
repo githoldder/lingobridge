@@ -184,6 +184,19 @@ export function createApp() {
       status: 'Published' as const
     };
     db.courses.unshift(course);
+
+    // Auto-add all students as course members
+    const students = db.users.filter(u => u.role === 'student');
+    for (const student of students) {
+      db.courseMembers.push({
+        id: crypto.randomUUID(),
+        courseId: course.id,
+        userId: student.id,
+        role: 'student',
+        joinedAt: new Date().toISOString()
+      });
+    }
+
     await writeDb(db);
     ok(res, course);
   });
@@ -308,9 +321,20 @@ export function createApp() {
     const db = await readDb();
     const course = db.courses.find((c) => c.id === req.params.id);
     if (!course) return fail(res, 404, 'Course not found');
-    const { email } = req.body ?? {};
-    if (!email) return fail(res, 400, 'email is required');
-    const user = db.users.find((u) => u.username === email || u.email === email);
+    const { email, userId } = req.body ?? {};
+    if (!email && !userId) return fail(res, 400, 'email or userId is required');
+
+    let user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      const search = (email || userId).toLowerCase();
+      user = db.users.find((u) =>
+        u.role === 'student' && (
+          u.username.toLowerCase().includes(search) ||
+          u.displayName.toLowerCase().includes(search) ||
+          (u.email && u.email.toLowerCase().includes(search))
+        )
+      );
+    }
     if (!user) return fail(res, 404, 'User not found');
     const existing = db.courseMembers.find((m) => m.courseId === req.params.id && m.userId === user.id);
     if (existing) return fail(res, 409, 'User is already a member');
@@ -332,6 +356,32 @@ export function createApp() {
       role: member.role,
       joinedAt: member.joinedAt
     });
+  });
+
+  app.get('/api/v1/courses/:id/students/search', async (req, res) => {
+    const db = await readDb();
+    const q = String(req.query.q || '').toLowerCase();
+    const courseId = req.params.id;
+    const existingMemberIds = db.courseMembers
+      .filter((m) => m.courseId === courseId)
+      .map((m) => m.userId);
+
+    const students = db.users
+      .filter((u) => u.role === 'student' && !existingMemberIds.includes(u.id))
+      .filter((u) =>
+        !q ||
+        u.username.toLowerCase().includes(q) ||
+        u.displayName.toLowerCase().includes(q) ||
+        (u.email && u.email.toLowerCase().includes(q))
+      )
+      .map((u) => ({
+        id: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        email: u.email || u.username
+      }));
+
+    ok(res, students);
   });
 
   app.delete('/api/v1/courses/:id/members/:memberId', async (req, res) => {

@@ -22,7 +22,13 @@ const LoginView = ({ onNavigate }: LoginViewProps) => {
     setIsSubmitting(true);
     try {
       const user = await login(email, password);
-      onNavigate(user.role === 'teacher' ? 'teacher-dashboard' : 'dashboard');
+      if (user.role === 'admin') {
+        onNavigate('admin');
+      } else if (user.role === 'teacher') {
+        onNavigate('teacher-dashboard');
+      } else {
+        onNavigate('dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed. Use teacher@test.com or student_a@test.com with Test@123456.');
     } finally {

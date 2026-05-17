@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-17-prd-v4.1-audited-fix-admin-plan",
+  "version": "2026-05-17-prd-v4.2-sprint2-bugfixes-samples",
   "updatedAt": "2026-05-17",
   "principles": [
     "简洁、可维护",
@@ -62,6 +62,36 @@
     ]
   },
   "diagnosis": [
+    {
+      "id": "D23",
+      "problem": "Admin 登录后显示学生 Dashboard 而非管理后台。",
+      "boundary": "LoginView 必须根据 user.role 导航到正确页面。",
+      "fix": "LoginView 添加 admin role 判断，导航到 'admin'。"
+    },
+    {
+      "id": "D24",
+      "problem": "创建课程后学生端看不到新课程。",
+      "boundary": "课程创建时必须自动关联所有学生。",
+      "fix": "POST /courses 自动为所有学生创建 courseMembers。"
+    },
+    {
+      "id": "D25",
+      "problem": "添加学生使用邮箱不合理，应该用班级学号/模糊搜索。",
+      "boundary": "成员添加应支持 userId 或模糊搜索用户名/姓名。",
+      "fix": "POST /members 支持 userId/email 模糊搜索，新增 GET /students/search 端点。"
+    },
+    {
+      "id": "D26",
+      "problem": "Live class 画笔后白屏。",
+      "boundary": "Canvas 渲染必须稳定，不导致页面崩溃。",
+      "fix": "待排查：canvas 尺寸/重绘逻辑。"
+    },
+    {
+      "id": "D27",
+      "problem": "PDF 课件渲染加载失败。",
+      "boundary": "PdfViewer 必须正确处理 PDF 文件。",
+      "fix": "待排查：PDF.js 配置/文件路径。"
+    },
     {
       "id": "D16",
       "problem": "db.courseMembers 字段缺失导致后端崩溃。",
@@ -595,6 +625,18 @@
       "title": "Browser/manual E2E pass",
       "scope": "用真实浏览器验证游客门禁、课程编辑、创建课时、创建/进入 live、上传 Excel、完成作业、刷新后记录保持、admin 权限。",
       "output": "手动验收报告和必要的 Playwright 回归测试。"
+    },
+    {
+      "id": "N04",
+      "title": "Sprint 2: Bug fixes & UX improvements",
+      "scope": [
+        "修复 Live class 画笔白屏问题",
+        "修复 PDF 课件渲染失败",
+        "优化学生添加为班级学号/模糊搜索",
+        "完善 Admin 后台功能（文件存储、多媒体管理）",
+        "完善教师班级管理（学生名单、live classes、课件）"
+      ],
+      "output": "稳定的课堂体验，可用的课件系统，完善的班级管理。"
     }
   ],
   "adminModules": [
