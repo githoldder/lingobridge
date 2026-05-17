@@ -370,33 +370,43 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
 
 function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => string }) {
   const [members, setMembers] = useState<CourseMember[]>([]);
+  const [candidates, setCandidates] = useState<Array<{ id: string; username: string; displayName: string; email: string }>>([]);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState('');
+  const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState('');
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await courseMembersApi.list(courseId);
+      const [data, candidateData] = await Promise.all([
+        courseMembersApi.list(courseId),
+        courseMembersApi.search(courseId, query).catch(() => []),
+      ]);
       setMembers(data || []);
+      setCandidates(candidateData || []);
     } catch {
       setMembers([]);
+      setCandidates([]);
     } finally {
       setLoading(false);
     }
-  }, [courseId]);
+  }, [courseId, query]);
 
   useEffect(() => { loadMembers(); }, [loadMembers]);
 
-  const addStudent = async () => {
-    if (!email.trim()) return;
+  const addStudent = async (studentId?: string) => {
+    if (!studentId && !query.trim()) return;
     setAdding(true);
     setMessage('');
     try {
-      await courseMembersApi.add(courseId, email.trim());
+      if (studentId) {
+        await courseMembersApi.addBatch(courseId, [studentId]);
+      } else {
+        await courseMembersApi.add(courseId, query.trim());
+      }
       setMessage(t('course_students.added'));
-      setEmail('');
+      setQuery('');
       loadMembers();
     } catch (e: any) {
       setMessage(e.message || t('course_students.add_failed'));
@@ -420,13 +430,13 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
 
       <div className="flex gap-3">
         <input
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
           placeholder={t('course_students.email_placeholder')}
           className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
         />
         <button
-          onClick={addStudent}
+          onClick={() => addStudent()}
           disabled={adding}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#0056D2] text-white rounded-xl font-bold text-sm disabled:opacity-50"
         >
@@ -434,6 +444,28 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
           {t('course_students.add')}
         </button>
       </div>
+
+      {candidates.length > 0 && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+          <p className="text-xs font-extrabold text-gray-500 uppercase mb-3">{t('course_students.default_roster')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {candidates.slice(0, 8).map((student) => (
+              <button
+                key={student.id}
+                onClick={() => addStudent(student.id)}
+                disabled={adding}
+                className="flex items-center justify-between rounded-xl bg-white border border-blue-100 p-3 text-left hover:border-[#0056D2] transition-colors disabled:opacity-50"
+              >
+                <span>
+                  <span className="block text-sm font-bold text-gray-800">{student.displayName}</span>
+                  <span className="block text-xs text-gray-400">{student.username}</span>
+                </span>
+                <UserPlus size={16} className="text-[#0056D2]" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {message && (
         <div className="text-sm font-bold px-4 py-2 rounded-xl bg-green-50 text-green-600">{message}</div>

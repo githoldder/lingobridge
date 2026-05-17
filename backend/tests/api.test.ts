@@ -164,3 +164,60 @@ test('homework import binds tasks to a live class', async () => {
     assert.equal(tasksJson.data[0].zhText, '大家好，我叫阿合买提。');
   });
 });
+
+test('registration creates an account and teacher roster search can add students to a course', async () => {
+  await withServer(async (baseUrl) => {
+    const registration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new_student@test.com',
+        password: 'Test@123456',
+        displayName: '新同学',
+        role: 'student'
+      })
+    });
+    const registrationJson = await registration.json();
+    assert.equal(registrationJson.code, 0);
+    assert.equal(registrationJson.data.user.role, 'student');
+
+    const course = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: 'Roster sync demo' })
+    });
+    const courseJson = await course.json();
+    assert.equal(courseJson.code, 0);
+
+    const search = await fetch(`${baseUrl}/api/v1/courses/${courseJson.data.id}/students/search?q=新`);
+    const searchJson = await search.json();
+    assert.equal(searchJson.code, 0);
+    assert.equal(searchJson.data.length, 0);
+
+    const roster = await fetch(`${baseUrl}/api/v1/students/search?q=新`, {
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const rosterJson = await roster.json();
+    assert.equal(rosterJson.code, 0);
+    assert.equal(rosterJson.data[0].displayName, '新同学');
+  });
+});
+
+test('live class inherits course students and supports batch student adds', async () => {
+  await withServer(async (baseUrl) => {
+    const liveClass = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: 'Live Class roster' })
+    });
+    const liveClassJson = await liveClass.json();
+    assert.equal(liveClassJson.code, 0);
+    const lessonNodeId = liveClassJson.data.lessonNode.id;
+
+    const students = await fetch(`${baseUrl}/api/v1/live-classes/${lessonNodeId}/students`);
+    const studentsJson = await students.json();
+    assert.equal(studentsJson.code, 0);
+    assert.ok(studentsJson.data.length >= 3);
+    assert.ok(studentsJson.data.some((item: any) => item.user.displayName === '阿合买提'));
+  });
+});

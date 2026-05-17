@@ -10,7 +10,7 @@ interface RegisterViewProps {
 
 const RegisterView = ({ onNavigate }: RegisterViewProps) => {
   const { t } = useLanguage();
-  const { login } = useAuth();
+  const { register } = useAuth();
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -19,10 +19,10 @@ const RegisterView = ({ onNavigate }: RegisterViewProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const user = await login(email, password);
+      const user = await register({ email, password, displayName: name, role });
       onNavigate(user.role === 'teacher' ? 'teacher-dashboard' : 'dashboard');
-    } catch {
-      onNavigate('dashboard');
+    } catch (error) {
+      console.error(error);
     }
   };
 

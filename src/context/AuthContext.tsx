@@ -6,6 +6,7 @@ interface AuthContextType {
   isGuest: boolean;
   requireAuth: () => boolean;
   login: (email: string, password: string) => Promise<ApiUser>;
+  register: (params: { email: string; password: string; displayName: string; role: 'student' | 'teacher' }) => Promise<ApiUser>;
   logout: () => void;
   showGuestGate: boolean;
   setShowGuestGate: (show: boolean) => void;
@@ -33,7 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requireAuth = useCallback(() => {
-    if (!user) {
+    const stored = authApi.currentUser();
+    if (!user && stored) {
+      setUser(stored);
+      setShowGuestGate(false);
+      return true;
+    }
+    if (!user && !stored) {
       setShowGuestGate(true);
       return false;
     }
@@ -47,6 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return loggedInUser;
   }, []);
 
+  const register = useCallback(async (params: { email: string; password: string; displayName: string; role: 'student' | 'teacher' }) => {
+    const { user: registeredUser } = await authApi.register(params);
+    setUser(registeredUser);
+    setShowGuestGate(false);
+    return registeredUser;
+  }, []);
+
   const logout = useCallback(() => {
     authApi.logout();
     setUser(null);
@@ -55,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isGuest = user === null;
 
   return (
-    <AuthContext.Provider value={{ user, isGuest, requireAuth, login, logout, showGuestGate, setShowGuestGate }}>
+    <AuthContext.Provider value={{ user, isGuest, requireAuth, login, register, logout, showGuestGate, setShowGuestGate }}>
       {children}
     </AuthContext.Provider>
   );

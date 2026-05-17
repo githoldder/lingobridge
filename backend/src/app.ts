@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
 import { saveBase64File, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
-import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course } from './types.ts';
+import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course, LiveClassStudent, HomeworkImport } from './types.ts';
 import { ttsFacade } from './providers/ttsFacade.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
@@ -33,6 +33,17 @@ function deriveStyleTokens(styleSeed: number): { colorToken: string; shapeToken:
   return {
     colorToken: colors[hash % colors.length],
     shapeToken: shapes[hash % shapes.length]
+  };
+}
+
+function publicUser(user: import('./types.ts').User) {
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    displayName: user.displayName,
+    languagePref: user.languagePref,
+    email: user.email || user.username
   };
 }
 
@@ -153,6 +164,41 @@ export function createApp() {
     });
   });
 
+  app.post('/api/v1/auth/register', async (req, res) => {
+    const db = await readDb();
+    const { email, username, password, role = 'student', displayName } = req.body ?? {};
+    const loginName = String(email || username || '').trim().toLowerCase();
+    if (!loginName || !password || !displayName) return fail(res, 400, 'email, password, and displayName are required');
+    if (!['student', 'teacher'].includes(role)) return fail(res, 400, 'Only student or teacher registration is allowed');
+    if (db.users.find((item) => item.username.toLowerCase() === loginName)) return fail(res, 409, 'Account already exists');
+
+    const user = {
+      id: crypto.randomUUID(),
+      username: loginName,
+      password: String(password),
+      role: role as 'student' | 'teacher',
+      displayName: String(displayName),
+      languagePref: 'zh' as const,
+      email: loginName
+    };
+    db.users.push(user);
+    if (user.role === 'student') {
+      const defaultTeacher = db.users.find((item) => item.role === 'teacher');
+      if (defaultTeacher) {
+        db.teacherStudentLinks.push({
+          id: crypto.randomUUID(),
+          teacherId: defaultTeacher.id,
+          studentId: user.id,
+          className: '文科院中文测试班',
+          status: 'active',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+    await writeDb(db);
+    ok(res, { token: user.id, user: publicUser(user) });
+  });
+
   app.get('/api/v1/users/me', async (req, res) => {
     const db = await readDb();
     const user = db.users.find((item) => item.id === currentUserId(req));
@@ -184,9 +230,18 @@ export function createApp() {
       status: 'Published' as const
     };
     db.courses.unshift(course);
+    db.courseMembers.push({
+      id: crypto.randomUUID(),
+      courseId: course.id,
+      userId: teacherId,
+      role: 'teacher',
+      joinedAt: new Date().toISOString()
+    });
 
-    // Auto-add all students as course members
-    const students = db.users.filter(u => u.role === 'student');
+    const linkedStudentIds = db.teacherStudentLinks
+      .filter((link) => link.teacherId === teacherId && link.status === 'active')
+      .map((link) => link.studentId);
+    const students = db.users.filter(u => u.role === 'student' && linkedStudentIds.includes(u.id));
     for (const student of students) {
       db.courseMembers.push({
         id: crypto.randomUUID(),
@@ -302,6 +357,7 @@ export function createApp() {
     const db = await readDb();
     const members = db.courseMembers
       .filter((m) => m.courseId === req.params.id)
+      .filter((m) => m.role === 'student')
       .map((m) => {
         const user = db.users.find((u) => u.id === m.userId);
         return {
@@ -321,12 +377,12 @@ export function createApp() {
     const db = await readDb();
     const course = db.courses.find((c) => c.id === req.params.id);
     if (!course) return fail(res, 404, 'Course not found');
-    const { email, userId } = req.body ?? {};
-    if (!email && !userId) return fail(res, 400, 'email or userId is required');
+    const { email, userId, q } = req.body ?? {};
+    if (!email && !userId && !q) return fail(res, 400, 'email, q, or userId is required');
 
     let user = db.users.find((u) => u.id === userId);
     if (!user) {
-      const search = (email || userId).toLowerCase();
+      const search = String(email || q || userId).toLowerCase();
       user = db.users.find((u) =>
         u.role === 'student' && (
           u.username.toLowerCase().includes(search) ||
@@ -358,16 +414,49 @@ export function createApp() {
     });
   });
 
+  app.post('/api/v1/courses/:id/members/batch', async (req, res) => {
+    const db = await readDb();
+    const course = db.courses.find((c) => c.id === req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    const ids = Array.isArray(req.body?.userIds) ? req.body.userIds.map(String) : [];
+    if (ids.length === 0) return fail(res, 400, 'userIds is required');
+
+    const now = new Date().toISOString();
+    const added = [];
+    for (const userId of ids) {
+      const user = db.users.find((u) => u.id === userId && u.role === 'student');
+      if (!user) continue;
+      const existing = db.courseMembers.find((m) => m.courseId === req.params.id && m.userId === user.id);
+      if (existing) continue;
+      const member = {
+        id: crypto.randomUUID(),
+        courseId: req.params.id,
+        userId: user.id,
+        role: 'student' as const,
+        joinedAt: now
+      };
+      db.courseMembers.push(member);
+      added.push({ ...member, username: user.username, displayName: user.displayName, email: user.email || user.username });
+    }
+    await writeDb(db);
+    ok(res, added);
+  });
+
   app.get('/api/v1/courses/:id/students/search', async (req, res) => {
     const db = await readDb();
     const q = String(req.query.q || '').toLowerCase();
     const courseId = req.params.id;
+    const course = db.courses.find((c) => c.id === courseId);
+    if (!course) return fail(res, 404, 'Course not found');
     const existingMemberIds = db.courseMembers
       .filter((m) => m.courseId === courseId)
       .map((m) => m.userId);
+    const teacherStudentIds = db.teacherStudentLinks
+      .filter((link) => link.teacherId === course.teacherId && link.status === 'active')
+      .map((link) => link.studentId);
 
     const students = db.users
-      .filter((u) => u.role === 'student' && !existingMemberIds.includes(u.id))
+      .filter((u) => u.role === 'student' && teacherStudentIds.includes(u.id) && !existingMemberIds.includes(u.id))
       .filter((u) =>
         !q ||
         u.username.toLowerCase().includes(q) ||
@@ -381,6 +470,20 @@ export function createApp() {
         email: u.email || u.username
       }));
 
+    ok(res, students);
+  });
+
+  app.get('/api/v1/students/search', async (req, res) => {
+    const db = await readDb();
+    const teacherId = currentUserId(req) || 'teacher-1';
+    const q = String(req.query.q || '').toLowerCase();
+    const linkedIds = db.teacherStudentLinks
+      .filter((link) => link.teacherId === teacherId && link.status === 'active')
+      .map((link) => link.studentId);
+    const students = db.users
+      .filter((u) => u.role === 'student' && linkedIds.includes(u.id))
+      .filter((u) => !q || u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)))
+      .map(publicUser);
     ok(res, students);
   });
 
@@ -454,6 +557,18 @@ export function createApp() {
     const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, lessonNodeId || undefined);
     upsertTasks(db, result.learningTasks);
     upsertVocabulary(db, result.vocabularyItems);
+    const importRecord: HomeworkImport = {
+      id: crypto.randomUUID(),
+      courseId,
+      lessonNodeId: lessonNodeId || '',
+      fileId: fileMeta.id,
+      filename,
+      tasksCount: result.learningTasks.length,
+      vocabCount: result.vocabularyItems.length,
+      errors: result.errors,
+      createdAt: fileMeta.createdAt
+    };
+    db.homeworkImports.unshift(importRecord);
     await writeDb(db);
     ok(res, {
       tasksCount: result.learningTasks.length,
@@ -715,8 +830,61 @@ export function createApp() {
 
     db.lessonNodes.unshift(lessonNode);
     db.assignmentNodes.unshift(assignmentNode);
+    const courseStudentIds = db.courseMembers
+      .filter((m) => m.courseId === courseId && m.role === 'student')
+      .map((m) => m.userId);
+    for (const studentId of courseStudentIds) {
+      db.liveClassStudents.push({
+        id: crypto.randomUUID(),
+        lessonNodeId: lessonNode.id,
+        studentId,
+        source: 'course_member',
+        joinedAt: now
+      });
+    }
     await writeDb(db);
     ok(res, { lessonNode, assignmentNode });
+  });
+
+  app.get('/api/v1/live-classes/:id/students', async (req, res) => {
+    const db = await readDb();
+    const node = db.lessonNodes.find((n) => n.id === req.params.id);
+    if (!node) return fail(res, 404, 'Live class not found');
+    const students = db.liveClassStudents
+      .filter((item) => item.lessonNodeId === node.id)
+      .map((item) => {
+        const user = db.users.find((u) => u.id === item.studentId);
+        return user ? { ...item, user: publicUser(user) } : null;
+      })
+      .filter(Boolean);
+    ok(res, students);
+  });
+
+  app.post('/api/v1/live-classes/:id/students/batch', async (req, res) => {
+    const db = await readDb();
+    const node = db.lessonNodes.find((n) => n.id === req.params.id);
+    if (!node) return fail(res, 404, 'Live class not found');
+    const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds.map(String) : [];
+    if (userIds.length === 0) return fail(res, 400, 'userIds is required');
+    const now = new Date().toISOString();
+    const added = [];
+    for (const userId of userIds) {
+      const user = db.users.find((u) => u.id === userId && u.role === 'student');
+      if (!user) continue;
+      const existing = db.liveClassStudents.find((item) => item.lessonNodeId === node.id && item.studentId === userId);
+      if (existing) continue;
+      const liveStudent: LiveClassStudent = {
+        id: crypto.randomUUID(),
+        lessonNodeId: node.id,
+        studentId: userId,
+        source: 'manual',
+        joinedAt: now
+      };
+      db.liveClassStudents.push(liveStudent);
+      added.push({ ...liveStudent, user: publicUser(user) });
+    }
+    await writeDb(db);
+    ok(res, added);
   });
 
   app.patch('/api/v1/lesson-nodes/:id', async (req, res) => {
@@ -1012,19 +1180,31 @@ export function createApp() {
   // T14: Admin - Assignment imports (Excel parse results)
   app.get('/api/v1/admin/assignment-imports', requireAdmin, async (_req, res) => {
     const db = await readDb();
-    const xlsxFiles = db.files.filter((f) => f.type === 'xlsx');
-    const items = xlsxFiles.map((f) => {
-      const course = db.courses.find((c) => c.id === f.courseId);
-      const tasks = db.learningTasks.filter((t) => t.sourceFileId === f.id);
-      const vocab = db.vocabularyItems.filter((v) => v.sourceFileId === f.id);
-      return {
+    const imports = db.homeworkImports.length > 0
+      ? db.homeworkImports
+      : db.files.filter((f) => f.type === 'xlsx').map((f) => ({
+        id: f.id,
+        courseId: f.courseId,
+        lessonNodeId: f.lessonNodeId || '',
         fileId: f.id,
         filename: f.filename,
-        courseTitle: course?.title || '',
-        tasksCount: tasks.length,
-        vocabCount: vocab.length,
+        tasksCount: db.learningTasks.filter((t) => t.sourceFileId === f.id).length,
+        vocabCount: db.vocabularyItems.filter((v) => v.sourceFileId === f.id).length,
         errors: [] as string[],
         createdAt: f.createdAt
+      }));
+    const items = imports.map((item) => {
+      const course = db.courses.find((c) => c.id === item.courseId);
+      const lesson = item.lessonNodeId ? db.lessonNodes.find((n) => n.id === item.lessonNodeId) : undefined;
+      return {
+        fileId: item.fileId,
+        filename: item.filename,
+        courseTitle: course?.title || '',
+        liveClassTitle: lesson?.title || '',
+        tasksCount: item.tasksCount,
+        vocabCount: item.vocabCount,
+        errors: item.errors,
+        createdAt: item.createdAt
       };
     });
     ok(res, items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));

@@ -619,8 +619,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
     const clientX = 'clientX' in e ? e.clientX : (e.touches && e.touches[0].clientX);
     const clientY = 'clientY' in e ? e.clientY : (e.touches && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return { x: 0, y: 0 };
     return {
       x: (clientX - rect.left) * (canvas.width / rect.width),
       y: (clientY - rect.top) * (canvas.height / rect.height)
@@ -642,6 +644,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isTeacher || !isCanvasEnabled || !isDrawing) return;
+    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');

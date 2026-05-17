@@ -26,6 +26,22 @@ const seed: Database = {
       languagePref: 'kk'
     },
     {
+      id: 'student-2',
+      username: 'student_b@test.com',
+      password: 'Test@123456',
+      role: 'student',
+      displayName: '玛丽亚',
+      languagePref: 'ru'
+    },
+    {
+      id: 'student-3',
+      username: 'student_c@test.com',
+      password: 'Test@123456',
+      role: 'student',
+      displayName: '努尔兰',
+      languagePref: 'kk'
+    },
+    {
       id: 'admin-1',
       username: 'admin@test.com',
       password: 'Test@123456',
@@ -88,7 +104,57 @@ const seed: Database = {
   lessonNodes: [],
   assignmentNodes: [],
   coursewareFiles: [],
-  courseMembers: []
+  courseMembers: [
+    {
+      id: 'course-member-1',
+      courseId: 'course-1',
+      userId: 'student-1',
+      role: 'student',
+      joinedAt: now
+    },
+    {
+      id: 'course-member-2',
+      courseId: 'course-1',
+      userId: 'student-2',
+      role: 'student',
+      joinedAt: now
+    },
+    {
+      id: 'course-member-3',
+      courseId: 'course-1',
+      userId: 'student-3',
+      role: 'student',
+      joinedAt: now
+    }
+  ],
+  teacherStudentLinks: [
+    {
+      id: 'teacher-student-1',
+      teacherId: 'teacher-1',
+      studentId: 'student-1',
+      className: '文科院中文测试班',
+      status: 'active',
+      createdAt: now
+    },
+    {
+      id: 'teacher-student-2',
+      teacherId: 'teacher-1',
+      studentId: 'student-2',
+      className: '文科院中文测试班',
+      status: 'active',
+      createdAt: now
+    },
+    {
+      id: 'teacher-student-3',
+      teacherId: 'teacher-1',
+      studentId: 'student-3',
+      className: '文科院中文测试班',
+      status: 'active',
+      createdAt: now
+    }
+  ],
+  liveClassStudents: [],
+  homeworkImports: []
 };
 
 let cached: Database | null = null;
@@ -103,6 +169,17 @@ async function ensureDb() {
     // Migration: add missing fields
     if (!cached.courseMembers) cached.courseMembers = [];
     if (!cached.coursewareFiles) cached.coursewareFiles = [];
+    if (!cached.teacherStudentLinks) cached.teacherStudentLinks = structuredClone(seed.teacherStudentLinks);
+    if (!cached.liveClassStudents) cached.liveClassStudents = [];
+    if (!cached.homeworkImports) cached.homeworkImports = [];
+    for (const user of seed.users) {
+      if (!cached.users.find((existing) => existing.id === user.id)) cached.users.push(user);
+    }
+    for (const member of seed.courseMembers) {
+      if (!cached.courseMembers.find((existing) => existing.courseId === member.courseId && existing.userId === member.userId)) {
+        cached.courseMembers.push(member);
+      }
+    }
     await writeDb(cached);
   } catch {
     cached = seed;
@@ -126,4 +203,3 @@ export function resetDbForTests() {
   cached = structuredClone(seed);
   return cached;
 }
-

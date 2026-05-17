@@ -130,6 +130,15 @@ export const authApi = {
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     return data;
   },
+  async register(params: { email: string; password: string; displayName: string; role: 'student' | 'teacher' }) {
+    const data = await request<{ token: string; user: ApiUser }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    return data;
+  },
   currentUser() {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) as ApiUser : null;
@@ -181,8 +190,14 @@ export const courseMembersApi = {
   list: (courseId: string) => request<CourseMemberData[]>(`/courses/${courseId}/members`),
   add: (courseId: string, email: string) => request<CourseMemberData>(`/courses/${courseId}/members`, {
     method: 'POST',
-    body: JSON.stringify({ email })
+    body: JSON.stringify({ q: email })
   }),
+  addBatch: (courseId: string, userIds: string[]) => request<CourseMemberData[]>(`/courses/${courseId}/members/batch`, {
+    method: 'POST',
+    body: JSON.stringify({ userIds })
+  }),
+  search: (courseId: string, q = '') =>
+    request<Array<{ id: string; username: string; displayName: string; email: string }>>(`/courses/${courseId}/students/search?q=${encodeURIComponent(q)}`),
   remove: (courseId: string, memberId: string) => request<{ deleted: boolean }>(`/courses/${courseId}/members/${memberId}`, {
     method: 'DELETE'
   })

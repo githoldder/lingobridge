@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
 interface PdfViewerProps {
   url: string;
@@ -21,8 +22,7 @@ async function ensurePdfjs() {
   if (!loadingPromise) {
     loadingPromise = (async () => {
       const mod = await import('pdfjs-dist');
-      // Use CDN for worker to avoid Vite bundling issues
-      mod.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.mjs`;
+      mod.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
       return mod;
     })();
   }
@@ -44,7 +44,7 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
 
   const renderPage = useCallback(async (num: number, targetCanvas?: HTMLCanvasElement): Promise<boolean> => {
     const doc = docRef.current;
-    const canvas = targetCanvas || canvasRef.current;
+      const canvas = targetCanvas || canvasRef.current;
     if (!doc || !canvas) return false;
 
     if (renderTaskRef.current && !targetCanvas) {
@@ -74,8 +74,12 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
       await task.promise;
 
       if (!targetCanvas) {
-        const entry: PageCacheEntry = { pageNum: num, canvas: canvas.cloneNode(true) as HTMLCanvasElement, rendered: true };
-        (entry.canvas as any).getContext = canvas.getContext.bind(canvas);
+        const cacheCanvas = document.createElement('canvas');
+        cacheCanvas.width = canvas.width;
+        cacheCanvas.height = canvas.height;
+        const cacheCtx = cacheCanvas.getContext('2d');
+        if (cacheCtx) cacheCtx.drawImage(canvas, 0, 0);
+        const entry: PageCacheEntry = { pageNum: num, canvas: cacheCanvas, rendered: true };
         pageCacheRef.current.set(num, entry);
         if (pageCacheRef.current.size > MAX_CACHE_SIZE) {
           const oldest = pageCacheRef.current.keys().next().value;

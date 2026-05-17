@@ -18,6 +18,35 @@ export interface CourseMember {
   joinedAt: string;
 }
 
+export interface TeacherStudentLink {
+  id: string;
+  teacherId: string;
+  studentId: string;
+  className: string;
+  status: 'active' | 'archived';
+  createdAt: string;
+}
+
+export interface LiveClassStudent {
+  id: string;
+  lessonNodeId: string;
+  studentId: string;
+  source: 'course_member' | 'manual';
+  joinedAt: string;
+}
+
+export interface HomeworkImport {
+  id: string;
+  courseId: string;
+  lessonNodeId: string;
+  fileId: string;
+  filename: string;
+  tasksCount: number;
+  vocabCount: number;
+  errors: string[];
+  createdAt: string;
+}
+
 export interface Course {
   id: string;
   teacherId: string;
@@ -221,4 +250,7 @@ export interface Database {
   assignmentNodes: AssignmentNode[];
   coursewareFiles: CoursewareFile[];
   courseMembers: CourseMember[];
+  teacherStudentLinks: TeacherStudentLink[];
+  liveClassStudents: LiveClassStudent[];
+  homeworkImports: HomeworkImport[];
 }

@@ -86,7 +86,7 @@ function AppContent() {
       setNavContext((prev) => ({ ...prev, ...ctx }));
     }
     setActiveTab(target);
-  }, [activeTab, requireAuth]);
+  }, [activeTab, requireAuth, user]);
 
   const handleClassExit = () => {
     setActiveTab(prevTab);
