@@ -198,15 +198,54 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      
+      // Save current content before resize
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, 0, 0);
+      }
+      
       canvas.width = rect.width;
       canvas.height = rect.height;
+      
+      // Restore content after resize
+      if (tempCtx) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+        }
+      }
+      
+      // Redraw strokes after resize
+      const pageKey = isPdfType ? pdfPage : currentPageIdx + 1;
+      const strokes = pageStrokes.get(pageKey) || [];
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const stroke of strokes) {
+        if (stroke.points.length < 2) continue;
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+      }
     };
 
     resizeCanvas();
     const ro = new ResizeObserver(resizeCanvas);
     ro.observe(container);
     return () => ro.disconnect();
-  }, []);
+  }, [isPdfType, pdfPage, currentPageIdx, pageStrokes]);
 
   // Raise-hand flow: listen for grants via localStorage events
   useEffect(() => {
@@ -654,17 +693,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
     }
   };
-
-  // Redraw strokes when canvas resizes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ro = new ResizeObserver(() => {
-      requestAnimationFrame(redrawCanvas);
-    });
-    ro.observe(canvas);
-    return () => ro.disconnect();
-  }, [redrawCanvas]);
 
   // Redraw strokes when page changes
   useEffect(() => {

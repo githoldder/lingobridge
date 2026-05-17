@@ -21,7 +21,8 @@ async function ensurePdfjs() {
   if (!loadingPromise) {
     loadingPromise = (async () => {
       const mod = await import('pdfjs-dist');
-      mod.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+      // Use CDN for worker to avoid Vite bundling issues
+      mod.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.mjs`;
       return mod;
     })();
   }
@@ -117,13 +118,21 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
       try {
         const lib = await ensurePdfjs();
         if (cancelled) return;
-        const doc = await lib.getDocument(url).promise;
+        
+        // Handle CORS and network errors gracefully
+        const loadingTask = lib.getDocument({
+          url,
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+          cMapPacked: true,
+        });
+        
+        const doc = await loadingTask.promise;
         if (cancelled) return;
         docRef.current = doc;
         onPageCount?.(doc.numPages);
         setReady(true);
         setError(null);
-        onRenderState?.('loading');
+        onRenderState?.('ready');
       } catch (err: any) {
         if (!cancelled) {
           console.error('PDF load error:', err);
