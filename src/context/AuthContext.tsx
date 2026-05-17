@@ -22,6 +22,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored) {
       setUser(stored);
     }
+
+    // Listen for storage events (e.g., from E2E tests)
+    const handleStorage = () => {
+      const updated = authApi.currentUser();
+      setUser(updated);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const requireAuth = useCallback(() => {

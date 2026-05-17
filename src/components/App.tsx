@@ -46,6 +46,22 @@ function AppContent() {
   const [navContext, setNavContext] = useState<NavigationContext>({});
   const { requireAuth, user, showGuestGate, setShowGuestGate } = useAuth();
 
+  // Auto-navigate to dashboard when user logs in
+  React.useEffect(() => {
+    if (user && activeTab === 'landing') {
+      if (user.role === 'teacher') {
+        setActiveTab('teacher-dashboard');
+        setUserRole('teacher');
+      } else if (user.role === 'admin') {
+        setActiveTab('admin');
+        setUserRole('admin');
+      } else {
+        setActiveTab('dashboard');
+        setUserRole('student');
+      }
+    }
+  }, [user, activeTab]);
+
   const handleNavigate = useCallback((target: string, ctx?: NavigationContext) => {
     if (PROTECTED_TABS.includes(target)) {
       if (!requireAuth()) return;
@@ -112,6 +128,9 @@ function AppContent() {
       case 'teacher-course-detail':
         return <TeacherCourseDetailView courseId={selectedCourseId} onNavigate={handleNavigate} onBack={() => handleNavigate('teacher-courses')} onEnterLive={(courseId, lessonNodeId) => { setNavContext({ courseId, lessonNodeId }); handleNavigate('teacher-classroom'); }} />;
       case 'admin':
+        if (user?.role !== 'admin') {
+          return <DashboardView onNavigate={handleNavigate} />;
+        }
         return <AdminDashboardView />;
       default:
         return userRole === 'teacher' ? <TeacherDashboardView /> : <DashboardView />;

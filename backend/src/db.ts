@@ -100,6 +100,10 @@ async function ensureDb() {
   try {
     const raw = await readFile(dbPath, 'utf8');
     cached = JSON.parse(raw) as Database;
+    // Migration: add missing fields
+    if (!cached.courseMembers) cached.courseMembers = [];
+    if (!cached.coursewareFiles) cached.coursewareFiles = [];
+    await writeDb(cached);
   } catch {
     cached = seed;
     await writeDb(cached);
