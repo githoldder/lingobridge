@@ -1,5 +1,5 @@
 {
-  "version": "2026-05-17-prd-v4.2-sprint2-bugfixes-samples",
+  "version": "2026-05-17-prd-v4.3-sprint3-mvp-recovery",
   "updatedAt": "2026-05-17",
   "principles": [
     "简洁、可维护",
@@ -8,19 +8,19 @@
     "不展开非关键内部实现细节"
   ],
   "implementationStatus": {
-    "summary": "P0-P2 的 15 个任务 + E2E 测试已完成。15/15 Playwright 测试通过。身份与游客门禁、live/课时/作业一对一、学习记录持久化、学生/教师 live 权限分离、教师课程编辑页、Admin 后台、TTS provider facade 均已接入。",
+    "summary": "当前版本具备演示骨架，但最新实测暴露 P0/P1 阻断：admin 路由、GuestGate 登录弹窗、真实注册登录 schema、PDF 渲染、画笔白屏、课程/Live Class/学生同步、homework Excel 导入与学生端割裂。进入 Sprint 3：MVP 闭环修复与数据模型落库。",
     "verification": {
       "lint": "passed: npm run lint",
       "build": "passed: npm run build",
-      "backendTests": "passed: npm run backend:test, 3/3 tests",
-      "e2eTests": "passed: npx playwright test e2e/mvp-pipeline.spec.ts, 15/15 tests",
+      "backendTests": "pending: must rerun after Sprint 3 fixes",
+      "e2eTests": "pending: current defect list not covered",
       "prdJson": "passed: JSON parse"
     },
     "nonBlockingWarnings": [
       "PDF.js build warning about eval usage.",
       "Vite chunk-size warning because main bundle is larger than 500KB."
     ],
-    "lastAuditResult": "No P0/P1 blocker. E2E pipeline fully passing.",
+    "lastAuditResult": "Current state has P0/P1 blockers; do not claim teacher/student data collection is ready until Sprint 3 acceptance passes.",
     "e2ePipeline": [
       "01: Backend health check",
       "02: Course CRUD API",
@@ -183,6 +183,54 @@
       "id": "D10",
       "problem": "缺少管理端后台。",
       "boundary": "Admin 只做运营维护，不扩展成完整 LMS。"
+    },
+    {
+      "id": "D28",
+      "problem": "Admin 是独立后台但当前可能落到学生页面。",
+      "boundary": "admin 登录后必须直接进入后台；后台是后端服务、文件/多媒体存储和数据库业务数据的可视化控制台。",
+      "fix": "修复 LoginView/App 路由；补 admin route guard 回归测试。"
+    },
+    {
+      "id": "D29",
+      "problem": "点击完整功能进入登录后仍弹出“解锁完整功能”。",
+      "boundary": "login/register 导航必须清理 GuestGate 状态，避免重复门禁。",
+      "fix": "handleNavigate(login/register) 关闭 showGuestGate，并确认 requireAuth 不拦截登录页。"
+    },
+    {
+      "id": "D30",
+      "problem": "注册登录缺少真实数据库 schema 和业务约束。",
+      "boundary": "先设计 users/sessions/profile/teacher_student_links schema，再实现注册登录。",
+      "fix": "新增 schema 文档与后端数据层，迁移 demo token 逻辑。"
+    },
+    {
+      "id": "D31",
+      "problem": "教师创建课程/Live Class 后学生端不同步。",
+      "boundary": "课程/Live Class 对学生可见性来自 teacher-student 或 live_class_student 关系。",
+      "fix": "课程创建和 Live Class 创建后支持绑定默认班级学生。"
+    },
+    {
+      "id": "D32",
+      "problem": "老师添加学生只支持邮箱，不符合测试和真实使用。",
+      "boundary": "应支持用户名、姓名、学号模糊搜索，并可从默认班级学生中勾选。",
+      "fix": "新增 GET /students/search 与批量绑定接口。"
+    },
+    {
+      "id": "D33",
+      "problem": "PDF 课件上传后无法查看。",
+      "boundary": "PDF 文件 URL、静态服务、PDF.js worker 和错误提示必须端到端可用。",
+      "fix": "专项修复 PdfViewer 和后端 mediaUrl。"
+    },
+    {
+      "id": "D34",
+      "problem": "Live Class 画笔绘制后白屏。",
+      "boundary": "画笔层不得破坏 PDF/canvas 渲染状态。",
+      "fix": "拆分 PDF canvas 和 annotation canvas，补回归测试。"
+    },
+    {
+      "id": "D35",
+      "problem": "Homework Excel 上传不稳定，学生自学链路无法验证。",
+      "boundary": "samples 中的 Excel 必须能导入，学生端必须能看到对应 homework。",
+      "fix": "生成多套 samples 并补导入/查询测试。"
     }
   ],
   "businessRules": [
@@ -220,6 +268,31 @@
       "id": "R07",
       "rule": "画笔模式只控制是否可书写。",
       "acceptance": "penMode=false 时已有笔迹继续显示；clearInk 才清空当前页笔迹。"
+    },
+    {
+      "id": "R08",
+      "rule": "Admin 是独立后台角色。",
+      "acceptance": "admin 登录后进入 /admin；后台可管理账号、文件、多媒体、作业、学习记录、学习进度和服务状态。"
+    },
+    {
+      "id": "R09",
+      "rule": "登录/注册路由不得触发 GuestGate。",
+      "acceptance": "用户点击登录或注册后，不再弹出“解锁完整功能”提示。"
+    },
+    {
+      "id": "R10",
+      "rule": "Live Class 是核心教学容器。",
+      "acceptance": "teacher 1:N liveClass；liveClass M:N student；liveClass 1:N courseware；liveClass 1:N homeworkImport。"
+    },
+    {
+      "id": "R11",
+      "rule": "教师添加学生必须支持搜索与批量选择。",
+      "acceptance": "可按用户名/姓名/学号模糊搜索，并可选择默认班级学生加入 Live Class。"
+    },
+    {
+      "id": "R12",
+      "rule": "注册登录必须基于明确 schema。",
+      "acceptance": "users/sessions/student_profiles/teacher_profiles/teacher_student_links schema 存在并被业务代码使用。"
     }
   ],
   "antiRegressionGuardrails": [
@@ -273,55 +346,236 @@
     "entities": [
       {
         "name": "user",
-        "fields": ["id", "username", "role", "displayName", "languagePref", "status"]
+        "fields": [
+          "id",
+          "username",
+          "role",
+          "displayName",
+          "languagePref",
+          "status"
+        ]
       },
       {
         "name": "course",
-        "fields": ["id", "teacherId", "title", "description", "coverUrl", "status", "createdAt", "updatedAt"]
+        "fields": [
+          "id",
+          "teacherId",
+          "title",
+          "description",
+          "coverUrl",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       {
         "name": "course_member",
-        "fields": ["id", "courseId", "studentId", "joinedAt", "status"]
+        "fields": [
+          "id",
+          "courseId",
+          "studentId",
+          "joinedAt",
+          "status"
+        ]
       },
       {
         "name": "lesson_node",
-        "fields": ["id", "courseId", "title", "startsAt", "endsAt", "styleSeed", "colorToken", "shapeToken", "status"]
+        "fields": [
+          "id",
+          "courseId",
+          "title",
+          "startsAt",
+          "endsAt",
+          "styleSeed",
+          "colorToken",
+          "shapeToken",
+          "status"
+        ]
       },
       {
         "name": "live_session",
-        "fields": ["id", "courseId", "lessonNodeId", "teacherId", "status", "sourceMode", "currentPage", "recordingStatus", "startedAt", "endedAt"]
+        "fields": [
+          "id",
+          "courseId",
+          "lessonNodeId",
+          "teacherId",
+          "status",
+          "sourceMode",
+          "currentPage",
+          "recordingStatus",
+          "startedAt",
+          "endedAt"
+        ]
       },
       {
         "name": "assignment_node",
-        "fields": ["id", "courseId", "lessonNodeId", "title", "dueAt", "status"]
+        "fields": [
+          "id",
+          "courseId",
+          "lessonNodeId",
+          "title",
+          "dueAt",
+          "status"
+        ]
       },
       {
         "name": "learning_task",
-        "fields": ["id", "assignmentNodeId", "sourceFileId", "taskType", "zhText", "pinyin", "translationRu", "translationKk", "audioText", "sortOrder"]
+        "fields": [
+          "id",
+          "assignmentNodeId",
+          "sourceFileId",
+          "taskType",
+          "zhText",
+          "pinyin",
+          "translationRu",
+          "translationKk",
+          "audioText",
+          "sortOrder"
+        ]
       },
       {
         "name": "learning_record",
-        "fields": ["id", "studentId", "lessonNodeId", "taskId", "context", "status", "attemptsCount", "lastRecordingId", "updatedAt", "completedAt"]
+        "fields": [
+          "id",
+          "studentId",
+          "lessonNodeId",
+          "taskId",
+          "context",
+          "status",
+          "attemptsCount",
+          "lastRecordingId",
+          "updatedAt",
+          "completedAt"
+        ]
       },
       {
         "name": "recording",
-        "fields": ["id", "studentId", "courseId", "lessonNodeId", "taskId", "audioUrl", "durationSec", "createdAt"]
+        "fields": [
+          "id",
+          "studentId",
+          "courseId",
+          "lessonNodeId",
+          "taskId",
+          "audioUrl",
+          "durationSec",
+          "createdAt"
+        ]
       },
       {
         "name": "courseware_file",
-        "fields": ["id", "courseId", "lessonNodeId", "type", "filename", "storageUrl", "renderStatus", "pageCount", "createdAt"]
+        "fields": [
+          "id",
+          "courseId",
+          "lessonNodeId",
+          "type",
+          "filename",
+          "storageUrl",
+          "renderStatus",
+          "pageCount",
+          "createdAt"
+        ]
       },
       {
         "name": "lecture_recording",
-        "fields": ["id", "courseId", "lessonNodeId", "liveSessionId", "videoUrl", "durationSec", "createdAt"]
+        "fields": [
+          "id",
+          "courseId",
+          "lessonNodeId",
+          "liveSessionId",
+          "videoUrl",
+          "durationSec",
+          "createdAt"
+        ]
       },
       {
         "name": "classroom_note",
-        "fields": ["id", "liveSessionId", "studentId", "body", "visibility", "createdAt"]
+        "fields": [
+          "id",
+          "liveSessionId",
+          "studentId",
+          "body",
+          "visibility",
+          "createdAt"
+        ]
       },
       {
         "name": "transcript_segment",
-        "fields": ["id", "liveSessionId", "lectureRecordingId", "sourceText", "translatedText", "lang", "startedAt", "endedAt"]
+        "fields": [
+          "id",
+          "liveSessionId",
+          "lectureRecordingId",
+          "sourceText",
+          "translatedText",
+          "lang",
+          "startedAt",
+          "endedAt"
+        ]
+      },
+      {
+        "name": "session",
+        "fields": [
+          "id",
+          "userId",
+          "tokenHash",
+          "expiresAt",
+          "createdAt",
+          "revokedAt"
+        ]
+      },
+      {
+        "name": "teacher_profile",
+        "fields": [
+          "userId",
+          "title",
+          "department",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      {
+        "name": "student_profile",
+        "fields": [
+          "userId",
+          "studentNo",
+          "className",
+          "nationality",
+          "nativeLanguage",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      {
+        "name": "teacher_student_link",
+        "fields": [
+          "id",
+          "teacherId",
+          "studentId",
+          "status",
+          "createdAt"
+        ]
+      },
+      {
+        "name": "live_class_student",
+        "fields": [
+          "id",
+          "liveClassId",
+          "studentId",
+          "status",
+          "joinedAt"
+        ]
+      },
+      {
+        "name": "homework_import",
+        "fields": [
+          "id",
+          "liveClassId",
+          "courseId",
+          "filename",
+          "tasksCount",
+          "vocabCount",
+          "errors",
+          "createdAt"
+        ]
       }
     ],
     "relationshipRules": [
@@ -331,37 +585,167 @@
       "assignment_node 1:N learning_task",
       "student + lesson_node + task 1:1 learning_record",
       "live_session 1:N classroom_note",
-      "live_session 1:N transcript_segment"
+      "live_session 1:N transcript_segment",
+      "teacher 1:N live_class",
+      "teacher M:N student via teacher_student_link",
+      "live_class M:N student via live_class_student",
+      "live_class 1:N courseware_file",
+      "live_class 1:N homework_import",
+      "homework_import 1:N learning_task"
     ]
   },
   "apiContract": {
-    "responseEnvelope": { "code": 0, "data": {}, "message": "success" },
+    "responseEnvelope": {
+      "code": 0,
+      "data": {},
+      "message": "success"
+    },
     "routes": [
-      { "method": "POST", "path": "/api/v1/auth/login", "purpose": "登录并返回角色" },
-      { "method": "POST", "path": "/api/v1/auth/register", "purpose": "注册，MVP 可先支持学生" },
-      { "method": "GET", "path": "/api/v1/users/me", "purpose": "当前用户，替代前端身份 mock" },
-      { "method": "GET", "path": "/api/v1/courses/:id", "purpose": "课程详情" },
-      { "method": "PATCH", "path": "/api/v1/courses/:id", "purpose": "编辑课程信息" },
-      { "method": "GET", "path": "/api/v1/courses/:id/members", "purpose": "课程学生列表" },
-      { "method": "POST", "path": "/api/v1/courses/:id/members", "purpose": "加入学生" },
-      { "method": "DELETE", "path": "/api/v1/courses/:id/members/:studentId", "purpose": "移除学生" },
-      { "method": "GET", "path": "/api/v1/courses/:id/lesson-nodes", "purpose": "课时节点列表" },
-      { "method": "POST", "path": "/api/v1/courses/:id/lesson-nodes", "purpose": "创建课时，同时创建作业节点和稳定样式种子" },
-      { "method": "PATCH", "path": "/api/v1/lesson-nodes/:id", "purpose": "修改课时标题、时间、状态" },
-      { "method": "POST", "path": "/api/v1/coursewares", "purpose": "上传 PDF/PPTX 课件" },
-      { "method": "POST", "path": "/api/v1/assignments/import", "purpose": "上传 Excel 作业并生成 learning_task" },
-      { "method": "GET", "path": "/api/v1/assignments?lessonNodeId=", "purpose": "获取课时作业节点" },
-      { "method": "GET", "path": "/api/v1/homework/tasks?assignmentNodeId=", "purpose": "获取当前作业任务" },
-      { "method": "POST", "path": "/api/v1/learning-records", "purpose": "upsert 学习记录" },
-      { "method": "GET", "path": "/api/v1/learning-records?studentId=&lessonNodeId=", "purpose": "读取学生课时进度" },
-      { "method": "POST", "path": "/api/v1/live-sessions", "purpose": "创建 live 并绑定 lessonNodeId" },
-      { "method": "PATCH", "path": "/api/v1/live-sessions/:id", "purpose": "更新翻页、状态、录制状态" },
-      { "method": "GET", "path": "/api/v1/live-sessions/active?courseId=", "purpose": "学生进入当前 live" },
-      { "method": "GET", "path": "/api/v1/admin/users", "purpose": "管理端账号列表" },
-      { "method": "GET", "path": "/api/v1/admin/coursewares", "purpose": "管理端课件列表" },
-      { "method": "GET", "path": "/api/v1/admin/assignment-imports", "purpose": "管理端 Excel 上传/解析记录" },
-      { "method": "GET", "path": "/api/v1/admin/live-sessions", "purpose": "管理端 live 列表" },
-      { "method": "GET", "path": "/api/v1/admin/learning-progress", "purpose": "管理端学习进度聚合" }
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "purpose": "登录并返回角色"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/register",
+        "purpose": "注册，MVP 可先支持学生"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/users/me",
+        "purpose": "当前用户，替代前端身份 mock"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/courses/:id",
+        "purpose": "课程详情"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/courses/:id",
+        "purpose": "编辑课程信息"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/courses/:id/members",
+        "purpose": "课程学生列表"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/courses/:id/members",
+        "purpose": "加入学生"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/courses/:id/members/:studentId",
+        "purpose": "移除学生"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/courses/:id/lesson-nodes",
+        "purpose": "课时节点列表"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/courses/:id/lesson-nodes",
+        "purpose": "创建课时，同时创建作业节点和稳定样式种子"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/lesson-nodes/:id",
+        "purpose": "修改课时标题、时间、状态"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/coursewares",
+        "purpose": "上传 PDF/PPTX 课件"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/assignments/import",
+        "purpose": "上传 Excel 作业并生成 learning_task"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/assignments?lessonNodeId=",
+        "purpose": "获取课时作业节点"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/homework/tasks?assignmentNodeId=",
+        "purpose": "获取当前作业任务"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/learning-records",
+        "purpose": "upsert 学习记录"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/learning-records?studentId=&lessonNodeId=",
+        "purpose": "读取学生课时进度"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/live-sessions",
+        "purpose": "创建 live 并绑定 lessonNodeId"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v1/live-sessions/:id",
+        "purpose": "更新翻页、状态、录制状态"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/live-sessions/active?courseId=",
+        "purpose": "学生进入当前 live"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/users",
+        "purpose": "管理端账号列表"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/coursewares",
+        "purpose": "管理端课件列表"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/assignment-imports",
+        "purpose": "管理端 Excel 上传/解析记录"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/live-sessions",
+        "purpose": "管理端 live 列表"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/learning-progress",
+        "purpose": "管理端学习进度聚合"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/students/search?q=",
+        "purpose": "教师按用户名/姓名/学号模糊搜索学生"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/live-classes/:id/students/batch",
+        "purpose": "批量加入学生到 Live Class"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/storage",
+        "purpose": "后台查看文件与多媒体存储状态"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/admin/service-status",
+        "purpose": "后台查看 API/TTS/存储等服务状态"
+      }
     ]
   },
   "frontendRoutes": [
@@ -406,7 +790,12 @@
       "id": "T01",
       "phase": "P0-auth-guard",
       "title": "清理身份 mock 与游客门禁",
-      "scope": ["src/components/HomeView.tsx", "src/components/DashboardView.tsx", "src/components/Layout.tsx", "src/services/apiClient.ts"],
+      "scope": [
+        "src/components/HomeView.tsx",
+        "src/components/DashboardView.tsx",
+        "src/components/Layout.tsx",
+        "src/services/apiClient.ts"
+      ],
       "acceptance": [
         "Anna 等默认学生身份从组件中移除",
         "登录后显示测试账号个人信息",
@@ -418,7 +807,12 @@
       "id": "T02",
       "phase": "P0-data-contract",
       "title": "固化 live/课时/作业一对一模型",
-      "scope": ["backend/src/types.ts", "backend/src/db.ts", "backend/src/app.ts", "src/services/apiClient.ts"],
+      "scope": [
+        "backend/src/types.ts",
+        "backend/src/db.ts",
+        "backend/src/app.ts",
+        "src/services/apiClient.ts"
+      ],
       "acceptance": [
         "新增 lesson_node 和 assignment_node",
         "创建 live 时必须传 lessonNodeId",
@@ -430,7 +824,11 @@
       "id": "T03",
       "phase": "P0-learning-records",
       "title": "修复学习记录持久化",
-      "scope": ["backend/src/app.ts", "src/components/HomeworkView.tsx", "src/components/VocabularyView.tsx"],
+      "scope": [
+        "backend/src/app.ts",
+        "src/components/HomeworkView.tsx",
+        "src/components/VocabularyView.tsx"
+      ],
       "acceptance": [
         "learning-records 使用 studentId + lessonNodeId + taskId upsert",
         "刷新或跳转后完成状态保持",
@@ -442,7 +840,11 @@
       "id": "T04",
       "phase": "P0-live-student",
       "title": "学生端 live 去除教师配置按钮",
-      "scope": ["src/components/TeacherClassroomView.tsx", "src/components/StudentClassroomView.tsx", "src/components/App.tsx"],
+      "scope": [
+        "src/components/TeacherClassroomView.tsx",
+        "src/components/StudentClassroomView.tsx",
+        "src/components/App.tsx"
+      ],
       "acceptance": [
         "学生端不显示作业映射 live 按钮",
         "学生端不显示单词映射 live 按钮",
@@ -454,7 +856,10 @@
       "id": "T05",
       "phase": "P0-i18n",
       "title": "教师 live i18n 审计",
-      "scope": ["src/components/TeacherClassroomView.tsx", "src/context/LanguageContext.tsx"],
+      "scope": [
+        "src/components/TeacherClassroomView.tsx",
+        "src/context/LanguageContext.tsx"
+      ],
       "acceptance": [
         "不出现 classroom.content_mode 原始 key",
         "不出现 classroom.stopped 原始 key",
@@ -466,7 +871,11 @@
       "id": "T06",
       "phase": "P0-courseware-rendering",
       "title": "PDF/PPTX 渲染性能边界",
-      "scope": ["src/components/PdfViewer.tsx", "backend/src/app.ts", "backend/src/storage.ts"],
+      "scope": [
+        "src/components/PdfViewer.tsx",
+        "backend/src/app.ts",
+        "backend/src/storage.ts"
+      ],
       "acceptance": [
         "课堂使用已上传/转换/缓存的分页资源",
         "PDF 翻页不卡顿到不可用",
@@ -478,7 +887,9 @@
       "id": "T07",
       "phase": "P0-annotation",
       "title": "画笔交互重做",
-      "scope": ["src/components/TeacherClassroomView.tsx"],
+      "scope": [
+        "src/components/TeacherClassroomView.tsx"
+      ],
       "acceptance": [
         "画笔为清晰连续圆珠笔线条",
         "支持粗细调节",
@@ -491,7 +902,11 @@
       "id": "T08",
       "phase": "P1-course-management",
       "title": "教师课程详情/编辑页",
-      "scope": ["src/components/TeacherCoursesView.tsx", "src/components/TeacherCourseDetailView.tsx", "src/components/App.tsx"],
+      "scope": [
+        "src/components/TeacherCoursesView.tsx",
+        "src/components/TeacherCourseDetailView.tsx",
+        "src/components/App.tsx"
+      ],
       "acceptance": [
         "点击课程卡片进入详情页",
         "详情页包含课程信息、入会学生、上传课件、课程时间、课程作业、课程直播管理",
@@ -503,7 +918,11 @@
       "id": "T09",
       "phase": "P1-lesson-style",
       "title": "课时节点随机样式",
-      "scope": ["backend/src/app.ts", "src/components/TeacherCourseDetailView.tsx", "src/components/CoursesView.tsx"],
+      "scope": [
+        "backend/src/app.ts",
+        "src/components/TeacherCourseDetailView.tsx",
+        "src/components/CoursesView.tsx"
+      ],
       "acceptance": [
         "创建课时节点时生成 styleSeed",
         "前端根据 styleSeed 稳定映射颜色和形状",
@@ -515,7 +934,11 @@
       "id": "T10",
       "phase": "P1-student-entry",
       "title": "学生课程/作业入口统一",
-      "scope": ["src/components/CoursesView.tsx", "src/components/ScheduleView.tsx", "src/components/HomeworkView.tsx"],
+      "scope": [
+        "src/components/CoursesView.tsx",
+        "src/components/ScheduleView.tsx",
+        "src/components/HomeworkView.tsx"
+      ],
       "acceptance": [
         "从课程、schedule、live 进入同一 lessonNode 的 assignmentNode",
         "学习记录读取同一组 API",
@@ -527,7 +950,11 @@
       "id": "T11",
       "phase": "P2-admin-shell",
       "title": "Admin 路由与权限",
-      "scope": ["src/components/AdminDashboardView.tsx", "src/components/App.tsx", "backend/src/app.ts"],
+      "scope": [
+        "src/components/AdminDashboardView.tsx",
+        "src/components/App.tsx",
+        "backend/src/app.ts"
+      ],
       "acceptance": [
         "仅 admin 可进入 /admin",
         "非 admin 访问时提示无权限或跳登录",
@@ -539,7 +966,10 @@
       "id": "T12",
       "phase": "P2-admin-users",
       "title": "账号管理",
-      "scope": ["src/components/AdminDashboardView.tsx", "backend/src/app.ts"],
+      "scope": [
+        "src/components/AdminDashboardView.tsx",
+        "backend/src/app.ts"
+      ],
       "acceptance": [
         "可查看老师账号",
         "可查看学生账号",
@@ -551,7 +981,10 @@
       "id": "T13",
       "phase": "P2-admin-resources",
       "title": "课程与资源管理",
-      "scope": ["src/components/AdminDashboardView.tsx", "backend/src/app.ts"],
+      "scope": [
+        "src/components/AdminDashboardView.tsx",
+        "backend/src/app.ts"
+      ],
       "acceptance": [
         "可管理课程 CRUD",
         "可查看 PDF/PPTX 课件及转换状态",
@@ -563,7 +996,10 @@
       "id": "T14",
       "phase": "P2-admin-live",
       "title": "Live 与内容记录管理",
-      "scope": ["src/components/AdminDashboardView.tsx", "backend/src/app.ts"],
+      "scope": [
+        "src/components/AdminDashboardView.tsx",
+        "backend/src/app.ts"
+      ],
       "acceptance": [
         "可查看 live 列表和状态",
         "可查看录播记录",
@@ -576,7 +1012,10 @@
       "id": "T15",
       "phase": "P2-admin-progress",
       "title": "学习进度管理",
-      "scope": ["src/components/AdminDashboardView.tsx", "backend/src/app.ts"],
+      "scope": [
+        "src/components/AdminDashboardView.tsx",
+        "backend/src/app.ts"
+      ],
       "acceptance": [
         "可按学生、课程、课时查看作业进度",
         "可查看单词学习进度",
@@ -637,6 +1076,20 @@
         "完善教师班级管理（学生名单、live classes、课件）"
       ],
       "output": "稳定的课堂体验，可用的课件系统，完善的班级管理。"
+    },
+    {
+      "id": "N05",
+      "title": "Sprint 3: MVP recovery",
+      "scope": [
+        "修复 admin 独立后台路由",
+        "修复登录页 GuestGate 重复弹窗",
+        "设计并落地注册登录 schema",
+        "重构 teacher-student-liveClass 关系",
+        "修复 PDF 渲染失败和画笔白屏",
+        "让课程/Live Class/homework 对学生端可见",
+        "生成 xlsx/pdf/pptx samples 并补测试"
+      ],
+      "output": "老师可创建 Live Class、选择学生、上传课件和 homework；学生可看到并完成；admin 可看后台数据。"
     }
   ],
   "adminModules": [
@@ -666,6 +1119,14 @@
     "关闭画笔不会清空笔迹，清除笔迹按钮才清空。",
     "教师点击课程卡片进入课程编辑页。",
     "课程编辑页统一管理课程信息、学生、课件、时间、作业、live。",
-    "管理端可管理老师、学生、课程、课件、Excel、live、录播、note、字幕、schedule、学习进度。"
+    "管理端可管理老师、学生、课程、课件、Excel、live、录播、note、字幕、schedule、学习进度。",
+    "Admin 登录后进入独立后台，不进入学生 Dashboard。",
+    "登录/注册页不会再弹出 GuestGate 解锁完整功能窗口。",
+    "注册登录有明确数据库 schema 和后端业务代码。",
+    "教师可按用户名/姓名/学号搜索并批量添加学生到 Live Class。",
+    "教师创建课程/Live Class 后，绑定学生可在学生端看到对应内容。",
+    "PDF samples 上传后可查看，画笔绘制不白屏。",
+    "samples 里的 Excel 作业能导入，学生端能看到 homework。",
+    "Admin 后台可查看账户、文件、多媒体、作业、学习记录、学习进度和服务状态。"
   ]
 }
