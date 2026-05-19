@@ -57,7 +57,7 @@ const seed: Database = {
       title: '第三课：自我介绍',
       description: 'MVP demo course generated from teacher courseware.',
       createdAt: now,
-      status: 'Published'
+      status: 'published'
     }
   ],
   coursePages: [

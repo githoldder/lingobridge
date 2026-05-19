@@ -1,0 +1,204 @@
+/**
+ * S4-T04: Courses repository — JSON + Postgres dual mode
+ */
+
+import { readDb, writeDb } from '../db.ts';
+import { getDbMode, query, queryRow, queryRows } from '../db/postgres.ts';
+import type { CourseDto, CourseMemberDto, LessonNodeDto } from './types.ts';
+
+function mapCourse(row: Record<string, any>): CourseDto {
+  return {
+    id: row.id,
+    teacherId: row.teacher_id ?? row.teacherId,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    startsAt: row.starts_at ?? row.startsAt,
+    endsAt: row.ends_at ?? row.endsAt,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  };
+}
+
+function mapMember(row: Record<string, any>): CourseMemberDto {
+  return {
+    id: row.id,
+    courseId: row.course_id ?? row.courseId,
+    userId: row.user_id ?? row.userId,
+    role: row.role,
+    joinedAt: row.joined_at ?? row.joinedAt,
+  };
+}
+
+function mapLessonNode(row: Record<string, any>): LessonNodeDto {
+  return {
+    id: row.id,
+    courseId: row.course_id ?? row.courseId,
+    title: row.title,
+    startsAt: row.starts_at ?? row.startsAt,
+    endsAt: row.ends_at ?? row.endsAt,
+    styleSeed: row.style_seed ?? row.styleSeed ?? 0,
+    colorToken: row.color_token ?? row.colorToken ?? 'blue',
+    shapeToken: row.shape_token ?? row.shapeToken ?? 'circle',
+    status: row.status,
+    assignmentNodeId: row.assignment_node_id ?? row.assignmentNodeId,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  };
+}
+
+// ─── Course CRUD ───
+
+export async function findById(id: string): Promise<CourseDto | null> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const c = db.courses.find((c) => c.id === id);
+    return c ? mapCourse(c) : null;
+  }
+  const row = await queryRow('SELECT * FROM courses WHERE id = $1', [id]);
+  return row ? mapCourse(row) : null;
+}
+
+export async function findByTeacherId(teacherId: string): Promise<CourseDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    return db.courses.filter((c) => c.teacherId === teacherId).map(mapCourse);
+  }
+  const rows = await queryRows('SELECT * FROM courses WHERE teacher_id = $1 ORDER BY created_at DESC', [teacherId]);
+  return rows.map(mapCourse);
+}
+
+export async function findByStudentId(studentId: string): Promise<CourseDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const memberOf = db.courseMembers.filter((m) => m.userId === studentId).map((m) => m.courseId);
+    return db.courses.filter((c) => memberOf.includes(c.id)).map(mapCourse);
+  }
+  const rows = await queryRows(
+    `SELECT c.* FROM courses c
+     JOIN course_members cm ON cm.course_id = c.id
+     WHERE cm.user_id = $1 AND cm.removed_at IS NULL
+     ORDER BY c.created_at DESC`,
+    [studentId]
+  );
+  return rows.map(mapCourse);
+}
+
+export async function create(data: { teacherId: string; title: string; description?: string; status?: string }): Promise<CourseDto> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const course = {
+      id: crypto.randomUUID(),
+      teacherId: data.teacherId,
+      title: data.title,
+      description: data.description ?? '',
+      createdAt: new Date().toISOString(),
+      status: data.status ?? 'published',
+    };
+    db.courses.push(course as any);
+    await writeDb(db);
+    return mapCourse(course);
+  }
+  const row = await queryRow(
+    `INSERT INTO courses (teacher_id, title, description, status)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [data.teacherId, data.title, data.description ?? '', data.status ?? 'published']
+  );
+  return mapCourse(row!);
+}
+
+export async function update(id: string, data: Partial<{ title: string; description: string; status: string; startsAt: string; endsAt: string }>): Promise<CourseDto | null> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const idx = db.courses.findIndex((c) => c.id === id);
+    if (idx === -1) return null;
+    Object.assign(db.courses[idx], data, { updatedAt: new Date().toISOString() });
+    await writeDb(db);
+    return mapCourse(db.courses[idx]);
+  }
+  const sets: string[] = [];
+  const vals: any[] = [];
+  let i = 1;
+  if (data.title !== undefined) { sets.push(`title = $${i++}`); vals.push(data.title); }
+  if (data.description !== undefined) { sets.push(`description = $${i++}`); vals.push(data.description); }
+  if (data.status !== undefined) { sets.push(`status = $${i++}`); vals.push(data.status); }
+  if (data.startsAt !== undefined) { sets.push(`starts_at = $${i++}`); vals.push(data.startsAt); }
+  if (data.endsAt !== undefined) { sets.push(`ends_at = $${i++}`); vals.push(data.endsAt); }
+  sets.push(`updated_at = now()`);
+  vals.push(id);
+  const row = await queryRow(`UPDATE courses SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+  return row ? mapCourse(row) : null;
+}
+
+// ─── Course Members ───
+
+export async function findMembers(courseId: string): Promise<CourseMemberDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    return db.courseMembers.filter((m) => m.courseId === courseId).map(mapMember);
+  }
+  const rows = await queryRows(
+    'SELECT * FROM course_members WHERE course_id = $1 AND removed_at IS NULL',
+    [courseId]
+  );
+  return rows.map(mapMember);
+}
+
+export async function addMember(courseId: string, userId: string, role: string): Promise<CourseMemberDto> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const existing = db.courseMembers.find((m) => m.courseId === courseId && m.userId === userId);
+    if (existing) return mapMember(existing);
+    const member = { id: crypto.randomUUID(), courseId, userId, role, joinedAt: new Date().toISOString() };
+    db.courseMembers.push(member as any);
+    await writeDb(db);
+    return mapMember(member);
+  }
+  const row = await queryRow(
+    `INSERT INTO course_members (course_id, user_id, role)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (course_id, user_id) DO UPDATE SET removed_at = NULL, role = EXCLUDED.role
+     RETURNING *`,
+    [courseId, userId, role]
+  );
+  return mapMember(row!);
+}
+
+export async function removeMember(courseId: string, userId: string): Promise<boolean> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const idx = db.courseMembers.findIndex((m) => m.courseId === courseId && m.userId === userId);
+    if (idx === -1) return false;
+    db.courseMembers.splice(idx, 1);
+    await writeDb(db);
+    return true;
+  }
+  const result = await query(
+    `UPDATE course_members SET removed_at = now() WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL`,
+    [courseId, userId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+// ─── Lesson Nodes ───
+
+export async function findLessonNodes(courseId: string): Promise<LessonNodeDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const nodes = db.lessonNodes.filter((n) => n.courseId === courseId);
+    return nodes.map((n) => {
+      const assignmentNode = db.assignmentNodes.find((a) => a.lessonNodeId === n.id);
+      return mapLessonNode({ ...n, assignmentNodeId: assignmentNode?.id });
+    });
+  }
+  const rows = await queryRows(
+    `SELECT ln.*, an.id AS assignment_node_id
+     FROM lesson_nodes ln
+     LEFT JOIN assignment_nodes an ON an.lesson_node_id = ln.id
+     WHERE ln.course_id = $1
+     ORDER BY ln.starts_at NULLS LAST, ln.created_at`,
+    [courseId]
+  );
+  return rows.map(mapLessonNode);
+}

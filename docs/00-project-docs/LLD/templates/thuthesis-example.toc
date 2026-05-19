@@ -1,0 +1,9 @@
+\contentsline {chapter}{\numberline {第1章}模块详细设计}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}身份认证模块}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2}课程管理模块}{1}{section.1.2}%
+\contentsline {section}{\numberline {1.3}课件渲染模块}{1}{section.1.3}%
+\contentsline {section}{\numberline {1.4}录音模块}{1}{section.1.4}%
+\contentsline {section}{\numberline {1.5}直播课堂模块}{1}{section.1.5}%
+\contentsline {chapter}{\numberline {第2章}数据库详细设计}{2}{chapter.2}%
+\contentsline {chapter}{参考文献}{3}{section*.3}%
+\contentsfinish 

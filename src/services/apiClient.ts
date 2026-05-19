@@ -14,7 +14,7 @@ export interface Course {
   title: string;
   description: string;
   createdAt: string;
-  status: 'Published' | 'Draft';
+  status: 'published' | 'draft';
   pagesCount?: number;
   exercisesCount?: number;
   recordingsCount?: number;
@@ -155,7 +155,7 @@ export const coursesApi = {
     method: 'POST',
     body: JSON.stringify({ title, description })
   }),
-  update: (id: string, updates: { title?: string; description?: string; status?: 'Published' | 'Draft' }) =>
+  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft' }) =>
     request<Course>(`/courses/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)

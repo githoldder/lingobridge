@@ -53,7 +53,7 @@ export interface Course {
   title: string;
   description: string;
   createdAt: string;
-  status: 'Published' | 'Draft';
+  status: 'published' | 'draft';
 }
 
 export interface CoursePage {

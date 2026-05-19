@@ -51,7 +51,7 @@ const CourseCard = ({ title, semester, students, date, status, image, courseId, 
         <img src={image} alt={title} className="w-full h-full object-cover" />
         <div className="absolute top-4 left-4 bg-green-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
           <CheckCircle2 size={12} />
-          {status === 'Published' ? t('course.published') : t('course.draft')}
+          {status === 'published' ? t('course.published') : t('course.draft')}
         </div>
         <button className="absolute top-4 right-4 p-1.5 bg-black/20 text-white rounded-full hover:bg-black/40 transition-colors backdrop-blur-sm">
           <MoreVertical size={18} />
@@ -169,7 +169,7 @@ const CoursesView: React.FC<CoursesViewProps> = ({ onNavigate }) => {
       semester: t('course.spring'),
       students: 32,
       date: "2024-05-20",
-      status: "Published",
+      status: "published",
       image: "https://images.unsplash.com/photo-1508670510197-4071ba5d3514?w=800&auto=format&fit=crop"
     },
     {
@@ -178,7 +178,7 @@ const CoursesView: React.FC<CoursesViewProps> = ({ onNavigate }) => {
       semester: t('course.autumn'),
       students: 24,
       date: "2024-05-18",
-      status: "Published",
+      status: "published",
       image: "https://images.unsplash.com/photo-1540655037529-dec987208707?w=800&auto=format&fit=crop"
     },
     {
@@ -187,7 +187,7 @@ const CoursesView: React.FC<CoursesViewProps> = ({ onNavigate }) => {
       semester: t('course.summer'),
       students: 0,
       date: "2024-05-21",
-      status: "Draft",
+      status: "draft",
       image: "https://images.unsplash.com/photo-1523050853023-8c2d27543630?w=800&auto=format&fit=crop"
     }
   ]);

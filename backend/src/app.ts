@@ -2,10 +2,13 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import path from 'node:path';
 import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
+import { initPostgres, healthCheck as pgHealthCheck } from './db/postgres.ts';
 import { saveBase64File, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
 import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course, LiveClassStudent, HomeworkImport } from './types.ts';
 import { ttsFacade } from './providers/ttsFacade.ts';
+import * as usersRepo from './repositories/users.ts';
+import * as coursesRepo from './repositories/courses.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -144,14 +147,18 @@ export function createApp() {
     next();
   });
 
-  app.get('/api/v1/health', (_req, res) => ok(res, { status: 'ok', service: 'lingobridge-mvp-api' }));
+  app.get('/api/v1/health', async (_req, res) => {
+    const dbStatus = await pgHealthCheck();
+    ok(res, { status: 'ok', service: 'lingobridge-mvp-api', db: dbStatus });
+  });
 
   app.post('/api/v1/auth/login', async (req, res) => {
     const { email, username, password, role } = req.body ?? {};
-    const db = await readDb();
-    const loginName = email || username;
-    const user = db.users.find((item) => item.username === loginName && item.password === password && (!role || item.role === role));
+    const loginName = (email || username);
+    if (!loginName || !password) return fail(res, 401, 'Invalid demo credentials');
+    const user = await usersRepo.verifyPassword(String(loginName), String(password));
     if (!user) return fail(res, 401, 'Invalid demo credentials');
+    if (role && user.role !== role) return fail(res, 401, 'Invalid role');
     ok(res, {
       token: user.id,
       user: {
@@ -165,94 +172,73 @@ export function createApp() {
   });
 
   app.post('/api/v1/auth/register', async (req, res) => {
-    const db = await readDb();
     const { email, username, password, role = 'student', displayName } = req.body ?? {};
     const loginName = String(email || username || '').trim().toLowerCase();
     if (!loginName || !password || !displayName) return fail(res, 400, 'email, password, and displayName are required');
     if (!['student', 'teacher'].includes(role)) return fail(res, 400, 'Only student or teacher registration is allowed');
-    if (db.users.find((item) => item.username.toLowerCase() === loginName)) return fail(res, 409, 'Account already exists');
+    const existing = await usersRepo.findByUsername(loginName);
+    if (existing) return fail(res, 409, 'Account already exists');
 
-    const user = {
-      id: crypto.randomUUID(),
+    const user = await usersRepo.create({
       username: loginName,
       password: String(password),
-      role: role as 'student' | 'teacher',
+      role,
       displayName: String(displayName),
-      languagePref: 'zh' as const,
+      languagePref: 'zh',
       email: loginName
-    };
-    db.users.push(user);
+    });
+
     if (user.role === 'student') {
-      const defaultTeacher = db.users.find((item) => item.role === 'teacher');
-      if (defaultTeacher) {
-        db.teacherStudentLinks.push({
-          id: crypto.randomUUID(),
-          teacherId: defaultTeacher.id,
-          studentId: user.id,
-          className: '文科院中文测试班',
-          status: 'active',
-          createdAt: new Date().toISOString()
-        });
+      const defaultTeacherId = await usersRepo.findDefaultTeacherId();
+      if (defaultTeacherId) {
+        await usersRepo.addTeacherStudentLink(defaultTeacherId, user.id);
       }
     }
-    await writeDb(db);
-    ok(res, { token: user.id, user: publicUser(user) });
+    ok(res, { token: user.id, user: publicUser(user as import('./types.ts').User) });
   });
 
   app.get('/api/v1/users/me', async (req, res) => {
-    const db = await readDb();
-    const user = db.users.find((item) => item.id === currentUserId(req));
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
     if (!user) return fail(res, 401, 'Unauthorized');
     ok(res, { id: user.id, username: user.username, role: user.role, displayName: user.displayName, languagePref: user.languagePref });
   });
 
   app.get('/api/v1/courses', async (_req, res) => {
     const db = await readDb();
-    const courses = db.courses.map((course) => ({
-      ...course,
-      pagesCount: db.coursePages.filter((page) => page.courseId === course.id).length,
-      exercisesCount: db.learningTasks.filter((t) => t.courseId === course.id && t.publishToHomework).length,
-      recordingsCount: db.recordings.filter((recording) => recording.courseId === course.id).length
-    }));
+    const courses = await Promise.all(
+      db.courses.map(async (course) => ({
+        id: course.id,
+        teacherId: course.teacherId,
+        title: course.title,
+        description: course.description,
+        status: course.status,
+        createdAt: course.createdAt,
+        pagesCount: db.coursePages.filter((page) => page.courseId === course.id).length,
+        exercisesCount: db.learningTasks.filter((t) => t.courseId === course.id && t.publishToHomework).length,
+        recordingsCount: db.recordings.filter((recording) => recording.courseId === course.id).length
+      }))
+    );
     ok(res, courses);
   });
 
   app.post('/api/v1/courses', async (req, res) => {
-    const db = await readDb();
     const teacherId = currentUserId(req) || 'teacher-1';
     const title = String(req.body?.title || 'New Chinese Course');
-    const course = {
-      id: crypto.randomUUID(),
+    const course = await coursesRepo.create({
       teacherId,
       title,
       description: String(req.body?.description || ''),
-      createdAt: new Date().toISOString(),
-      status: 'Published' as const
-    };
-    db.courses.unshift(course);
-    db.courseMembers.push({
-      id: crypto.randomUUID(),
-      courseId: course.id,
-      userId: teacherId,
-      role: 'teacher',
-      joinedAt: new Date().toISOString()
+      status: 'published'
     });
+    await coursesRepo.addMember(course.id, teacherId, 'teacher');
 
-    const linkedStudentIds = db.teacherStudentLinks
-      .filter((link) => link.teacherId === teacherId && link.status === 'active')
-      .map((link) => link.studentId);
-    const students = db.users.filter(u => u.role === 'student' && linkedStudentIds.includes(u.id));
-    for (const student of students) {
-      db.courseMembers.push({
-        id: crypto.randomUUID(),
-        courseId: course.id,
-        userId: student.id,
-        role: 'student',
-        joinedAt: new Date().toISOString()
-      });
+    const linkedStudentIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
+    for (const studentId of linkedStudentIds) {
+      await coursesRepo.addMember(course.id, studentId, 'student');
     }
 
-    await writeDb(db);
     ok(res, course);
   });
 
@@ -342,67 +328,51 @@ export function createApp() {
   });
 
   app.patch('/api/v1/courses/:id', async (req, res) => {
-    const db = await readDb();
-    const course = db.courses.find((c) => c.id === req.params.id);
-    if (!course) return fail(res, 404, 'Course not found');
     const { title, description, status } = req.body ?? {};
-    if (title !== undefined) course.title = String(title);
-    if (description !== undefined) course.description = String(description);
-    if (status !== undefined && ['Published', 'Draft'].includes(status)) course.status = status as Course['status'];
-    await writeDb(db);
-    ok(res, course);
+    const updated = await coursesRepo.update(req.params.id, {
+      title: title !== undefined ? String(title) : undefined,
+      description: description !== undefined ? String(description) : undefined,
+      status: status !== undefined && ['published', 'draft'].includes(status) ? status : undefined,
+    });
+    if (!updated) return fail(res, 404, 'Course not found');
+    ok(res, updated);
   });
 
   app.get('/api/v1/courses/:id/members', async (req, res) => {
-    const db = await readDb();
-    const members = db.courseMembers
-      .filter((m) => m.courseId === req.params.id)
-      .filter((m) => m.role === 'student')
-      .map((m) => {
-        const user = db.users.find((u) => u.id === m.userId);
-        return {
-          id: m.id,
-          userId: m.userId,
-          username: user?.username || '',
-          displayName: user?.displayName || '',
-          email: user?.username || '',
-          role: m.role,
-          joinedAt: m.joinedAt
-        };
+    const members = await coursesRepo.findMembers(req.params.id);
+    const studentMembers = members.filter((m) => m.role === 'student');
+    const result = [];
+    for (const m of studentMembers) {
+      const user = await usersRepo.findById(m.userId);
+      result.push({
+        id: m.id,
+        userId: m.userId,
+        username: user?.username || '',
+        displayName: user?.displayName || '',
+        email: user?.username || '',
+        role: m.role,
+        joinedAt: m.joinedAt
       });
-    ok(res, members);
+    }
+    ok(res, result);
   });
 
   app.post('/api/v1/courses/:id/members', async (req, res) => {
-    const db = await readDb();
-    const course = db.courses.find((c) => c.id === req.params.id);
+    const course = await coursesRepo.findById(req.params.id);
     if (!course) return fail(res, 404, 'Course not found');
     const { email, userId, q } = req.body ?? {};
     if (!email && !userId && !q) return fail(res, 400, 'email, q, or userId is required');
 
-    let user = db.users.find((u) => u.id === userId);
+    let user = userId ? await usersRepo.findById(userId) : null;
     if (!user) {
       const search = String(email || q || userId).toLowerCase();
-      user = db.users.find((u) =>
-        u.role === 'student' && (
-          u.username.toLowerCase().includes(search) ||
-          u.displayName.toLowerCase().includes(search) ||
-          (u.email && u.email.toLowerCase().includes(search))
-        )
-      );
+      const candidates = await usersRepo.search(search);
+      user = candidates.find((u) => u.role === 'student') || null;
     }
     if (!user) return fail(res, 404, 'User not found');
-    const existing = db.courseMembers.find((m) => m.courseId === req.params.id && m.userId === user.id);
-    if (existing) return fail(res, 409, 'User is already a member');
-    const member = {
-      id: crypto.randomUUID(),
-      courseId: req.params.id,
-      userId: user.id,
-      role: 'student' as const,
-      joinedAt: new Date().toISOString()
-    };
-    db.courseMembers.push(member);
-    await writeDb(db);
+    const existingMembers = await coursesRepo.findMembers(req.params.id);
+    if (existingMembers.find((m) => m.userId === user.id)) return fail(res, 409, 'User is already a member');
+    const member = await coursesRepo.addMember(req.params.id, user.id, 'student');
     ok(res, {
       id: member.id,
       userId: member.userId,
@@ -415,54 +385,36 @@ export function createApp() {
   });
 
   app.post('/api/v1/courses/:id/members/batch', async (req, res) => {
-    const db = await readDb();
-    const course = db.courses.find((c) => c.id === req.params.id);
+    const course = await coursesRepo.findById(req.params.id);
     if (!course) return fail(res, 404, 'Course not found');
     const ids = Array.isArray(req.body?.userIds) ? req.body.userIds.map(String) : [];
     if (ids.length === 0) return fail(res, 400, 'userIds is required');
 
-    const now = new Date().toISOString();
+    const existingMembers = await coursesRepo.findMembers(req.params.id);
+    const existingMemberIds = new Set(existingMembers.map((m) => m.userId));
     const added = [];
     for (const userId of ids) {
-      const user = db.users.find((u) => u.id === userId && u.role === 'student');
-      if (!user) continue;
-      const existing = db.courseMembers.find((m) => m.courseId === req.params.id && m.userId === user.id);
-      if (existing) continue;
-      const member = {
-        id: crypto.randomUUID(),
-        courseId: req.params.id,
-        userId: user.id,
-        role: 'student' as const,
-        joinedAt: now
-      };
-      db.courseMembers.push(member);
+      if (existingMemberIds.has(userId)) continue;
+      const user = await usersRepo.findById(userId);
+      if (!user || user.role !== 'student') continue;
+      const member = await coursesRepo.addMember(req.params.id, userId, 'student');
       added.push({ ...member, username: user.username, displayName: user.displayName, email: user.email || user.username });
     }
-    await writeDb(db);
     ok(res, added);
   });
 
   app.get('/api/v1/courses/:id/students/search', async (req, res) => {
-    const db = await readDb();
-    const q = String(req.query.q || '').toLowerCase();
+    const q = String(req.query.q || '');
     const courseId = req.params.id;
-    const course = db.courses.find((c) => c.id === courseId);
+    const course = await coursesRepo.findById(courseId);
     if (!course) return fail(res, 404, 'Course not found');
-    const existingMemberIds = db.courseMembers
-      .filter((m) => m.courseId === courseId)
-      .map((m) => m.userId);
-    const teacherStudentIds = db.teacherStudentLinks
-      .filter((link) => link.teacherId === course.teacherId && link.status === 'active')
-      .map((link) => link.studentId);
+    const existingMembers = await coursesRepo.findMembers(courseId);
+    const existingMemberIds = new Set(existingMembers.map((m) => m.userId));
+    const teacherStudentIds = await usersRepo.findStudentIdsByTeacherId(course.teacherId);
 
-    const students = db.users
-      .filter((u) => u.role === 'student' && teacherStudentIds.includes(u.id) && !existingMemberIds.includes(u.id))
-      .filter((u) =>
-        !q ||
-        u.username.toLowerCase().includes(q) ||
-        u.displayName.toLowerCase().includes(q) ||
-        (u.email && u.email.toLowerCase().includes(q))
-      )
+    const allStudents = q ? await usersRepo.searchExtended(q) : await usersRepo.searchExtended('');
+    const students = allStudents
+      .filter((u) => u.role === 'student' && teacherStudentIds.includes(u.id) && !existingMemberIds.has(u.id))
       .map((u) => ({
         id: u.id,
         username: u.username,
@@ -474,25 +426,22 @@ export function createApp() {
   });
 
   app.get('/api/v1/students/search', async (req, res) => {
-    const db = await readDb();
     const teacherId = currentUserId(req) || 'teacher-1';
-    const q = String(req.query.q || '').toLowerCase();
-    const linkedIds = db.teacherStudentLinks
-      .filter((link) => link.teacherId === teacherId && link.status === 'active')
-      .map((link) => link.studentId);
-    const students = db.users
+    const q = String(req.query.q || '');
+    const linkedIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
+    const allStudents = await usersRepo.searchExtended(q);
+    const students = allStudents
       .filter((u) => u.role === 'student' && linkedIds.includes(u.id))
-      .filter((u) => !q || u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q) || (u.email && u.email.toLowerCase().includes(q)))
       .map(publicUser);
     ok(res, students);
   });
 
   app.delete('/api/v1/courses/:id/members/:memberId', async (req, res) => {
-    const db = await readDb();
-    const before = db.courseMembers.length;
-    db.courseMembers = db.courseMembers.filter((m) => m.id !== req.params.memberId);
-    await writeDb(db);
-    ok(res, { deleted: before !== db.courseMembers.length });
+    const members = await coursesRepo.findMembers(req.params.id);
+    const target = members.find((m) => m.id === req.params.memberId);
+    if (!target) return ok(res, { deleted: false });
+    const deleted = await coursesRepo.removeMember(req.params.id, target.userId);
+    ok(res, { deleted });
   });
 
   app.get('/api/v1/coursewares', async (req, res) => {

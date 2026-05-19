@@ -195,9 +195,9 @@ export default function TeacherCourseDetailView({ courseId, onNavigate, onBack, 
           <p className="text-sm text-gray-400 font-medium">{course.description || t('course.no_description')}</p>
         </div>
         <span className={`ml-auto px-3 py-1 rounded-full text-xs font-bold ${
-          course.status === 'Published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+          course.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
         }`}>
-          {course.status === 'Published' ? t('course.published') : t('course.draft')}
+          {course.status === 'published' ? t('course.published') : t('course.draft')}
         </span>
       </div>
 
@@ -326,11 +326,11 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
           <label className="block text-sm font-bold text-gray-600 mb-1">{t('course_info.status')}</label>
           <select
             value={status}
-            onChange={e => setStatus(e.target.value as 'Published' | 'Draft')}
+            onChange={e => setStatus(e.target.value as 'published' | 'draft')}
             className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
           >
-            <option value="Published">{t('course.published')}</option>
-            <option value="Draft">{t('course.draft')}</option>
+            <option value="published">{t('course.published')}</option>
+            <option value="draft">{t('course.draft')}</option>
           </select>
         </div>
 

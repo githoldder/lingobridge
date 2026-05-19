@@ -1,12 +1,14 @@
-# LingoBridge PRD v4.1 修复、后台管理与下一阶段方向
+# LingoBridge PRD v4.4 Sprint 4 可执行计划
 
-> 更新日期：2026-05-17  
-> 目标：清理前端 mock、修正 live/课时/作业边界、补齐课程编辑与管理后台。  
-> 原则：简洁、可维护；只覆盖关键逻辑；重点写清模块交界点，不展开内部实现细节。
+> 更新日期：2026-05-19  
+> 目标：在 Sprint 3 演示闭环基础上，把真实数据落库、课程/学生同步、PDF 批注稳定、Live 翻页唯一可信、作业双模式和 Admin 验收拆成可直接派发给 agent 的任务。  
+> 原则：简洁、可维护；只覆盖关键逻辑；重点写清模块交界点；每个任务必须能落到具体文件、接口、验证步骤。
 
 ## 0. 当前进度与风险重估
 
-截至 2026-05-17，项目已具备演示骨架，但不能再用“主链路已完全跑通”作为对外口径。最新实测反馈显示：注册登录、角色跳转、PDF 渲染、画笔、课程同步、Live Class 与学生/课件/homework 关系仍存在 P0/P1 缺陷。当前阶段进入 Sprint 3：MVP 闭环修复与数据模型落库。
+截至 2026-05-19，Sprint 3 已形成演示闭环，Sprint 4 进入“真实数据和可验收闭环”阶段。当前执行合同以 `prd.json` 的 `sprint4ExecutionPlan` 为准；agent 派活时必须引用具体 task id，并按 `operations` 逐条执行和验收。
+
+本轮明确后置：`O6：PPTX 策略 Spike`，即 `S4-T28` 到 `S4-T31`。当前不做 `pptx.js`、PPTX 转 PDF/图片评估、Microsoft 365 Embed 或 PPTX MVP 决策。PPTX 可以保留上传入口和清晰提示，但不能阻塞 PDF、课程、作业、Live 和 Admin 主线。
 
 | 模块 | 状态 | 说明 |
 |---|---|---|
@@ -266,44 +268,109 @@ Admin 必须支持：
 | `PATCH` | `/api/v1/live-sessions/:id` | 翻页/状态/录制状态 |
 | `GET` | `/api/v1/admin/*` | 管理端聚合接口，按模块拆分实现 |
 
-## 6. 任务拆分
+## 6. Sprint 4 任务拆分
 
-### P0 必须先修
+详细可执行操作已写入 `prd.json` 的 `sprint4ExecutionPlan.tasks[].operations`。`prd.md` 只保留派工摘要，避免人工读文档时过载。
 
-| ID | 任务 | 交付 |
-|---|---|---|
-| T01 | 清理身份 mock 与游客门禁 | Anna 消失；游客受保护动作弹注册登录提示 |
-| T02 | 固化 live/课时/作业一对一模型 | `lesson_node`、`assignment_node`、`live_session.lessonNodeId` |
-| T03 | 修复学习记录持久化 | 完成状态刷新/跳转不回退 |
-| T04 | 学生端 live 去除教师配置按钮 | 作业/单词映射按钮不在学生端出现 |
-| T05 | 教师 live i18n 审计 | 不出现 `classroom.*` key |
-| T06 | PDF 渲染性能边界 | 使用已上传/转换/缓存的分页资源 |
-| T07 | 画笔交互重做 | 圆珠笔线条、粗细、关闭不清空、清除才清空 |
-| T17 | 真实注册登录 schema | users/sessions/profile/link 表设计和业务代码 |
-| T18 | Admin 独立后台路由 | admin 登录只进入后台，后台不是学生端 |
-| T19 | GuestGate 路由修复 | login/register 不再弹解锁完整功能 |
-| T20 | Live Class 学生选择 | 模糊搜索 + 默认班级学生选择 |
-| T21 | PDF/画笔专项修复 | PDF 可看，画笔不白屏 |
-| T22 | 样例素材与上传回归 | xlsx/pdf/pptx samples + 后端/前端回归测试 |
+### O1：Postgres Schema 与数据访问层
 
-### P1 课程管理闭环
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T01 | 新增 Postgres docker service | done | 已完成，后续只验证 |
+| S4-T02 | 定义业务 schema | done | 已完成，后续只验证 |
+| S4-T03 | 引入数据库连接层 | todo | `DATABASE_URL`、pool、transaction helper、health |
+| S4-T04 | Repository 抽象 | todo | users/courses/assignments/live/files repositories |
+| S4-T05 | Seed 迁移 | todo | admin/teacher/students/demo course 进入 Postgres seed |
+| S4-T06 | JSON DB 兼容策略 | todo | 明确 Postgres 优先，JSON fallback 或废弃 |
 
-| ID | 任务 | 交付 |
-|---|---|---|
-| T08 | 教师课程详情/编辑页 | 课程信息、学生、课件、时间、作业、live |
-| T09 | PDF/PPTX 与 Excel 上传拆分 | 课件和作业上传入口分开 |
-| T10 | 课时节点随机样式 | 创建后稳定显示颜色/样式 |
-| T11 | 学生课程/作业入口统一 | 从课程、schedule、live 都能进同一课时作业 |
+### O2：账号、课程、学生关系
 
-### P2 管理端后台
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T07 | 登录注册接入 Postgres | todo | users/sessions/password_hash/token_hash |
+| S4-T08 | 教师学生关系落库 | todo | `teacher_student_links` 默认学生池 |
+| S4-T09 | 学生模糊搜索 | todo | 姓名、username、email、student_no 搜索 |
+| S4-T10 | 课程成员 CRUD | todo | `course_members` 批量加入、移除、去重 |
+| S4-T11 | 课程编辑保存 | todo | title/description/status/starts_at/ends_at |
 
-| ID | 任务 | 交付 |
-|---|---|---|
-| T12 | Admin 路由与权限 | 仅 admin 可进入 |
-| T13 | 账号管理 | 老师/学生 CRUD 基础能力 |
-| T14 | 课程与资源管理 | 课程、PDF/PPTX、Excel 解析记录 |
-| T15 | Live 与内容记录管理 | live、录播、note、字幕 |
-| T16 | 学习进度管理 | 作业、单词、录音、完成记录 |
+### O3：课程编辑页功能闭环
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T12 | 优化教师课程编辑 UI | todo | 模块清晰、状态收敛、移动端不重叠 |
+| S4-T13 | 上传课件绑定课时 | todo | PDF/PPTX 元数据写入 lesson_node_id；PPTX 不做预览策略 |
+| S4-T14 | 上传作业绑定作业节点 | todo | Excel 导入写 assignment_imports/learning_tasks |
+| S4-T15 | 下载作业表格 | todo | 导出当前 assignment tasks |
+| S4-T16 | 设定 live 时间 | todo | startsAt/endsAt + live scheduled 状态 |
+
+### O4：学生端真实数据
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T17 | 移除学生端静态 schedule | todo | `ScheduleView` 读取真实 student course/live 数据 |
+| S4-T18 | 移除固定 `course-1` fallback | todo | 入口必须带 courseId/lessonNodeId |
+| S4-T19 | 学生课程列表过滤 | todo | 只显示 `course_members` 里该学生加入的课程 |
+| S4-T20 | 学生 live 入口 | todo | 从 active/scheduled live session 进入课堂 |
+| S4-T21 | 学生作业入口 | todo | 根据 assignment_node 读取任务和学习记录 |
+
+### O5：PDF.js 与批注专项
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T22 | 抽离 PDF stage | todo | `PdfViewer` 只负责 PDF 渲染、worker、cache、page count |
+| S4-T23 | 建立 annotation model | todo | text/ink/shape/highlight 与 normalized 坐标 |
+| S4-T24 | Konva annotation layer Spike | todo | 批注层不污染 PDF canvas |
+| S4-T25 | 批注存储接口 | todo | lessonNode + courseware + page annotations |
+| S4-T26 | 打印导出 | todo | 输出课件页 + 批注视图 |
+| S4-T27 | PDF 回归测试 | todo | 翻页、画笔、清除、打印 smoke |
+
+### O6：PPTX 策略 Spike
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T28 | `pptx.js` 翻页验证 | deferred | 后置，不执行 |
+| S4-T29 | PPTX 转 PDF/图片评估 | deferred | 后置，不引入转换依赖 |
+| S4-T30 | Microsoft 365 Embed 决策备忘 | deferred | 后置，不接入 iframe/embed |
+| S4-T31 | PPTX MVP 决策 | deferred | 后置，不阻塞本轮 |
+
+### O7：Live Class 翻页与同步
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T32 | 合并翻页 UI | todo | 删除重复分页，只保留主控制 |
+| S4-T33 | 教师翻页写 live state | todo | `PATCH /live-sessions/:id currentPage` 唯一可信 |
+| S4-T34 | 学生跟随页码 | todo | 学生读取 live currentPage |
+| S4-T35 | PDF 页数边界修复 | todo | pageCount 未加载禁用下一页，页码 clamp |
+
+### O8：Excel 作业双模式
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T36 | 统一作业 row schema | todo | Excel 和手动表单共享 validator |
+| S4-T37 | Excel 导入预览 | todo | 错误行、有效行、确认发布 |
+| S4-T38 | 手动表单 UI | todo | 表格录入 zh/pinyin/translation/taskType |
+| S4-T39 | 手动创建接口 | todo | `POST /assignments/manual` |
+| S4-T40 | 学生作业创建验证 | todo | 两种模式发布后学生端均可见 |
+
+### O9：Admin UI 和验收
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| S4-T41 | Admin 顶栏优化 | todo | 当前用户、刷新、logout、模块导航 |
+| S4-T42 | Admin 账号模块 | todo | 用户搜索、新增、禁用、删除接入真实 DB |
+| S4-T43 | Admin 资源模块 | todo | PDF/PPTX/XLSX/录音/录播可查 |
+| S4-T44 | Admin 学习进度模块 | todo | course/student/lesson 维度查询 |
+| S4-T45 | E2E 三角色回归 | todo | admin logout、teacher create course、student see course |
+
+### 执行顺序
+
+1. S4-T03 到 S4-T06：先完成 Postgres 连接、repository、seed 和 JSON cutover。
+2. S4-T07 到 S4-T21：打通真实账号、课程、成员、学生端可见性。
+3. S4-T32 到 S4-T35：修 Live Class 翻页唯一可信和页码边界。
+4. S4-T22 到 S4-T27：集中突破 PDF.js 与批注。
+5. S4-T36 到 S4-T40：作业双模式收敛到统一任务模型。
+6. S4-T41 到 S4-T45：Admin 和三角色 E2E 收尾验收。
+7. S4-T28 到 S4-T31：后置，不进入本轮 agent 执行。
 
 ## 7. 验收清单
 
@@ -336,3 +403,5 @@ Admin 必须支持：
 - 比较 Teams、腾讯会议、Azure Speech、腾讯云/其他 ASR 的集成成本、权限门槛、费用、数据可控性。
 - 输出“自研课堂 vs 外部会议平台”的取舍表。
 - 做一个最小 adapter demo：课程页创建会议链接、学生点击入会、会后把录播/字幕/出勤元数据回填到课程课时。
+
+PPTX 策略 Spike 另行排期，不和本轮 Sprint 4 主线混在一起。

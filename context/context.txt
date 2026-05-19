@@ -154,3 +154,78 @@ Guardrails for future agents:
 ## Open Strategic Questions
 
 The user asked whether to avoid self-building live class infrastructure and instead integrate Teams or Tencent Meeting APIs; whether TTS quota will run out; whether Azure Speech should be used for TTS with waveform rendering and AI evaluation; and whether a 3B-class ASR/translation/filtering pipeline is reliable. These should be treated as the next product direction discussion, not as already-approved implementation scope.
+
+---
+
+# 文档化转型记录
+
+Date: 2026-05-18
+Action: 从原型开发模式进入文档驱动模式
+
+## 创建的文档体系
+
+路径: `docs/00-project-docs/`
+模板来源: `/Users/caolei/Desktop/LatexCenterTool/packages/thuthesis-manual-writing-kit`
+
+共 7 份国标文档，全部使用 thuthesis LaTeX 模板，XeLaTeX 4-pass 编译通过：
+
+| 缩写 | 文档 | 标准 | 页数 |
+|---|---|---|---|
+| FA | 可行性分析报告 | GB/T 8567—2006 | 7 |
+| SRS | 软件需求规格说明书 | GB/T 9385—2008 | ~10 |
+| HLD | 概要设计说明书 | GB/T 8567—2006, IEEE 1016 | ~10 |
+| LLD | 详细设计说明书 | GB/T 8567—2006, IEEE 1016 | ~6 |
+| TP | 测试计划 | GB/T 8567—2006, IEEE 829 | ~7 |
+| DEP | 部署说明 | GB/T 8567—2006 | ~5 |
+| UM | 用户手册 | GB/T 8567—2006 | ~8 |
+
+共享资源: `shared/fonts/`(~51MB), `shared/cls/`, `shared/refs.bib`
+符号链接: 每个文档的 `templates/fonts` 和 `templates/cls` 指向 `shared/`
+编译: `build_all.sh` 一键编译全部，单份可用 `{DOC}/scripts/build_manual.sh`
+
+## 下一步
+
+各文档目前为骨架（章节标题+TODO），需按 Sprint 3 进度逐步填充内容。
+
+---
+
+# S4-T07~T11 Handler 迁移完成
+
+Date: 2026-05-19
+Action: Auth/课程/成员/搜索 handler 迁移至 repository 调用
+
+## 已迁移 Handler 清单
+
+| Endpoint | File | 迁移前 | 迁移后 |
+|---|---|---|---|
+| POST /auth/login | app.ts:155 | usersRepo.verifyPassword (已迁) | 保持 |
+| POST /auth/register | app.ts:174 | readDb/writeDb teacherStudentLinks | usersRepo.create + addTeacherStudentLink + findDefaultTeacherId |
+| GET /users/me | app.ts:209 | usersRepo.findById (已迁) | 保持 |
+| GET /courses | app.ts:218 | readDb (保留 JSON 聚合统计) | 保留，followup T18 再改 |
+| POST /courses | app.ts:236 | coursesRepo.create + addMember (已迁) | 保持 |
+| PATCH /courses/:id | app.ts:341 | coursesRepo.update (已迁) | 保持 |
+| GET /courses/:id/members | app.ts:351 | coursesRepo.findMembers (已迁) | 保持 |
+| POST /courses/:id/members | app.ts:370 | coursesRepo + usersRepo (已迁) | 保持 |
+| POST /courses/:id/members/batch | app.ts:397 | coursesRepo + usersRepo (已迁) | 保持 |
+| DELETE /courses/:id/members/:memberId | app.ts:457 | coursesRepo.removeMember (已迁) | 保持 |
+| GET /courses/:id/students/search | app.ts:406 | readDb 直接 JSON | coursesRepo.findById + findMembers + usersRepo.findStudentIdsByTeacherId + searchExtended |
+| GET /students/search | app.ts:437 | usersRepo.search | usersRepo.searchExtended (新增 email/student_no 搜索) |
+
+## 修复的严重问题
+
+1. app.ts 重复 import 15 次 usersRepo/coursesRepo — 已清理
+2. app.ts login handler 多余 `});` 导致后续代码在错误作用域 — 已修复
+3. register handler teacherStudentLinks 通过 readDb/writeDb 直接操作 — 迁移至 repo
+
+## 新增 Repository 方法
+
+- usersRepo.addTeacherStudentLink(teacherId, studentId, className)
+- usersRepo.findDefaultTeacherId()
+- usersRepo.searchExtended(q) — 支持 email 和 student_no (via LEFT JOIN student_profiles)
+
+## 回归结果
+
+- npm run lint: PASSED
+- Module import validation: PASSED
+- JSON parse prd.json: PASSED
+- npm run backend:test: SKIPPED (sandbox EPERM on listen 127.0.0.1, 需本地手动验证)
