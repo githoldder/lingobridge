@@ -261,7 +261,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState(() => propCourseId || localStorage.getItem('lingobridge_courseId') || 'course-1');
+  const [selectedCourseId, setSelectedCourseId] = useState(() => propCourseId || localStorage.getItem('lingobridge_courseId') || '');
   const [activeLessonNodeId, setActiveLessonNodeId] = useState<string | undefined>(propLessonNodeId);
 
   // Task state

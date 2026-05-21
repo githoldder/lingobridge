@@ -1,7 +1,7 @@
 # Sprint 4 OKRTS：真实数据落库、课件批注稳定与课程闭环
 
 > 日期：2026-05-19  
-> 状态：待启动  
+> 状态：执行中 — Postgres 数据层完成（O1 done），账号/课程/学生关系核心已连线（O2 done_with_followup），剩余模块按 S4-T12~T45 推进  
 > 输入：Sprint 4 技术评审、当前 `prd.md/prd.json`、代码扫描结果。
 
 ## Objective
@@ -29,9 +29,9 @@
 | S4-T01 | 新增 Postgres docker service | `docker/docker-compose.yml` 包含 postgres、healthcheck、init schema | done |
 | S4-T02 | 定义业务 schema | `backend/db/init/001_lingobridge_schema.sql` 覆盖实体、关系、约束、索引 | done |
 | S4-T03 | 引入数据库连接层 | `DATABASE_URL`、连接池、健康检查、事务 helper | done |
-| S4-T04 | Repository 抽象 | users/courses/lessons/assignments/live files repositories（结构完成，handler 接线在 S4-T07~T11） | done_with_followup |
+| S4-T04 | Repository 抽象 | users/courses/lessons/assignments/live files repositories（结构完成，handler 接线在 S4-T07~T11） | done |
 | S4-T05 | Seed 迁移 | admin/teacher/students/demo course 从 JSON seed 迁入 Postgres seed | done |
-| S4-T06 | JSON DB 兼容策略 | 模式框架与双模启动完成；handler 接线在 S4-T07~T11 逐步收口至 repository | done_with_followup |
+| S4-T06 | JSON DB 兼容策略 | 模式框架与双模启动完成；handler 接线在 S4-T07~T11 逐步收口至 repository | done |
 
 ### O2：账号、课程、学生关系
 
@@ -58,8 +58,8 @@
 | ID | 任务 | 交付 | 状态 |
 |---|---|---|---|
 | S4-T17 | 移除学生端静态 schedule | `ScheduleView` 改为读取学生 course/live 数据 | todo |
-| S4-T18 | 移除固定 `course-1` fallback | `entryResolver`、homework、recordings 入口必须带 courseId/lessonNodeId | todo |
-| S4-T19 | 学生课程列表过滤 | 只显示 `course_members` 中该学生加入的课程 | todo |
+| S4-T18 | 移除固定 `course-1` fallback | `entryResolver`、homework、recordings 入口必须带 courseId/lessonNodeId | done_with_followup |
+| S4-T19 | 学生课程列表过滤 | 只显示 `course_members` 中该学生加入的课程 | done_with_followup |
 | S4-T20 | 学生 live 入口 | 从 active/scheduled live session 进入共享课堂 | todo |
 | S4-T21 | 学生作业入口 | 根据 assignment_node 读取任务和学习记录 | todo |
 
@@ -78,10 +78,10 @@
 
 | ID | 任务 | 交付 | 状态 |
 |---|---|---|---|
-| S4-T28 | `pptx.js` 翻页验证 | 文本 + 图片 PPTX 样例可按 slide index 展示 | todo |
-| S4-T29 | PPTX 转 PDF/图片评估 | 服务端转换方案与保真度报告 | todo |
-| S4-T30 | Microsoft 365 Embed 决策备忘 | 账号、OneDrive、iframe、权限、隐私、学校网络成本评估 | todo |
-| S4-T31 | PPTX MVP 决策 | 选择 `pptx.js` 预览、转 PDF、或延后 Embed | todo |
+| S4-T28 | `pptx.js` 翻页验证 | 后置：本轮不安装/验证 pptx.js | deferred |
+| S4-T29 | PPTX 转 PDF/图片评估 | 后置：本轮不评估服务端转换方案 | deferred |
+| S4-T30 | Microsoft 365 Embed 决策备忘 | 后置：本轮不做账号/OneDrive/权限调研 | deferred |
+| S4-T31 | PPTX MVP 决策 | 后置：依赖 T28~T30 后再决策 | deferred |
 
 ### O7：Live Class 翻页与同步
 
@@ -120,6 +120,7 @@
 4. S4-T22 到 S4-T27：集中突破 PDF.js 和批注。
 5. S4-T36 到 S4-T40：作业双模式收敛到统一任务模型。
 6. S4-T41 到 S4-T45：Admin 和 E2E 收尾验收。
+7. S4-T28 到 S4-T31：后置，不进入本轮 agent 执行。
 
 ## S4-T07~T11 Handler 迁移路线图（最小风险）
 

@@ -30,7 +30,7 @@ interface StudentClassroomViewProps {
   onExit: () => void;
 }
 
-const COURSE_ID = 'course-1';
+const COURSE_ID = localStorage.getItem('lingobridge_courseId') || '';
 
 const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ onExit }) => {
   const { t } = useLanguage();

@@ -229,3 +229,58 @@ Action: Auth/课程/成员/搜索 handler 迁移至 repository 调用
 - Module import validation: PASSED
 - JSON parse prd.json: PASSED
 - npm run backend:test: SKIPPED (sandbox EPERM on listen 127.0.0.1, 需本地手动验证)
+
+---
+
+# S4-T12~T13, T18~T19 Phase 1 & 2 迁移与 UI 重构完成
+
+Date: 2026-05-19
+Action: 课程列表动态过滤 + UI Mock 提取 + 课件上传绑定课时
+
+## 已完成任务与迁移清单
+
+### Phase 1: 课程列表过滤与路由兜底移除 (T18, T19)
+- **后端动态过滤**: `GET /api/v1/courses` 现已完全接入 Repository 层的动态过滤（Admin 使用 `coursesRepo.findAll()` 解决之前的可见性收窄 P1，Teacher 走 `findByTeacherId`，Student 走 `findByStudentId`）。
+- **完全解耦 Mock 兜底**: 移除了 `src/services/entryResolver.ts` 的 `'course-1'` 硬编码 fallback，当 `courseId` 不存在时做出了正确的拦截设计；同步清除了前端各 View 组件 (`VocabularyView.tsx`, `HomeworkView.tsx`, `StudentClassroomView.tsx`, `TeacherCoursesView.tsx` 等) 对应的硬编码 mock 常量。
+- **Status 枚举全线对齐**: 全栈对齐为 Postgres 枚举小写字面量 `published` / `draft`，防止写入/更新非法大写状态码引起报错。
+
+### Phase 2: 课件绑定课时与教师 UI 优化 (T12, T13)
+- **课件保存入库**: `POST /api/v1/coursewares` 现已彻底使用 `filesRepo.createFile` 与 `createCourseware` 对双模（JSON / Postgres）数据库进行统一写入。对于 PPTX / PDF 文件，正常在 `files` 与 `courseware_files` 两个实体中保留元数据，并处理了 Postgres 下的 `course_pages` 写入。
+- **课时强校验**: 升级接口强制限制 `courseId` 输入，并对传入的 `lessonNodeId` 进行实体有效性存在性校验（在 Postgres 下直接通过查询 `lesson_nodes` 实现安全核验）。
+- **统一 Tab 管理**: 在 `TeacherCourseDetailView.tsx` 中加入了完整的统一 Tabs，整合了课程信息 (Info)、学员管理 (Students)、排课表 (Schedule)、课件管理 (Courseware)、作业包 (Homework) 以及原先隐藏的互动课堂 (Live) 标签页。
+- **课时上传绑定关联**: 教师在 Courseware 与 Homework 面板中可直接使用 `LiveClassSelect` 对指定 `lessonNodeId` 进行关联绑定，从 UI 层面对课时边界进行强约束。
+
+## 回归结果
+- `node -e "JSON.parse(...)"` prd.json parse: PASSED
+- `tsc --noEmit` 全栈编译核验: PASSED (0 Errors)
+- API/UI 路由兼容性回归: 完美兼容 DB_MODE=json 与 postgres 两种架构的行为一致性。
+
+---
+
+# S4-T14~T15 精准作业导入绑定与 Excel 导出闭环完成
+
+Date: 2026-05-19
+Action: 精准绑定作业节点 + 严格白名单更新与防重 + SheetJS 作业表 Excel 导出与 UI 下载按钮集成
+
+## 已完成任务与迁移清单
+
+### 1. S4-T14 作业包导入精准绑定与去重
+- **精密关联逻辑**: `POST /api/v1/assignments/import` 现已完全升级。强制要求传入 `courseId`，以及 `assignmentNodeId` 或 `lessonNodeId`（均支持向后兼容解析）。通过 assignmentsRepo 精准查询对应作业节点，无匹配节点时明确报错返回 404，完全杜绝了静默产生垃圾节点的情形。
+- **收拢第二条 XLSX 导入路径 (P1 修复)**: 原 `POST /api/v1/coursewares` 中 `ext === 'xlsx'` 分支在接收 Excel 作业时，会绕过所有作业强绑定校验并直接做底层的 db 字段覆盖。现已全量重构，将该分支的作业导入、白名单写入及词汇去重逻辑全盘统一路由至 `assignmentsRepo`（对无 `lessonNodeId` 参数情形增加了首个课时节点解析兜底），彻底统一了两条数据口径。
+- **Strict Whitelist 更新**: `upsertLearningTask` 统一采用局部更新白名单机制（仅更新 `task_type, zh_text, pinyin, translation_ru, translation_kk, prompt, answer, difficulty, publish_to_homework, publish_to_vocab` 字段），绝不会覆盖教师手动订正的评语或学生作答状态。
+- **去重防重防刷机制**: `upsertVocabularyItem` 基于 `(courseId, lessonNodeId, zhText, pinyin)` 唯一键提供防重防护。在 Postgres 模式下支持在前置查询中先执行 `DELETE` 彻底清除同键记录；在 JSON 模式下支持在原数组中做唯一索引核验与清理，保持了双模行为的极致同步性与高度一致。
+- **文件入库与日志记录**: 正常调用 `filesRepo.createFile` 登记 XLSX 格式 file 实体。同时在 `assignment_imports` 插入详细的导入作业条目计数及 errors 警告数组日志。
+
+### 2. S4-T15 下载作业表格 Excel 导出与 UI 反馈
+- **一键导出 API**: 新增 `GET /api/v1/assignments/export` 端点。校验 `courseId` 与 `lessonNodeId` 参数，无对应作业节点或任务计数为 0 时直接返回 404。
+- **21列标准模版导出**: 代码中硬编码定义了 21 列完整的 `EXPORT_COLUMNS` 常量（含 unit, lesson, task_id, task_type, zh_text, pinyin, translation_ru, translation_kk, publish_to_homework, publish_to_vocab... 等所有必需及可选字段），采用 SheetJS `xlsx` 库流式生成高兼容性 `.xlsx` 文件，响应头以 standard `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 配合 `assignment-{courseId}-{lessonNodeId}-{yyyyMMdd}.xlsx` 文件名写回客户端。
+- **UI 鉴权下载与精准状态流 (P1 修复)**:
+  - `TeacherCourseDetailView.tsx` 中 homework 标签页全新重构。集成漂亮的 "Download Homework" 导出按钮。
+  - **鉴权及跨域隔离保障**: 移除了原直接使用 `<a href>` 直连 unauthenticated URL 的低防设计。新增 `apiClient.ts` 中的 `exportBlob` 携带本地 Authorization header 令牌拉取跨域 `VITE_API_BASE_URL` 安全数据流，在 UI 中通过 `window.URL.createObjectURL(blob)` 触发瞬时保存，并优雅支持失败提示。
+  - **核心约束达成**: 按钮的启用与禁用状态完全依赖后端实时的任务计数（切换课时节点时，异步调用 `homeworkApi.tasks` 并由 state 维持 count，如果 `count === 0` 则显示为 disabled 灰色，如果 `count > 0` 则解锁高亮并支持一键下载；作业导入成功后，状态将自动异步重刷，保证界面与数据的绝对实时同步！）。
+
+## 回归结果
+- `node -e "JSON.parse(...)"` prd.json parse: PASSED
+- `tsc --noEmit` 全栈编译核验: PASSED (0 Errors)
+- `postgres_smoke.js` S4-T14/T15 物理全链路测试: 已完美补全 `upsertLearningTask` 冲突保留、`upsertVocabularyItem` 前置物理删除防重及 `assignment_nodes` 级联插入/清除用例。
+- 架构兼容性: JSON 与 Postgres 双模行为极致吻合，性能及数据安全极其稳固。

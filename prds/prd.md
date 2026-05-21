@@ -278,20 +278,20 @@ Admin 必须支持：
 |---|---|---|---|
 | S4-T01 | 新增 Postgres docker service | done | 已完成，后续只验证 |
 | S4-T02 | 定义业务 schema | done | 已完成，后续只验证 |
-| S4-T03 | 引入数据库连接层 | todo | `DATABASE_URL`、pool、transaction helper、health |
-| S4-T04 | Repository 抽象 | todo | users/courses/assignments/live/files repositories |
-| S4-T05 | Seed 迁移 | todo | admin/teacher/students/demo course 进入 Postgres seed |
-| S4-T06 | JSON DB 兼容策略 | todo | 明确 Postgres 优先，JSON fallback 或废弃 |
+| S4-T03 | 引入数据库连接层 | done | `DATABASE_URL`、pool、transaction helper、health |
+| S4-T04 | Repository 抽象 | done | users/courses/assignments/live/files repositories |
+| S4-T05 | Seed 迁移 | done | admin/teacher/students/demo course 进入 Postgres seed |
+| S4-T06 | JSON DB 兼容策略 | done | 明确 Postgres 优先，JSON fallback 或废弃 |
 
 ### O2：账号、课程、学生关系
 
 | ID | 任务 | 状态 | 派工重点 |
 |---|---|---|---|
-| S4-T07 | 登录注册接入 Postgres | todo | users/sessions/password_hash/token_hash |
-| S4-T08 | 教师学生关系落库 | todo | `teacher_student_links` 默认学生池 |
-| S4-T09 | 学生模糊搜索 | todo | 姓名、username、email、student_no 搜索 |
-| S4-T10 | 课程成员 CRUD | todo | `course_members` 批量加入、移除、去重 |
-| S4-T11 | 课程编辑保存 | todo | title/description/status/starts_at/ends_at |
+| S4-T07 | 登录注册接入 Postgres | done_with_followup | users/sessions/password_hash/token_hash |
+| S4-T08 | 教师学生关系落库 | done_with_followup | `teacher_student_links` 默认学生池 |
+| S4-T09 | 学生模糊搜索 | done_with_followup | 姓名、username、email、student_no 搜索 |
+| S4-T10 | 课程成员 CRUD | done_with_followup | `course_members` 批量加入、移除、去重 |
+| S4-T11 | 课程编辑保存 | done_with_followup | title/description/status/starts_at/ends_at |
 
 ### O3：课程编辑页功能闭环
 
@@ -308,8 +308,8 @@ Admin 必须支持：
 | ID | 任务 | 状态 | 派工重点 |
 |---|---|---|---|
 | S4-T17 | 移除学生端静态 schedule | todo | `ScheduleView` 读取真实 student course/live 数据 |
-| S4-T18 | 移除固定 `course-1` fallback | todo | 入口必须带 courseId/lessonNodeId |
-| S4-T19 | 学生课程列表过滤 | todo | 只显示 `course_members` 里该学生加入的课程 |
+| S4-T18 | 移除固定 `course-1` fallback | done_with_followup | 入口必须带 courseId/lessonNodeId |
+| S4-T19 | 学生课程列表过滤 | done_with_followup | 只显示 `course_members` 里该学生加入的课程 |
 | S4-T20 | 学生 live 入口 | todo | 从 active/scheduled live session 进入课堂 |
 | S4-T21 | 学生作业入口 | todo | 根据 assignment_node 读取任务和学习记录 |
 
@@ -372,6 +372,61 @@ Admin 必须支持：
 6. S4-T41 到 S4-T45：Admin 和三角色 E2E 收尾验收。
 7. S4-T28 到 S4-T31：后置，不进入本轮 agent 执行。
 
+## 6.1 候选 Sprint：语音演示与中俄双语字幕 Spike
+
+> 状态：`proposed_after_sprint4_core_green`  
+> 前置条件：先修复当前 TypeScript errors、`backend:test` 失败和 dirty task 状态；Sprint 4 主链路至少达到 `npm run lint`、`npm run build`、`npm run backend:test` green。  
+> 原则：语音能力服务演示，不反过来打断课程、作业、Live、PDF、Admin 主线。
+
+### Objective
+
+在不打断 Sprint 4 课程/作业/Live/PDF/Admin 主链路的前提下，为上台演示提供高音质、低翻车风险的中俄语音播报和可选实时字幕验证。
+
+### Key Results
+
+| KR | 指标 | 验收口径 |
+|---|---|---|
+| KR-SD1 | 演示 TTS 稳定 | 中文和俄语演示语句均提前生成 MP3，本地/后端缓存播放；断网时核心播报仍可演示 |
+| KR-SD2 | Provider 可替换 | 后端 TTS facade 支持至少一个国内中文 provider 和一个俄语 provider，前端不直接依赖厂商 SDK |
+| KR-SD3 | 额度与限流风险透明 | 记录火山、百度、ElevenLabs、Azure、DeepL 的官方额度、认证门槛、并发/限速风险和控制台实测结果 |
+| KR-SD4 | 实时字幕 Spike 可回退 | ASR/翻译字幕 demo 支持实时模式和预录音频 fallback；实时失败不影响主产品演示 |
+| KR-SD5 | 不污染 Sprint 4 主线 | 所有语音 Spike 代码通过 feature flag 或 `scripts/demo` 隔离，不改坏课程、作业、Live、PDF 和 Admin E2E |
+
+### 技术评审结论
+
+| 方案 | 判断 |
+|---|---|
+| 火山引擎/豆包语音 | 中文 TTS 和 ASR Spike 首选候选，但额度需按官方控制台复核。官方豆包语音试用口径包含 TTS 约 20000 字符/半年、流式 ASR 约 20 小时/半年；不能写成 100 万字符/月或 500 小时/月 |
+| 百度智能云语音 | 中文 TTS/ASR 可作为国内备选。免费资源按认证状态和接口类型区分，个人账号常见并非 50 万字符/月；俄语能力需单独实测 |
+| ElevenLabs | 俄语音质候选，适合网页或脚本提前生成 MP3；免费额度、署名和商用限制必须以当前 pricing/account 为准 |
+| Azure Speech | 中文/俄语质量和多语言生态稳，官方 F0 常见口径为 TTS 0.5M neural characters/month、STT 5 audio hours/month；国内网络建议预生成 |
+| DeepL | 俄语翻译候选；官方 DeepL API Free 为 500000 characters/month，不是每日 5000 |
+| Edge TTS / Browser TTS / 本地开源 TTS | 不作为上台演示主链路。可保留 browser fallback 兜底，但音质、限流、算力和稳定性不足以承诺演示级 |
+
+### Non-goals
+
+- 不在 Sprint 4 内把实时 ASR/翻译字幕接入正式课堂主链路。
+- 不承诺任何云厂商永久免费、不限流或无边界并发。
+- 不使用 Edge TTS、浏览器 TTS 或本地开源 TTS 作为上台演示主音源。
+- 不把 Python 字幕 demo 当作正式产品功能交付。
+
+### Task Breakdown
+
+| ID | 任务 | 状态 | 派工重点 |
+|---|---|---|---|
+| SD-T01 | TTS provider 官方额度与控制台实测审计 | todo_after_sprint4_core_green | 复核火山、百度、ElevenLabs、Azure 的额度、认证、并发、商用限制；输出 provider audit |
+| SD-T02 | 离线生成中俄 MP3 演示资产 | todo_after_sprint4_core_green | 建立 `scripts/demo/tts-manifest.json` 和生成脚本；音频写入缓存目录；不提交真实密钥 |
+| SD-T03 | TTS facade 多 provider hardening | todo_after_sprint4_core_green | 后端接 Volcengine/Baidu/Azure/ElevenLabs adapter 或 stub；前端继续只调 LingoBridge TTS API |
+| SD-T04 | ASR/翻译 provider 审计与最小字幕 demo | todo_after_sprint4_core_green | 火山/Azure/百度 ASR 与火山/DeepL 翻译只做独立 demo；必须有预录音频 fallback |
+| SD-T05 | 语音演示 runbook 与 E2E smoke | todo_after_sprint4_core_green | 写演示前检查、断网 fallback、音量/设备检查；补 demo audio smoke |
+
+### 执行顺序
+
+1. 先做离线 TTS 预生成和缓存播放，解决上台音质和断网风险。
+2. 再做 provider adapter hardening，把火山/百度/Azure/ElevenLabs 放到同一 facade 后面。
+3. 最后做 ASR + 翻译 + 字幕独立 demo，不进入正式课堂主链路。
+4. 完成后只把成熟能力并入正式产品；实时字幕若不稳定，保留为演示 Spike 和后续版本候选。
+
 ## 7. 验收清单
 
 - [x] 学生账号默认不再显示 Anna，登录后显示测试账号个人信息。
@@ -394,14 +449,15 @@ Admin 必须支持：
 下一阶段不应继续扩大自研 live 课堂，而应先做技术路线决策：
 
 1. 直播课堂是否改为“外部会议平台集成优先”：Teams 或腾讯会议负责音视频会议、入会链接、录制/转写能力，本系统负责课程、作业、学习记录、权限与后台。
-2. TTS 是否采用 Azure Speech 作为主 provider：后端保留 provider adapter，前端只调用本项目 TTS facade，避免以后更换服务影响页面。
+2. TTS 上台演示是否采用“云服务预生成 MP3 + 本地缓存播放”：结论是采用。中文候选火山/百度，俄语候选 ElevenLabs/Azure；后端保留 provider adapter，前端只调用本项目 TTS facade，避免以后更换服务影响页面。
 3. 录音波形与 AI 评测应拆开：波形图本地生成或脚本预处理，AI 评测走异步任务，不阻塞录音提交。
-4. ASR/实时翻译不应在 MVP 中直接押注自部署大模型。优先用托管 ASR/翻译服务跑通 pipeline，再评估本地模型在成本、延迟、准确率和运维上的收益。
+4. ASR/实时翻译不应在 MVP 中直接押注自部署大模型，也不应在 Sprint 4 内接入正式课堂主链路。优先用托管 ASR/翻译服务做独立 Spike，并提供预录音频/预生成字幕 fallback，再评估是否进入后续版本。
 
-建议下一轮 PRD 只做一个 Spike：
+建议下一轮 PRD 保留两个互不阻塞的 Spike：
 
 - 比较 Teams、腾讯会议、Azure Speech、腾讯云/其他 ASR 的集成成本、权限门槛、费用、数据可控性。
 - 输出“自研课堂 vs 外部会议平台”的取舍表。
 - 做一个最小 adapter demo：课程页创建会议链接、学生点击入会、会后把录播/字幕/出勤元数据回填到课程课时。
+- 语音演示与字幕 Spike：先用火山/百度/ElevenLabs/Azure 预生成 MP3，后做 ASR + 翻译 + 双语字幕独立 demo；不承诺未经官方核验的免费额度或“不限流”。
 
 PPTX 策略 Spike 另行排期，不和本轮 Sprint 4 主线混在一起。

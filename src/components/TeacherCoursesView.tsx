@@ -19,7 +19,7 @@ interface TeacherCoursesViewProps {
 const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onOpenCourse }) => {
   const { t } = useLanguage();
   const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState('course-1');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -29,7 +29,7 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
     try {
       const data = await coursesApi.list();
       setCourses(data);
-      setSelectedCourseId(data[0]?.id || 'course-1');
+      setSelectedCourseId(data[0]?.id || '');
     } catch (error: any) {
       setMessage(error.message || t('course.load_failed'));
     } finally {

@@ -387,7 +387,7 @@ const VocabularyView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || 'course-1');
+  const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || '');
 
   useEffect(() => {
     coursesApi.list().then(setCourses).catch(() => {});

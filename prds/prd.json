@@ -1033,18 +1033,18 @@
     },
     {
       "id": "S02",
-      "question": "TTS 是否会因为免费额度或频率限制影响测试？",
-      "prdDecisionNeeded": "需要 provider adapter、缓存、用量监控和降级策略。不要让前端直接依赖某个云厂商。"
+      "question": "TTS 是否会因为免费额度、频率限制或上台网络波动影响演示？",
+      "prdDecisionNeeded": "结论更新：上台演示不依赖实时 TTS API。中文优先火山/百度，俄语优先 ElevenLabs/Azure，全部提前生成 MP3 并缓存；云 API 只作为预生成工具或后端 provider，不直接绑在前端交互上。火山/百度/ElevenLabs/Azure 的免费额度必须按控制台和官方文档复核，不能在 PRD 中承诺“永久免费、不限流”。"
     },
     {
       "id": "S03",
       "question": "是否使用 Azure Speech TTS，并用脚本生成波形图，下方附 AI 评测？",
-      "prdDecisionNeeded": "建议采用：Azure Speech 作为首个云 TTS provider；波形本地/后端异步生成；AI 评测异步写入 learning_record 扩展字段。"
+      "prdDecisionNeeded": "建议保留 provider adapter 思路，但不再把 Azure 写成唯一主 provider。短期采用可插拔 TTS facade：Volcengine/Baidu/Azure/ElevenLabs 都可作为生成器；演示音频以本地 MP3 缓存为准。波形和 AI 评测继续拆为异步后处理，不阻塞录音提交。"
     },
     {
       "id": "S04",
-      "question": "ASR/实时翻译/二层文本过滤/人工核验 pipeline 是否可靠？",
-      "prdDecisionNeeded": "MVP 不直接自部署大模型作为唯一链路。先用托管 ASR/翻译验证数据流，再评估本地 3B 级模型是否满足延迟、准确率和运维成本。"
+      "question": "ASR/实时翻译/双语字幕 pipeline 是否可靠？",
+      "prdDecisionNeeded": "MVP 主线不接入实时字幕。候选 Sprint 只做独立 Spike：火山 ASR + 火山或 DeepL 翻译 + 简单字幕 UI，并必须提供预录音频/预生成字幕 fallback。火山 ASR 试用额度按官方豆包语音口径约为 20 小时/半年，不能按“500 小时/月、不限流”写入承诺。"
     },
     {
       "id": "S05",
@@ -1111,6 +1111,22 @@
         "PPTX strategy spike S4-T28 to S4-T31"
       ],
       "output": "按 prd.json sprint4ExecutionPlan.operations 逐项执行，并在完成后更新 task status。"
+    },
+    {
+      "id": "N07",
+      "title": "Candidate Sprint: speech demo and subtitle spike",
+      "scope": [
+        "上台演示 TTS 采用预生成 MP3，不实时依赖云 API",
+        "中文 provider 候选：火山/百度；俄语 provider 候选：ElevenLabs/Azure",
+        "实时 ASR + 翻译 + 双语字幕只做独立 Spike，不进入 Sprint 4 主链路",
+        "所有 provider 额度、限流、认证和商用限制必须以官方文档和控制台实测为准"
+      ],
+      "blockedBy": [
+        "当前 TS errors 修复",
+        "backend:test 恢复 green",
+        "Sprint 4 课程/作业/Live/PDF/Admin 主链路完成核心验收"
+      ],
+      "output": "speechDemoSprintPlan 中 SD-T01 到 SD-T05 的审计、脚本、adapter、字幕 demo 和 runbook。"
     }
   ],
   "adminModules": [
@@ -1557,7 +1573,7 @@
         "objectiveId": "O4",
         "objective": "学生端真实数据",
         "title": "移除固定 course-1 fallback",
-        "status": "todo",
+        "status": "done_with_followup",
         "suggestedAgent": "frontend",
         "operations": [
           "扫描 entryResolver、homework、recordings、classroom 入口中的 course-1",
@@ -1577,7 +1593,7 @@
         "objectiveId": "O4",
         "objective": "学生端真实数据",
         "title": "学生课程列表过滤",
-        "status": "todo",
+        "status": "done_with_followup",
         "suggestedAgent": "backend/frontend",
         "operations": [
           "后端课程列表按 course_members 过滤 student",
@@ -2098,6 +2114,175 @@
           "三角色主链路通过",
           "失败项有明确复现步骤",
           "报告引用 prd.json task id"
+        ]
+      }
+    ]
+  },
+  "speechDemoSprintPlan": {
+    "id": "speech-demo-spike",
+    "title": "候选 Sprint：语音演示与中俄双语字幕 Spike",
+    "status": "proposed_after_sprint4_core_green",
+    "updatedAt": "2026-05-21",
+    "objective": "在不打断 Sprint 4 课程/作业/Live/PDF/Admin 主链路的前提下，为上台演示提供高音质、低翻车风险的中俄语音播报和可选实时字幕验证。",
+    "nonGoals": [
+      "不在 Sprint 4 内把实时 ASR/翻译字幕接入正式课堂主链路",
+      "不承诺任何云厂商永久免费、不限流或无边界并发",
+      "不使用 Edge TTS、浏览器 TTS 或本地开源 TTS 作为上台演示主音源",
+      "不把 Python 字幕 demo 当作正式产品功能交付"
+    ],
+    "keyResults": [
+      {
+        "id": "KR-SD1",
+        "metric": "演示 TTS 稳定",
+        "acceptance": "中文和俄语演示语句均提前生成 MP3，本地/后端缓存播放；断网时核心播报仍可演示。"
+      },
+      {
+        "id": "KR-SD2",
+        "metric": "Provider 可替换",
+        "acceptance": "后端 TTS facade 支持至少一个国内中文 provider 和一个俄语 provider，前端不直接依赖厂商 SDK。"
+      },
+      {
+        "id": "KR-SD3",
+        "metric": "额度与限流风险透明",
+        "acceptance": "文档记录火山、百度、ElevenLabs、Azure、DeepL 的官方额度、认证门槛、并发/限速风险和控制台实测结果。"
+      },
+      {
+        "id": "KR-SD4",
+        "metric": "实时字幕 Spike 可回退",
+        "acceptance": "ASR/翻译字幕 demo 支持实时模式和预录音频 fallback；实时失败不影响主产品演示。"
+      },
+      {
+        "id": "KR-SD5",
+        "metric": "不污染 Sprint 4 主线",
+        "acceptance": "所有语音 Spike 代码通过 feature flag 或 scripts/demo 隔离，不改坏课程、作业、Live、PDF 和 Admin E2E。"
+      }
+    ],
+    "providerAudit": [
+      {
+        "provider": "火山引擎/豆包语音",
+        "verdict": "中文 TTS 和 ASR Spike 首选候选，但额度需按官方控制台复核。官方豆包语音试用口径包含 TTS 约 20000 字符/半年、流式 ASR 约 20 小时/半年；不能写成 100 万字符/月或 500 小时/月。"
+      },
+      {
+        "provider": "百度智能云语音",
+        "verdict": "中文 TTS/ASR 可作为国内备选。免费资源按认证状态和接口类型区分，个人账号常见并非 50 万字符/月；俄语能力需单独实测。"
+      },
+      {
+        "provider": "ElevenLabs",
+        "verdict": "俄语音质候选，适合网页或脚本提前生成 MP3；免费额度、署名和商用限制必须以当前 pricing/account 为准。"
+      },
+      {
+        "provider": "Azure Speech",
+        "verdict": "中文/俄语质量和多语言生态稳，官方 F0 常见口径为 TTS 0.5M neural characters/month、STT 5 audio hours/month；国内网络建议预生成。"
+      },
+      {
+        "provider": "DeepL",
+        "verdict": "俄语翻译候选；官方 DeepL API Free 为 500000 characters/month，不是每日 5000。"
+      },
+      {
+        "provider": "Edge TTS / Browser TTS / 本地开源 TTS",
+        "verdict": "不作为上台演示主链路。可保留 browser fallback 兜底，但音质、限流、算力和稳定性不足以承诺演示级。"
+      }
+    ],
+    "executionOrder": [
+      "前置条件：先修复当前 TS errors、backend:test 失败和 dirty task 状态；Sprint 4 主链路至少达到 lint/build/backend:test green。",
+      "先做离线 TTS 预生成和缓存播放，解决上台音质和断网风险。",
+      "再做 provider adapter hardening，把火山/百度/Azure/ElevenLabs 放到同一 facade 后面。",
+      "最后做 ASR + 翻译 + 字幕独立 demo，不进入正式课堂主链路。"
+    ],
+    "tasks": [
+      {
+        "id": "SD-T01",
+        "objectiveId": "SD-O1",
+        "objective": "演示 TTS 稳定化",
+        "title": "TTS provider 官方额度与控制台实测审计",
+        "status": "todo_after_sprint4_core_green",
+        "suggestedAgent": "auditor",
+        "operations": [
+          "复核火山、百度、ElevenLabs、Azure 的 TTS 官方额度、认证门槛、并发/QPS 和商用限制",
+          "记录火山/百度/ElevenLabs/Azure 的控制台开通步骤和实测生成结果",
+          "把“永久免费、不限流、不会封 IP”等绝对表述降级为风险项",
+          "输出 docs/01-reference/speech-provider-audit.md"
+        ],
+        "acceptance": [
+          "每个 provider 有官方链接、账号状态、额度、并发、失败风险",
+          "不再出现未经核验的 100万字符/月、500小时/月等承诺",
+          "明确上台演示优先使用预生成 MP3"
+        ]
+      },
+      {
+        "id": "SD-T02",
+        "objectiveId": "SD-O1",
+        "objective": "演示 TTS 稳定化",
+        "title": "离线生成中俄 MP3 演示资产",
+        "status": "todo_after_sprint4_core_green",
+        "suggestedAgent": "backend",
+        "operations": [
+          "定义 scripts/demo/tts-manifest.json，列出演示中文和俄语句子、voice、provider、输出文件名",
+          "实现 scripts/demo/generate-tts-assets.ts 或等价脚本，支持 provider env 配置和本地缓存",
+          "将生成音频写入 public/demo-audio 或后端 uploads/demo-audio，并避免提交真实密钥",
+          "生成失败时保留手工下载 MP3 的 fallback 流程"
+        ],
+        "acceptance": [
+          "断网状态下可播放核心演示音频",
+          "中文和俄语音频均有缓存文件和 manifest 元数据",
+          "脚本不会把 AK/SK/API key 写入仓库"
+        ]
+      },
+      {
+        "id": "SD-T03",
+        "objectiveId": "SD-O2",
+        "objective": "Provider 可替换",
+        "title": "TTS facade 多 provider hardening",
+        "status": "todo_after_sprint4_core_green",
+        "suggestedAgent": "backend",
+        "operations": [
+          "扩展 backend/src/providers/tts.ts provider interface，保留 synthesize/status/usage/cache 语义",
+          "新增 Volcengine/Baidu/Azure/ElevenLabs provider adapter 的最小实现或 stub",
+          "添加 env 示例和 provider 优先级配置",
+          "前端继续只调用 LingoBridge TTS API，不直接调用云厂商 SDK"
+        ],
+        "acceptance": [
+          "可通过 env 切换 provider 或使用 cached-demo provider",
+          "provider 失败时返回明确错误并 fallback 到缓存/浏览器兜底",
+          "usage/status 不泄露用户文本和密钥"
+        ]
+      },
+      {
+        "id": "SD-T04",
+        "objectiveId": "SD-O3",
+        "objective": "实时字幕 Spike",
+        "title": "ASR/翻译 provider 审计与最小字幕 demo",
+        "status": "todo_after_sprint4_core_green",
+        "suggestedAgent": "spike",
+        "operations": [
+          "复核火山 ASR、Azure ASR、百度 ASR、火山翻译、DeepL 的官方额度、语种、认证和网络要求",
+          "实现 scripts/demo/realtime-subtitle-demo 或独立 demo 页面，接收麦克风或预录音频",
+          "输出中文/俄语识别文本和对应翻译字幕",
+          "提供预录音频 fallback，实时 API 失败时仍可演示字幕效果"
+        ],
+        "acceptance": [
+          "demo 与正式课堂代码隔离",
+          "实时失败时可切到预录音频/预生成字幕",
+          "报告记录延迟、识别准确率、网络失败和额度消耗"
+        ]
+      },
+      {
+        "id": "SD-T05",
+        "objectiveId": "SD-O4",
+        "objective": "演示验收",
+        "title": "语音演示 runbook 与 E2E smoke",
+        "status": "todo_after_sprint4_core_green",
+        "suggestedAgent": "testing",
+        "operations": [
+          "编写 docs/03-testing-deployment/speech-demo-runbook.md，包含开场前检查、断网 fallback、音量/设备检查",
+          "补一个 Playwright 或脚本 smoke：页面能加载 demo audio manifest 并播放/显示字幕占位",
+          "记录上台演示用账号、音频文件、字幕 fallback 文件和应急流程",
+          "把结果回填 acceptance report"
+        ],
+        "acceptance": [
+          "演示前 5 分钟检查表可执行",
+          "无网络时仍能完成核心 TTS 播报演示",
+          "失败项有回退步骤和负责人"
         ]
       }
     ]

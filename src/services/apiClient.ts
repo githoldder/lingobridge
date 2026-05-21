@@ -229,11 +229,23 @@ export interface HomeworkImportResult {
 }
 
 export const assignmentsApi = {
-  import: (courseId: string, filename: string, base64: string, lessonNodeId?: string) =>
+  import: (courseId: string, filename: string, base64: string, lessonNodeId?: string, assignmentNodeId?: string) =>
     request<HomeworkImportResult>('/assignments/import', {
       method: 'POST',
-      body: JSON.stringify({ courseId, filename, base64, lessonNodeId })
-    })
+      body: JSON.stringify({ courseId, filename, base64, lessonNodeId, assignmentNodeId })
+    }),
+  exportBlob: async (courseId: string, lessonNodeId: string): Promise<Blob> => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const response = await fetch(`${API_BASE_URL}/assignments/export?courseId=${courseId}&lessonNodeId=${lessonNodeId}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to download homework excel: ${response.statusText}`);
+    }
+    return response.blob();
+  }
 };
 
 export interface LessonNodeData {
@@ -253,7 +265,7 @@ export interface LessonNodeData {
 
 export const lessonNodesApi = {
   list: (courseId: string) => request<LessonNodeData[]>(`/courses/${courseId}/lesson-nodes`),
-  create: (courseId: string, data: { title: string; startsAt?: string }) =>
+  create: (courseId: string, data: { title: string; startsAt?: string; endsAt?: string }) =>
     request<{ lessonNode: LessonNodeData; assignmentNode: unknown }>(`/courses/${courseId}/lesson-nodes`, {
       method: 'POST',
       body: JSON.stringify(data)
@@ -266,7 +278,7 @@ export const lessonNodesApi = {
 };
 
 export const recordingsApi = {
-  list: (courseId = 'course-1', page = 1) => request<Recording[]>(`/recordings?courseId=${courseId}&page=${page}`),
+  list: (courseId: string, page = 1) => request<Recording[]>(`/recordings?courseId=${courseId}&page=${page}`),
   async upload(params: { courseId: string; pageNumber: number; taskId?: string; blob: Blob; durationSec: number; filename?: string }) {
     return request<Recording>('/recordings', {
       method: 'POST',
@@ -284,7 +296,7 @@ export const recordingsApi = {
 };
 
 export const lecturesApi = {
-  list: (courseId = 'course-1', date?: string) => request<Lecture[]>(`/lectures?courseId=${courseId}${date ? `&date=${date}` : ''}`),
+  list: (courseId: string, date?: string) => request<Lecture[]>(`/lectures?courseId=${courseId}${date ? `&date=${date}` : ''}`),
   async upload(params: { courseId: string; title: string; blob: Blob; durationSec: number; filename?: string }) {
     return request<Lecture>('/lectures', {
       method: 'POST',

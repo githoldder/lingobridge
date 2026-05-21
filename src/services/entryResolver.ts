@@ -30,7 +30,8 @@ export async function resolveEntry(params: {
   fromSchedule?: boolean;
   fromLive?: boolean;
 }): Promise<EntryResolution> {
-  const courseId = params.courseId || 'course-1';
+  const courseId = params.courseId;
+  if (!courseId) throw new Error('courseId is required for resolveEntry');
 
   if (params.lessonNodeId) {
     const parts = params.lessonNodeId.replace(`${courseId}-`, '').split('-');

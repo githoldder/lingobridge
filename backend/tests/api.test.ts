@@ -43,6 +43,7 @@ test('courseware upload creates pages and excel exercises', async () => {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
       body: JSON.stringify({
         courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
         filename: 'demo.pdf',
         mimeType: 'application/pdf',
         base64: Buffer.from('fake pdf').toString('base64')
@@ -200,6 +201,98 @@ test('registration creates an account and teacher roster search can add students
     const rosterJson = await roster.json();
     assert.equal(rosterJson.code, 0);
     assert.equal(rosterJson.data[0].displayName, '新同学');
+  });
+});
+
+test('PDF upload without lessonNodeId returns 400', async () => {
+  await withServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/v1/coursewares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        filename: 'test.pdf',
+        mimeType: 'application/pdf',
+        base64: Buffer.from('fake pdf').toString('base64')
+      })
+    });
+    const json = await res.json();
+    assert.equal(res.status, 400);
+    assert.ok(json.message.includes('lessonNodeId'));
+  });
+});
+
+test('lesson node update with endsAt works', async () => {
+  await withServer(async (baseUrl) => {
+    const create = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: 'EndsAt Test', startsAt: '2026-06-01T10:00', endsAt: '2026-06-01T11:30' })
+    });
+    const createJson = await create.json();
+    assert.equal(createJson.code, 0);
+    const nodeId = createJson.data.lessonNode.id;
+    assert.ok(createJson.data.lessonNode.startsAt);
+    assert.ok(createJson.data.lessonNode.endsAt);
+
+    const update = await fetch(`${baseUrl}/api/v1/lesson-nodes/${nodeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ endsAt: '2026-06-02T12:00' })
+    });
+    const updateJson = await update.json();
+    assert.equal(updateJson.code, 0);
+    assert.ok(updateJson.data.endsAt);
+  });
+});
+
+test('assignment export works', async () => {
+  await withServer(async (baseUrl) => {
+    // Create a lesson node
+    const create = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: 'Export Test Lesson' })
+    });
+    const createJson = await create.json();
+    assert.equal(createJson.code, 0);
+    const lessonNodeId = createJson.data.lessonNode.id;
+
+    // Create an xlsx homework and import it
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([[
+      'course_code', 'unit', 'lesson', 'task_id', 'task_type',
+      'zh_text', 'pinyin', 'translation_ru', 'translation_kk',
+      'publish_to_homework', 'publish_to_vocab'
+    ], [
+      'EXPORT-01', 1, 1, 'EXPORT-01-L01-001', 'pronunciation',
+      '测试导出。', 'Cèshì dǎochū.', 'Тест экспорта.', 'Экспорт сынағы.',
+      'TRUE', 'FALSE'
+    ]]);
+    XLSX.utils.book_append_sheet(wb, ws, 'homework');
+    const xlsxBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const upload = await fetch(`${baseUrl}/api/v1/assignments/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        lessonNodeId,
+        filename: 'export-test.xlsx',
+        base64: xlsxBuffer.toString('base64')
+      })
+    });
+    const uploadJson = await upload.json();
+    assert.equal(uploadJson.code, 0);
+    assert.equal(uploadJson.data.tasksCount, 1);
+
+    // Export and verify
+    const exportRes = await fetch(`${baseUrl}/api/v1/assignments/export?courseId=course-1&lessonNodeId=${lessonNodeId}`);
+    assert.equal(exportRes.status, 200);
+    const contentType = exportRes.headers.get('content-type') || '';
+    assert.ok(contentType.includes('spreadsheetml') || contentType.includes('octet-stream'));
+    const buffer = await exportRes.arrayBuffer();
+    assert.ok(buffer.byteLength > 0);
   });
 });
 

@@ -101,8 +101,31 @@ const seed: Database = {
   liveSessions: [],
   classroomComments: [],
   files: [],
-  lessonNodes: [],
-  assignmentNodes: [],
+  lessonNodes: [
+    {
+      id: 'lesson-node-1',
+      courseId: 'course-1',
+      title: 'Lesson 1',
+      styleSeed: 0,
+      colorToken: '#4A90D9',
+      shapeToken: 'circle',
+      status: 'draft',
+      assignmentNodeId: 'assignment-node-1',
+      createdAt: now,
+      updatedAt: now
+    }
+  ],
+  assignmentNodes: [
+    {
+      id: 'assignment-node-1',
+      courseId: 'course-1',
+      lessonNodeId: 'lesson-node-1',
+      title: 'Assignment 1',
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now
+    }
+  ],
   coursewareFiles: [],
   courseMembers: [
     {

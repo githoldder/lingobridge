@@ -9,6 +9,10 @@ import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment,
 import { ttsFacade } from './providers/ttsFacade.ts';
 import * as usersRepo from './repositories/users.ts';
 import * as coursesRepo from './repositories/courses.ts';
+import * as filesRepo from './repositories/files.ts';
+import * as assignmentsRepo from './repositories/assignments.ts';
+import * as XLSX from 'xlsx';
+import { queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -205,21 +209,29 @@ export function createApp() {
     ok(res, { id: user.id, username: user.username, role: user.role, displayName: user.displayName, languagePref: user.languagePref });
   });
 
-  app.get('/api/v1/courses', async (_req, res) => {
+  app.get('/api/v1/courses', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    let baseCourses = [];
+    if (user.role === 'admin') {
+      baseCourses = await coursesRepo.findAll();
+    } else if (user.role === 'teacher') {
+      baseCourses = await coursesRepo.findByTeacherId(userId);
+    } else {
+      baseCourses = await coursesRepo.findByStudentId(userId);
+    }
+
+    // Keep fallback metrics using readDb until T18 fully migrates pages/tasks/recordings to Postgres
     const db = await readDb();
-    const courses = await Promise.all(
-      db.courses.map(async (course) => ({
-        id: course.id,
-        teacherId: course.teacherId,
-        title: course.title,
-        description: course.description,
-        status: course.status,
-        createdAt: course.createdAt,
-        pagesCount: db.coursePages.filter((page) => page.courseId === course.id).length,
-        exercisesCount: db.learningTasks.filter((t) => t.courseId === course.id && t.publishToHomework).length,
-        recordingsCount: db.recordings.filter((recording) => recording.courseId === course.id).length
-      }))
-    );
+    const courses = baseCourses.map((course) => ({
+      ...course,
+      pagesCount: db.coursePages.filter((page) => page.courseId === course.id).length,
+      exercisesCount: db.learningTasks.filter((t) => t.courseId === course.id && t.publishToHomework).length,
+      recordingsCount: db.recordings.filter((recording) => recording.courseId === course.id).length
+    }));
     ok(res, courses);
   });
 
@@ -248,48 +260,57 @@ export function createApp() {
   });
 
   app.post('/api/v1/coursewares', async (req, res) => {
-    const { courseId = 'course-1', lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+    const { courseId, lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
 
-    const db = await readDb();
-    if (lessonNodeId && !db.lessonNodes.find((n) => n.id === lessonNodeId && n.courseId === courseId)) {
-      return fail(res, 404, 'Live class not found for this course');
-    }
     const ext = extensionOf(filename);
     if (!['pptx', 'pdf', 'xlsx'].includes(ext)) return fail(res, 415, 'Only pptx, pdf and xlsx are supported');
+
+    if (['pdf', 'pptx'].includes(ext) && !lessonNodeId) {
+      return fail(res, 400, 'lessonNodeId is required for PDF/PPTX courseware upload');
+    }
+
+    if (lessonNodeId) {
+      if (getDbMode() === 'json') {
+        const db = await readDb();
+        if (!db.lessonNodes.find((n) => n.id === lessonNodeId && n.courseId === courseId)) {
+          return fail(res, 404, 'Lesson node not found for this course');
+        }
+      } else {
+        const ln = await queryRow('SELECT * FROM lesson_nodes WHERE id = $1 AND course_id = $2', [lessonNodeId, courseId]);
+        if (!ln) return fail(res, 404, 'Lesson node not found for this course');
+      }
+    }
+
+    const db = await readDb();
 
     const saved = await saveBase64File({ base64, filename, folder: 'coursewares' });
     if (saved.sizeBytes > MAX_COURSEWARE_BYTES) return fail(res, 413, 'Courseware file exceeds 50MB');
 
-    const fileMeta: FileMetadata = {
-      id: saved.id,
+    const fileMeta = await filesRepo.createFile({
       ownerId: currentUserId(req) || 'teacher-1',
       courseId,
       lessonNodeId: lessonNodeId || undefined,
-      type: ext as FileMetadata['type'],
+      kind: ext,
       filename,
       mimeType,
       sizeBytes: saved.sizeBytes,
-      storageUrl: saved.url,
-      createdAt: new Date().toISOString()
-    };
-    db.files.unshift(fileMeta);
-    if (['pdf', 'pptx', 'xlsx'].includes(ext)) {
-      db.coursewareFiles.unshift({
+      storageUrl: saved.url
+    });
+
+    if (['pdf', 'pptx'].includes(ext)) {
+      await filesRepo.createCourseware({
         id: fileMeta.id,
         courseId,
         lessonNodeId: lessonNodeId || undefined,
-        type: ext as 'pdf' | 'pptx' | 'xlsx',
-        filename,
-        storageUrl: saved.url,
+        kind: ext as 'pdf' | 'pptx',
         renderStatus: 'processing',
-        pageCount: 0,
-        createdAt: fileMeta.createdAt
+        pageCount: 0
       });
     }
 
     let renderStatus: 'pending' | 'processing' | 'ready' | 'failed' = 'ready';
-
     let pages: CoursePage[] = [];
     let exercises: Exercise[] = [];
     let tasks: unknown[] = [];
@@ -300,30 +321,93 @@ export function createApp() {
       renderStatus = 'processing';
       try {
         pages = createPagesFromCourseware(courseId, filename, saved.url, saved.absolutePath);
-        db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
+        if (getDbMode() === 'json') {
+          db.coursePages = db.coursePages.filter((page) => page.courseId !== courseId).concat(pages);
+          await writeDb(db);
+        } else {
+          await queryRow('DELETE FROM course_pages WHERE course_id = $1', [courseId]);
+          for (const page of pages) {
+            await queryRow(
+              `INSERT INTO course_pages (courseware_file_id, course_id, lesson_node_id, page_number, content_html, audio_text)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [fileMeta.id, courseId, lessonNodeId || null, page.pageNumber, page.contentHtml, page.audioText]
+            );
+          }
+        }
         renderStatus = 'ready';
-      } catch {
+      } catch (err) {
+        console.error(err);
         renderStatus = 'failed';
       }
+      await filesRepo.updateCourseware(fileMeta.id, {
+        renderStatus,
+        pageCount: pages.length
+      });
     }
+
     if (ext === 'xlsx') {
-      const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, lessonNodeId || undefined);
+      let resolvedLessonNodeId = lessonNodeId || '';
+      if (!resolvedLessonNodeId) {
+        if (getDbMode() === 'json') {
+          const db_ = await readDb();
+          const ln = db_.lessonNodes.find((n) => n.courseId === courseId);
+          if (ln) resolvedLessonNodeId = ln.id;
+        } else {
+          const ln = await queryRow('SELECT id FROM lesson_nodes WHERE course_id = $1 LIMIT 1', [courseId]);
+          if (ln) resolvedLessonNodeId = ln.id;
+        }
+      }
+
+      if (!resolvedLessonNodeId) {
+        return fail(res, 400, 'A lesson node is required for importing homework tasks');
+      }
+
+      const node = await assignmentsRepo.findAssignmentNodeByLessonNodeId(resolvedLessonNodeId);
+      if (!node || node.courseId !== courseId) {
+        return fail(res, 404, 'Assignment node not found or course mismatch');
+      }
+      const resolvedAssignmentNodeId = node.id;
+
+      const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, resolvedLessonNodeId);
       if (result.errors.length > 0) {
         parseErrors = result.errors;
       }
-      upsertTasks(db, result.learningTasks);
-      upsertVocabulary(db, result.vocabularyItems);
+
+      const createdBy = currentUserId(req) || 'teacher-1';
+      const imp = await assignmentsRepo.createAssignmentImport({
+        courseId,
+        lessonNodeId: resolvedLessonNodeId,
+        assignmentNodeId: resolvedAssignmentNodeId,
+        fileId: fileMeta.id,
+        sourceMode: 'xlsx_import',
+        filename,
+        tasksCount: result.learningTasks.length,
+        vocabCount: result.vocabularyItems.length,
+        errors: result.errors,
+        createdBy
+      });
+
+      for (const task of result.learningTasks) {
+        await assignmentsRepo.upsertLearningTask({
+          ...task,
+          assignmentNodeId: resolvedAssignmentNodeId,
+          lessonNodeId: resolvedLessonNodeId,
+          sourceImportId: imp.id
+        });
+      }
+
+      for (const voc of result.vocabularyItems) {
+        await assignmentsRepo.upsertVocabularyItem({
+          ...voc,
+          lessonNodeId: resolvedLessonNodeId,
+          sourceFileId: fileMeta.id
+        });
+      }
+
       tasks = result.learningTasks;
       vocab = result.vocabularyItems;
     }
 
-    const coursewareRecord = db.coursewareFiles.find((f) => f.id === fileMeta.id);
-    if (coursewareRecord) {
-      coursewareRecord.renderStatus = renderStatus;
-      coursewareRecord.pageCount = pages.length;
-    }
-
-    await writeDb(db);
     ok(res, { file: { ...fileMeta, renderStatus }, pages, exercises, tasks, vocabulary: vocab, warnings: parseErrors.length > 0 ? parseErrors : undefined });
   });
 
@@ -470,84 +554,191 @@ export function createApp() {
   });
 
   app.post('/api/v1/assignments/import', async (req, res) => {
-    const { courseId, lessonNodeId, filename, base64 } = req.body ?? {};
+    const { courseId, lessonNodeId, assignmentNodeId, filename, base64 } = req.body ?? {};
     if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
-    const db = await readDb();
-    if (lessonNodeId && !db.lessonNodes.find((n) => n.id === lessonNodeId && n.courseId === courseId)) {
-      return fail(res, 404, 'Live class not found for this course');
+    if (!courseId) return fail(res, 400, 'courseId is required');
+
+    let resolvedAssignmentNodeId = '';
+    let resolvedLessonNodeId = '';
+
+    // Precise node matching
+    if (assignmentNodeId) {
+      const node = await assignmentsRepo.findAssignmentNodeById(assignmentNodeId);
+      if (!node || node.courseId !== courseId) {
+        return fail(res, 404, 'Assignment node not found or course mismatch');
+      }
+      resolvedAssignmentNodeId = node.id;
+      resolvedLessonNodeId = node.lessonNodeId || '';
+    } else if (lessonNodeId) {
+      const node = await assignmentsRepo.findAssignmentNodeByLessonNodeId(lessonNodeId);
+      if (!node || node.courseId !== courseId) {
+        return fail(res, 404, 'Assignment node not found for this lesson node or course mismatch');
+      }
+      resolvedAssignmentNodeId = node.id;
+      resolvedLessonNodeId = node.lessonNodeId || '';
+    } else {
+      return fail(res, 400, 'lessonNodeId or assignmentNodeId is required');
     }
+
     const ext = extensionOf(filename);
     if (!['xlsx', 'xls'].includes(ext)) return fail(res, 415, 'Only xlsx files are supported');
     const saved = await saveBase64File({ base64, filename, folder: 'assignments' });
-    const fileMeta: FileMetadata = {
-      id: saved.id,
+
+    // Store in files repository
+    const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const fileMeta = await filesRepo.createFile({
       ownerId: currentUserId(req) || 'teacher-1',
       courseId,
-      lessonNodeId: lessonNodeId || undefined,
-      type: 'xlsx' as FileMetadata['type'],
+      lessonNodeId: resolvedLessonNodeId || undefined,
+      kind: 'xlsx',
       filename,
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      mimeType,
       sizeBytes: saved.sizeBytes,
-      storageUrl: saved.url,
-      createdAt: new Date().toISOString()
-    };
-    db.files.unshift(fileMeta);
-    db.coursewareFiles.unshift({
-      id: fileMeta.id,
-      courseId,
-      lessonNodeId: lessonNodeId || undefined,
-      type: 'xlsx',
-      filename,
-      storageUrl: saved.url,
-      renderStatus: 'ready',
-      pageCount: 0,
-      createdAt: fileMeta.createdAt
+      storageUrl: saved.url
     });
-    const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, lessonNodeId || undefined);
-    upsertTasks(db, result.learningTasks);
-    upsertVocabulary(db, result.vocabularyItems);
-    const importRecord: HomeworkImport = {
-      id: crypto.randomUUID(),
+
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      db.coursewareFiles.unshift({
+        id: fileMeta.id,
+        courseId,
+        lessonNodeId: resolvedLessonNodeId || undefined,
+        type: 'xlsx',
+        filename,
+        storageUrl: saved.url,
+        renderStatus: 'ready',
+        pageCount: 0,
+        createdAt: fileMeta.createdAt
+      } as any);
+      await writeDb(db);
+    }
+
+    const result = parseExcel(saved.absolutePath, courseId, fileMeta.id, resolvedLessonNodeId);
+
+    const createdBy = currentUserId(req) || 'teacher-1';
+    const imp = await assignmentsRepo.createAssignmentImport({
       courseId,
-      lessonNodeId: lessonNodeId || '',
+      lessonNodeId: resolvedLessonNodeId,
+      assignmentNodeId: resolvedAssignmentNodeId,
       fileId: fileMeta.id,
+      sourceMode: 'xlsx_import',
       filename,
       tasksCount: result.learningTasks.length,
       vocabCount: result.vocabularyItems.length,
       errors: result.errors,
-      createdAt: fileMeta.createdAt
-    };
-    db.homeworkImports.unshift(importRecord);
-    await writeDb(db);
+      createdBy
+    });
+
+    for (const task of result.learningTasks) {
+      await assignmentsRepo.upsertLearningTask({
+        ...task,
+        assignmentNodeId: resolvedAssignmentNodeId,
+        lessonNodeId: resolvedLessonNodeId,
+        sourceImportId: imp.id
+      });
+    }
+
+    for (const voc of result.vocabularyItems) {
+      await assignmentsRepo.upsertVocabularyItem({
+        ...voc,
+        lessonNodeId: resolvedLessonNodeId,
+        sourceFileId: fileMeta.id
+      });
+    }
+
     ok(res, {
       tasksCount: result.learningTasks.length,
       vocabCount: result.vocabularyItems.length,
-      lessonNodeId: lessonNodeId || undefined,
+      lessonNodeId: resolvedLessonNodeId || undefined,
       warnings: result.errors.length > 0 ? result.errors : [],
       errorRows: []
     });
   });
 
-  app.get('/api/v1/exercises', async (req, res) => {
-    const db = await readDb();
-    const courseId = String(req.query.courseId || 'course-1');
-    const page = req.query.page ? Number(req.query.page) : undefined;
-    ok(res, db.exercises.filter((item) => item.courseId === courseId && (!page || item.pageNumber === page)));
-  });
-
   app.get('/api/v1/homework/tasks', async (req, res) => {
-    const db = await readDb();
     const courseId = String(req.query.courseId || '');
     const lessonNodeId = String(req.query.lessonNodeId || '');
-    const unit = req.query.unit ? Number(req.query.unit) : undefined;
-    const lesson = req.query.lesson ? Number(req.query.lesson) : undefined;
-    let items = db.learningTasks.filter((t) => t.publishToHomework);
-    if (courseId) items = items.filter((t) => t.courseId === courseId);
-    if (lessonNodeId) items = items.filter((t) => t.lessonNodeId === lessonNodeId);
-    if (unit !== undefined) items = items.filter((t) => t.unit === unit);
-    if (lesson !== undefined) items = items.filter((t) => t.lesson === lesson);
-    items.sort((a, b) => a.sortOrder - b.sortOrder);
-    ok(res, items);
+    const assignmentNodeId = String(req.query.assignmentNodeId || '');
+    const includeAll = req.query.includeAll === 'true';
+
+    if (!assignmentNodeId && !lessonNodeId) {
+      if (courseId && includeAll) {
+        const tasks = await assignmentsRepo.findTasksByCourseId(courseId);
+        return ok(res, tasks.filter((t) => t.publishToHomework));
+      }
+      return fail(res, 400, 'assignmentNodeId or lessonNodeId is required');
+    }
+
+    let tasks: any[] = [];
+    if (assignmentNodeId) {
+      tasks = await assignmentsRepo.findTasksByAssignmentNodeId(assignmentNodeId);
+    } else if (lessonNodeId && courseId) {
+      tasks = await assignmentsRepo.findTasksByLessonNodeId(courseId, lessonNodeId);
+    } else {
+      return fail(res, 400, 'courseId is required when querying by lessonNodeId');
+    }
+
+    const filtered = tasks.filter((t) => t.publishToHomework);
+    ok(res, filtered);
+  });
+
+  app.get('/api/v1/assignments/export', async (req, res) => {
+    const courseId = String(req.query.courseId || '');
+    const lessonNodeId = String(req.query.lessonNodeId || '');
+    if (!courseId || !lessonNodeId) {
+      return fail(res, 400, 'courseId and lessonNodeId are required');
+    }
+
+    const tasks = await assignmentsRepo.findTasksByLessonNodeId(courseId, lessonNodeId);
+    if (!tasks || tasks.length === 0) {
+      return fail(res, 404, 'No tasks found for this assignment node');
+    }
+
+    const EXPORT_COLUMNS = [
+      'course_code', 'unit', 'lesson', 'task_id', 'task_type',
+      'zh_text', 'pinyin', 'translation_ru', 'translation_kk',
+      'publish_to_homework', 'publish_to_vocab', 'lesson_title',
+      'page_number', 'difficulty', 'sort_order', 'prompt',
+      'answer', 'initial', 'final', 'tone', 'rhyme_group'
+    ] as const;
+
+    const dataRows = tasks.map((t) => {
+      return {
+        course_code: t.courseId || '',
+        unit: t.unit ?? 1,
+        lesson: t.lesson ?? 1,
+        task_id: t.taskKey || '',
+        task_type: t.taskType || '',
+        zh_text: t.zhText || '',
+        pinyin: t.pinyin || '',
+        translation_ru: t.translationRu || '',
+        translation_kk: t.translationKk || '',
+        publish_to_homework: t.publishToHomework ? 'TRUE' : 'FALSE',
+        publish_to_vocab: t.publishToVocab ? 'TRUE' : 'FALSE',
+        lesson_title: t.lessonTitle || '',
+        page_number: t.pageNumber ?? 1,
+        difficulty: t.difficulty ?? 1,
+        sort_order: t.sortOrder ?? 0,
+        prompt: t.prompt || '',
+        answer: t.answer || '',
+        initial: t.initial || '',
+        final: t.final || '',
+        tone: t.tone || '',
+        rhyme_group: t.rhymeGroup || ''
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dataRows, { header: EXPORT_COLUMNS as any });
+    XLSX.utils.book_append_sheet(wb, ws, 'homework');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filename = `assignment-${courseId}-${lessonNodeId}-${today}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   });
 
   app.get('/api/v1/vocabulary', async (req, res) => {

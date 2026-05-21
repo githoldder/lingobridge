@@ -28,6 +28,7 @@ import {
   courseMembersApi,
   coursewareFilesApi,
   assignmentsApi,
+  homeworkApi,
   lessonNodesApi,
   fileToBase64,
   type Course,
@@ -39,6 +40,7 @@ interface LessonNode {
   courseId: string;
   title: string;
   startsAt?: string;
+  endsAt?: string;
   status: 'draft' | 'scheduled' | 'active' | 'completed';
   styleSeed: number;
 }
@@ -79,7 +81,7 @@ interface LiveSession {
   lessonNodeId?: string;
 }
 
-type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework';
+type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework' | 'live';
 
 interface TeacherCourseDetailViewProps {
   courseId: string;
@@ -94,6 +96,7 @@ const TABS: { key: TabKey; icon: React.ReactNode }[] = [
   { key: 'schedule', icon: <Clock size={16} /> },
   { key: 'courseware', icon: <UploadCloud size={16} /> },
   { key: 'homework', icon: <FileSpreadsheet size={16} /> },
+  { key: 'live', icon: <Video size={16} /> },
 ];
 
 const ShapeIcon: React.FC<{ shape: string; size?: number; color?: string }> = ({ shape, size = 20, color = 'currentColor' }) => {
@@ -229,6 +232,7 @@ export default function TeacherCourseDetailView({ courseId, onNavigate, onBack, 
         {activeTab === 'courseware' && <CoursewareTab courseId={courseId} t={t} />}
         {activeTab === 'schedule' && <ScheduleTab courseId={courseId} t={t} />}
         {activeTab === 'homework' && <HomeworkTab courseId={courseId} t={t} />}
+        {activeTab === 'live' && <LiveTab courseId={courseId} t={t} onEnterLive={onEnterLive} />}
       </motion.div>
     </div>
   );
@@ -634,9 +638,11 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
   const [files, setFiles] = useState<CoursewareFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState('');
-  const [newDate, setNewDate] = useState('');
+  const [newStartsAt, setNewStartsAt] = useState('');
+  const [newEndsAt, setNewEndsAt] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [editEndsAt, setEditEndsAt] = useState('');
   const [message, setMessage] = useState('');
 
   const loadNodes = useCallback(async () => {
@@ -664,10 +670,12 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
     try {
       await lessonNodesApi.create(courseId, {
         title: newTitle.trim(),
-        startsAt: newDate || undefined,
+        startsAt: newStartsAt || undefined,
+        endsAt: newEndsAt || undefined,
       });
       setNewTitle('');
-      setNewDate('');
+      setNewStartsAt('');
+      setNewEndsAt('');
       loadNodes();
     } catch (e: any) {
       setMessage(e.message || t('course_schedule.create_failed'));
@@ -676,7 +684,10 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
 
   const updateNode = async (id: string) => {
     try {
-      await lessonNodesApi.update(id, { title: editTitle });
+      await lessonNodesApi.update(id, {
+        title: editTitle,
+        endsAt: editEndsAt || undefined,
+      });
       setEditingId(null);
       loadNodes();
     } catch {
@@ -700,8 +711,14 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
         />
         <input
           type="datetime-local"
-          value={newDate}
-          onChange={e => setNewDate(e.target.value)}
+          value={newStartsAt}
+          onChange={e => setNewStartsAt(e.target.value)}
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
+        />
+        <input
+          type="datetime-local"
+          value={newEndsAt}
+          onChange={e => setNewEndsAt(e.target.value)}
           className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
         />
         <button
@@ -735,24 +752,33 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                   <div className="flex items-center gap-2 mb-2">
                     <ShapeIcon shape={style.icon} size={18} color={style.borderColor} />
                     {editingId === node.id ? (
-                      <input
-                        value={editTitle}
-                        onChange={e => setEditTitle(e.target.value)}
-                        onBlur={() => updateNode(node.id)}
-                        onKeyDown={e => e.key === 'Enter' && updateNode(node.id)}
-                        className="flex-1 text-sm font-bold bg-white rounded-lg px-2 py-1 outline-none border border-gray-200"
-                        autoFocus
-                      />
+                      <div className="flex-1 space-y-1">
+                        <input
+                          value={editTitle}
+                          onChange={e => setEditTitle(e.target.value)}
+                          onBlur={() => updateNode(node.id)}
+                          onKeyDown={e => e.key === 'Enter' && updateNode(node.id)}
+                          className="w-full text-sm font-bold bg-white rounded-lg px-2 py-1 outline-none border border-gray-200"
+                          autoFocus
+                        />
+                        <input
+                          type="datetime-local"
+                          value={editEndsAt}
+                          onChange={e => setEditEndsAt(e.target.value)}
+                          onBlur={() => updateNode(node.id)}
+                          className="w-full text-xs bg-white rounded-lg px-2 py-1 outline-none border border-gray-200"
+                        />
+                      </div>
                     ) : (
                       <h3
                         className="flex-1 text-sm font-bold text-gray-800 cursor-pointer hover:text-[#0056D2]"
-                        onClick={() => { setEditingId(node.id); setEditTitle(node.title); }}
+                        onClick={() => { setEditingId(node.id); setEditTitle(node.title); setEditEndsAt(node.endsAt ? node.endsAt.slice(0, 16) : ''); }}
                       >
                         {node.title}
                       </h3>
                     )}
                     <button
-                      onClick={() => { setEditingId(node.id); setEditTitle(node.title); }}
+                      onClick={() => { setEditingId(node.id); setEditTitle(node.title); setEditEndsAt(node.endsAt ? node.endsAt.slice(0, 16) : ''); }}
                       className="p-1 rounded hover:bg-white/50 text-gray-400 hover:text-[#0056D2]"
                     >
                       <Edit2 size={12} />
@@ -774,12 +800,20 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                     </div>
                   </div>
 
-                  {node.startsAt && (
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium mb-2">
-                      <Clock size={12} />
-                      {new Date(node.startsAt).toLocaleString()}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-500 font-medium mb-2">
+                    {node.startsAt && (
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {new Date(node.startsAt).toLocaleString()}
+                      </div>
+                    )}
+                    {node.endsAt && (
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {'→'} {new Date(node.endsAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -808,6 +842,21 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
   const [result, setResult] = useState<HomeworkImportResult | null>(null);
   const [message, setMessage] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [tasksCount, setTasksCount] = useState(0);
+
+  useEffect(() => {
+    if (!lessonNodeId) {
+      setTasksCount(0);
+      return;
+    }
+    homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId)
+      .then((tasks) => {
+        setTasksCount(tasks.length);
+      })
+      .catch(() => {
+        setTasksCount(0);
+      });
+  }, [courseId, lessonNodeId]);
 
   const handleUpload = async (file: File) => {
     if (!lessonNodeId) {
@@ -827,10 +876,30 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       const result = await assignmentsApi.import(courseId, file.name, base64, lessonNodeId);
       setResult(result);
       setMessage(t('course_homework.imported').replace('{filename}', file.name));
+      // Re-fetch tasks count dynamically from backend
+      const tasks = await homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId);
+      setTasksCount(tasks.length);
     } catch (e: any) {
       setMessage(e.message || t('course_homework.import_failed'));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!lessonNodeId) return;
+    try {
+      const blob = await assignmentsApi.exportBlob(courseId, lessonNodeId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `assignment-${courseId}-${lessonNodeId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setMessage(e.message || 'Download failed');
     }
   };
 
@@ -843,7 +912,24 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
-      <h2 className="text-lg font-extrabold text-gray-900">{t('course_homework.title')}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-extrabold text-gray-900">{t('course_homework.title')}</h2>
+        {lessonNodeId && (
+          <button
+            onClick={handleDownload}
+            disabled={tasksCount === 0}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+              tasksCount > 0
+                ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+            title={tasksCount === 0 ? t('course_homework.no_tasks_download') : t('course_homework.download')}
+          >
+            <Download size={16} />
+            {t('course_homework.download')} ({tasksCount})
+          </button>
+        )}
+      </div>
       <LiveClassSelect courseId={courseId} t={t} value={lessonNodeId} onChange={setLessonNodeId} />
 
       <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-600 space-y-2">
@@ -887,7 +973,7 @@ CZU-CHN-001, 1, 1, CZU-CHN-001-L01-001, pronunciation, 大家好，我叫阿合�
 
       {message && (
         <div className={`text-sm font-bold px-4 py-2 rounded-xl ${
-          message.includes('failed') || message.includes('invalid')
+          message.includes('failed') || message.includes('invalid') || message.includes('required')
             ? 'bg-red-50 text-red-600'
             : 'bg-green-50 text-green-600'
         }`}>

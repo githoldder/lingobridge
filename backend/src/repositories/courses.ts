@@ -84,6 +84,16 @@ export async function findByStudentId(studentId: string): Promise<CourseDto[]> {
   return rows.map(mapCourse);
 }
 
+export async function findAll(): Promise<CourseDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    return db.courses.map(mapCourse);
+  }
+  const rows = await queryRows('SELECT * FROM courses ORDER BY created_at DESC');
+  return rows.map(mapCourse);
+}
+
+
 export async function create(data: { teacherId: string; title: string; description?: string; status?: string }): Promise<CourseDto> {
   if (getDbMode() === 'json') {
     const db = await readDb();

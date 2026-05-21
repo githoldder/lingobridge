@@ -78,6 +78,7 @@ export interface LearningTask {
   id: string;
   courseId: string;
   lessonNodeId?: string;
+  assignmentNodeId?: string;
   sourceFileId: string;
   taskId: string;
   taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';

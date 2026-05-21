@@ -98,3 +98,77 @@ export async function findCoursewareByLessonNodeId(lessonNodeId: string): Promis
   );
   return rows.map(mapCourseware);
 }
+
+export async function createCourseware(data: {
+  id: string;
+  courseId: string;
+  lessonNodeId?: string;
+  kind: 'pdf' | 'pptx';
+  renderStatus?: 'pending' | 'processing' | 'ready' | 'failed';
+  pageCount?: number;
+}): Promise<CoursewareFileDto> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const cw = {
+      id: data.id,
+      courseId: data.courseId,
+      lessonNodeId: data.lessonNodeId,
+      type: data.kind,
+      filename: '',
+      storageUrl: '',
+      renderStatus: data.renderStatus ?? 'pending',
+      pageCount: data.pageCount ?? 0,
+      createdAt: new Date().toISOString()
+    };
+    db.coursewareFiles.unshift(cw as any);
+    await writeDb(db);
+    return mapCourseware(cw);
+  }
+  await queryRow(
+    `INSERT INTO courseware_files (id, course_id, lesson_node_id, kind, render_status, page_count)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [data.id, data.courseId, data.lessonNodeId, data.kind, data.renderStatus ?? 'pending', data.pageCount ?? 0]
+  );
+  const rowWithFile = await queryRow(
+    `SELECT cf.*, f.filename, f.storage_url
+     FROM courseware_files cf
+     JOIN files f ON f.id = cf.id
+     WHERE cf.id = $1`,
+    [data.id]
+  );
+  return mapCourseware(rowWithFile!);
+}
+
+export async function updateCourseware(id: string, updates: {
+  renderStatus?: 'pending' | 'processing' | 'ready' | 'failed';
+  pageCount?: number;
+}): Promise<void> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const cw = db.coursewareFiles.find(c => c.id === id);
+    if (cw) {
+      if (updates.renderStatus) cw.renderStatus = updates.renderStatus;
+      if (updates.pageCount !== undefined) cw.pageCount = updates.pageCount;
+      await writeDb(db);
+    }
+    return;
+  }
+  if (updates.renderStatus && updates.pageCount !== undefined) {
+    await queryRow(
+      `UPDATE courseware_files SET render_status = $1, page_count = $2 WHERE id = $3`,
+      [updates.renderStatus, updates.pageCount, id]
+    );
+  } else if (updates.renderStatus) {
+    await queryRow(
+      `UPDATE courseware_files SET render_status = $1 WHERE id = $2`,
+      [updates.renderStatus, id]
+    );
+  } else if (updates.pageCount !== undefined) {
+    await queryRow(
+      `UPDATE courseware_files SET page_count = $1 WHERE id = $2`,
+      [updates.pageCount, id]
+    );
+  }
+}
+

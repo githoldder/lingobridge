@@ -168,7 +168,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   useEffect(() => {
     const loadPages = async () => {
-      const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+      const courseId = localStorage.getItem('lingobridge_courseId') || '';
       setPagesLoading(true);
       try {
         const pages = await coursesApi.pages(courseId);
@@ -292,14 +292,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   // Load homework/vocab for student
   useEffect(() => {
     if (role !== 'student') return;
-    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    const courseId = localStorage.getItem('lingobridge_courseId') || '';
     homeworkApi.tasks(courseId).then(setHomeworkTasks).catch(() => {});
     vocabularyApi.list(courseId).then(setVocabItems).catch(() => {});
   }, [role]);
 
   // Live session lifecycle
   useEffect(() => {
-    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || 'course-1';
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
     const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || '';
     let ended = false;
 
@@ -497,7 +497,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
           const blob = new Blob(chunks, { type: 'video/webm' });
           try {
             await lecturesApi.upload({
-              courseId: localStorage.getItem('lingobridge_courseId') || 'course-1',
+              courseId: localStorage.getItem('lingobridge_courseId') || '',
               title: t('course.basic') + ' - ' + new Date().toLocaleTimeString(),
               blob,
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
@@ -556,7 +556,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (!isTeacher) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    const courseId = localStorage.getItem('lingobridge_courseId') || 'course-1';
+    const courseId = localStorage.getItem('lingobridge_courseId') || '';
     try {
       setPagesLoading(true);
       setCoursewareStatus('processing');
