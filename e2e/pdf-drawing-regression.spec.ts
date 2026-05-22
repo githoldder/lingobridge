@@ -15,8 +15,9 @@ async function seedLessonNode(): Promise<string> {
     body: JSON.stringify({ title: `e2e-pdf-test-${Date.now()}` })
   });
   const json = await res.json();
+  if (json.code !== 0) console.error('seedLessonNode failed:', JSON.stringify(json));
   expect(json.code).toBe(0);
-  return json.data.id;
+  return json.data.lessonNode.id;
 }
 
 async function uploadPdfCourseware(lessonNodeId: string) {
@@ -32,6 +33,7 @@ async function uploadPdfCourseware(lessonNodeId: string) {
     })
   });
   const json = await res.json();
+  if (json.code !== 0) console.error('uploadPdfCourseware failed:', JSON.stringify(json));
   expect(json.code).toBe(0);
   return json.data;
 }
