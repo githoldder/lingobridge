@@ -17,6 +17,7 @@
     "pm2:stop": "pm2 stop ecosystem.config.cjs",
     "pm2:logs": "pm2 logs lingobridge-backend lingobridge-frontend-preview --lines 80 --nostream",
     "e2e": "playwright test",
+    "records:cleanup": "tsx scripts/cleanup-zombie-learning-records.ts",
     "db:seed": "tsx backend/src/seed.ts"
   },
   "dependencies": {

@@ -4,8 +4,10 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 interface PdfViewerProps {
   url: string;
   page: number;
+  lessonNodeId?: string;
   onPageCount?: (count: number) => void;
   onRenderState?: (state: 'loading' | 'ready' | 'error') => void;
+  onRenderError?: (detail: string) => void;
 }
 
 interface PageCacheEntry {
@@ -32,7 +34,24 @@ async function ensurePdfjs() {
 
 const MAX_CACHE_SIZE = 5;
 
-const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderState }) => {
+type PdfErrorCategory = 'network' | 'parse' | 'render' | 'unknown';
+
+function categorizePdfError(err: any): PdfErrorCategory {
+  const n = err?.name || '';
+  const m = (err?.message || '').toLowerCase();
+  if (n === 'NetworkError' || m.includes('network') || m.includes('fetch') || m.includes('abort')) return 'network';
+  if (n === 'InvalidPDFException' || m.includes('invalid pdf') || m.includes('corrupt') || m.includes('格式错误')) return 'parse';
+  if (n === 'MissingPDFException' || m.includes('404') || m.includes('not found')) return 'network';
+  return 'render';
+}
+
+function describePdfError(err: any) {
+  const name = err?.name ? `${err.name}: ` : '';
+  const message = err?.message || String(err || 'unknown error');
+  return `${name}${message}`;
+}
+
+const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, lessonNodeId, onPageCount, onRenderState, onRenderError }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<any>(null);
@@ -89,12 +108,17 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
       return true;
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
-        console.error('PDF render error:', err);
-        if (!targetCanvas) setError('render_failed');
+        const detail = describePdfError(err);
+        const category = categorizePdfError(err);
+        if (!targetCanvas) {
+          console.error(`PDF render error [${category}]: ${detail}`, { url, page: num, lessonNodeId });
+          setError('render_failed');
+          onRenderError?.(`[${category}] ${detail}`);
+        }
       }
       return false;
     }
-  }, []);
+  }, [onRenderError, url, lessonNodeId]);
 
   const preRenderAdjacent = useCallback(async (current: number, total: number) => {
     const doc = docRef.current;
@@ -126,8 +150,9 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
         // Handle CORS and network errors gracefully
         const loadingTask = lib.getDocument({
           url,
-          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
           cMapPacked: true,
+          disableAutoFetch: false,
+          disableStream: false,
         });
         
         const doc = await loadingTask.promise;
@@ -139,47 +164,45 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
         onRenderState?.('ready');
       } catch (err: any) {
         if (!cancelled) {
-          console.error('PDF load error:', err);
-          setError('load_failed');
+          const detail = describePdfError(err);
+          const category = categorizePdfError(err);
+          console.error(`PDF load error [${category}]: ${detail}`, { url, lessonNodeId, err });
+          setError(category === 'network' ? 'load_failed' : 'load_failed');
           onRenderState?.('error');
+          onRenderError?.(`[${category}] ${detail}`);
         }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [url]);
+  }, [url, onRenderState, onRenderError]);
 
-  // Render current page when ready or page changes
+  // Render current page when ready or page changes — clamp to valid range
   useEffect(() => {
     if (!ready) return;
+    const doc = docRef.current;
+    const maxPage = doc?.numPages || 1;
+    const clampedPage = Math.max(1, Math.min(page, maxPage));
+    if (clampedPage !== page) {
+      onPageCount?.(maxPage);
+    }
     setRendering(true);
     setError(null);
     onRenderState?.('loading');
 
-    renderPage(page).then((ok) => {
-      if (ok) {
-        setRendering(false);
-        onRenderState?.('ready');
-      }
+    renderPage(clampedPage).then((ok) => {
+      setRendering(false);
+      onRenderState?.(ok ? 'ready' : 'error');
     });
-  }, [ready, page, renderPage]);
+  }, [ready, page, renderPage, onRenderState, onPageCount]);
 
-  // Pre-render adjacent pages
-  useEffect(() => {
-    if (!ready) return;
-    const timer = setTimeout(() => {
-      preRenderAdjacent(page, pageCacheRef.current.size > 0 ? 999 : 1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [ready, page, preRenderAdjacent]);
-
-  // Get total pages for pre-rendering
+  // Pre-render adjacent pages using actual doc page count
   useEffect(() => {
     if (!ready || !docRef.current) return;
     const total = docRef.current.numPages;
     const timer = setTimeout(() => {
       preRenderAdjacent(page, total);
-    }, 500);
+    }, 300);
     return () => clearTimeout(timer);
   }, [ready, page, preRenderAdjacent]);
 
@@ -191,7 +214,7 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
     return () => ro.disconnect();
   }, [ready, page, renderPage]);
 
-  if (error === 'load_failed') {
+  if (error === 'load_failed' || error === 'render_failed') {
     return (
       <div ref={wrapperRef} className="relative w-full h-full flex items-center justify-center bg-gray-50">
         <div className="text-center p-8">
@@ -200,7 +223,11 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, onPageCount, onRenderS
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
-          <p className="text-sm font-medium text-gray-700 mb-2">课件加载失败，请重试</p>
+          <p className="text-sm font-medium text-gray-700 mb-2">
+            {error === 'load_failed' ? '课件加载失败，请检查网络或确认 PDF 文件有效后重试' : 'PDF 页面渲染失败，请切换页码或重新加载'}
+          </p>
+          <p className="text-xs text-gray-400 mb-4 break-all">{url}</p>
+          <p className="text-xs text-red-400 mb-4 font-mono">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"

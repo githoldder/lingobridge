@@ -53,7 +53,7 @@ export async function resolveEntry(params: {
     };
   }
 
-  const tasks = await homeworkApi.tasks(courseId);
+  const tasks = await homeworkApi.tasks(courseId, { includeAll: true });
   if (tasks.length === 0) {
     const fallback: LessonNode = {
       id: buildLessonNodeId(courseId, 1, 1),
@@ -108,7 +108,7 @@ export async function resolveEntry(params: {
 }
 
 export async function fetchLessonNodes(courseId: string): Promise<LessonNode[]> {
-  const tasks = await homeworkApi.tasks(courseId);
+  const tasks = await homeworkApi.tasks(courseId, { includeAll: true });
   const lessonMap = new Map<string, LearningTask[]>();
   for (const task of tasks) {
     const key = `${task.unit}-${task.lesson}`;

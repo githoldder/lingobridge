@@ -11,6 +11,7 @@ import * as usersRepo from './repositories/users.ts';
 import * as coursesRepo from './repositories/courses.ts';
 import * as filesRepo from './repositories/files.ts';
 import * as assignmentsRepo from './repositories/assignments.ts';
+import * as liveRepo from './repositories/live.ts';
 import * as XLSX from 'xlsx';
 import { queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
@@ -850,7 +851,8 @@ export function createApp() {
   });
 
   app.post('/api/v1/recordings', async (req, res) => {
-    const { courseId = 'course-1', pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId, pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!base64) return fail(res, 400, 'base64 audio is required');
     const db = await readDb();
     const saved = await saveBase64File({ base64, filename, folder: 'recordings' });
@@ -886,7 +888,8 @@ export function createApp() {
   });
 
   app.post('/api/v1/lectures', async (req, res) => {
-    const { courseId = 'course-1', title = 'Class Replay', filename = 'lecture.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId, title = 'Class Replay', filename = 'lecture.webm', base64, durationSec = 0 } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!base64) return fail(res, 400, 'base64 video is required');
     const db = await readDb();
     const saved = await saveBase64File({ base64, filename, folder: 'lectures' });
@@ -1055,71 +1058,127 @@ export function createApp() {
 
   // Live session API (T27)
   app.post('/api/v1/live-sessions', async (req, res) => {
-    const db = await readDb();
-    const teacherId = currentUserId(req) || 'teacher-1';
-    const { courseId = 'course-1', sourceMode = 'pdf', lessonNodeId } = req.body ?? {};
+    const teacherId = currentUserId(req);
+    if (!teacherId) return fail(res, 401, 'Unauthorized');
+    const teacher = await usersRepo.findById(teacherId);
+    if (!teacher || (teacher.role !== 'teacher' && teacher.role !== 'admin')) {
+      return fail(res, 403, 'Only teachers can create live sessions');
+    }
 
+    const { courseId, sourceMode = 'pdf', lessonNodeId } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!lessonNodeId) return fail(res, 400, 'lessonNodeId is required');
 
-    const lessonNode = db.lessonNodes.find((n) => n.id === lessonNodeId);
+    const course = await coursesRepo.findById(courseId);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (teacher.role !== 'admin' && course.teacherId !== teacherId) {
+      return fail(res, 403, 'You cannot create live sessions for this course');
+    }
+
+    const lessonNodes = await coursesRepo.findLessonNodes(courseId);
+    const lessonNode = lessonNodes.find((n) => n.id === lessonNodeId);
     if (!lessonNode) return fail(res, 404, 'Lesson node not found');
 
-    const existingActive = db.liveSessions.find(
-      (s) => s.lessonNodeId === lessonNodeId && s.status === 'active'
-    );
+    const existingActive = await liveRepo.findActiveByLessonNodeId(lessonNodeId);
     if (existingActive) return fail(res, 409, 'An active live session already exists for this lesson node');
 
-    db.liveSessions.forEach((s) => {
-      if (s.courseId === courseId && s.teacherId === teacherId && s.status === 'active') {
-        s.status = 'ended';
-        s.endedAt = new Date().toISOString();
-      }
-    });
-
-    const session: LiveSession = {
-      id: crypto.randomUUID(),
+    await liveRepo.endActiveByCourseAndTeacher(courseId, teacherId);
+    const session = await liveRepo.createSession({
       courseId,
       teacherId,
       lessonNodeId,
-      status: 'active',
       sourceMode: sourceMode as LiveSession['sourceMode'],
-      currentPage: 1,
-      recordingStatus: 'idle',
-      startedAt: new Date().toISOString(),
-      endedAt: ''
-    };
-    db.liveSessions.push(session);
-    await writeDb(db);
+      status: 'active'
+    });
     ok(res, session);
   });
 
   app.get('/api/v1/live-sessions/active', async (req, res) => {
-    const db = await readDb();
     const courseId = String(req.query.courseId || '');
-    const active = db.liveSessions.find(
-      (s) => s.courseId === courseId && s.status === 'active'
-    );
+    const active = courseId ? await liveRepo.findActiveByCourseId(courseId) : null;
     if (!active) return ok(res, null);
     ok(res, active);
   });
 
   app.patch('/api/v1/live-sessions/:id', async (req, res) => {
-    const db = await readDb();
-    const session = db.liveSessions.find((s) => s.id === req.params.id);
+    const session = await liveRepo.findById(req.params.id);
     if (!session) return fail(res, 404, 'Live session not found');
 
-    const { sourceMode, currentPage, recordingStatus, status, endedAt } = req.body ?? {};
-    if (sourceMode) session.sourceMode = sourceMode as LiveSession['sourceMode'];
-    if (currentPage !== undefined) session.currentPage = Number(currentPage);
-    if (recordingStatus) session.recordingStatus = recordingStatus as LiveSession['recordingStatus'];
-    if (status) {
-      session.status = status as LiveSession['status'];
-      if (status === 'ended' && !session.endedAt) {
-        session.endedAt = endedAt || new Date().toISOString();
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    if (user.role !== 'admin') {
+      const course = await coursesRepo.findById(session.courseId);
+      if (!course) return fail(res, 404, 'Course not found');
+      if (course.teacherId !== userId && session.teacherId !== userId) {
+        return fail(res, 403, 'Forbidden');
       }
     }
-    await writeDb(db);
-    ok(res, session);
+
+    const { sourceMode, currentPage, recordingStatus, status, endedAt } = req.body ?? {};
+    const pageNum = currentPage !== undefined ? Number(currentPage) : undefined;
+    if (pageNum !== undefined && (!Number.isInteger(pageNum) || pageNum < 1)) {
+      return fail(res, 400, 'currentPage must be a positive integer');
+    }
+    const updated = await liveRepo.updateSession(req.params.id, {
+      sourceMode: sourceMode as LiveSession['sourceMode'] | undefined,
+      currentPage: pageNum,
+      recordingStatus: recordingStatus as LiveSession['recordingStatus'] | undefined,
+      status: status as LiveSession['status'] | undefined,
+      endedAt: status === 'ended' && !session.endedAt ? (endedAt || new Date().toISOString()) : endedAt
+    });
+    ok(res, updated);
+  });
+
+  app.get('/api/v1/live-sessions/:id', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    if (user.role === 'admin') return ok(res, session);
+
+    const course = await coursesRepo.findById(session.courseId);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (course.teacherId === userId || session.teacherId === userId) return ok(res, session);
+
+    const courseMembers = await coursesRepo.findMembers(session.courseId);
+    const isMember = courseMembers.some((m) => m.userId === userId);
+    if (isMember) return ok(res, session);
+
+    const liveClassStudents = await liveRepo.findClassStudents(session.lessonNodeId);
+    const isLiveStudent = liveClassStudents.some((s) => s.studentId === userId);
+    if (isLiveStudent) return ok(res, session);
+
+    return fail(res, 403, 'Forbidden');
+  });
+
+  app.post('/api/v1/live-sessions/:id/join', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    if (session.status !== 'active' && session.status !== 'scheduled') return fail(res, 403, 'Session is not active');
+
+    const studentId = currentUserId(req);
+    if (!studentId) return fail(res, 401, 'Unauthorized');
+
+    const courseMembers = await coursesRepo.findMembers(session.courseId);
+    const isCourseMember = courseMembers.some(
+      (m) => m.courseId === session.courseId && m.userId === studentId && m.role === 'student'
+    );
+    if (isCourseMember) return ok(res, { allowed: true });
+
+    const liveClassStudents = await liveRepo.findClassStudents(session.lessonNodeId);
+    const isLiveClassStudent = liveClassStudents.some(
+      (s) => s.lessonNodeId === session.lessonNodeId && s.studentId === studentId
+    );
+    if (isLiveClassStudent) return ok(res, { allowed: true });
+
+    return fail(res, 403, 'You are not enrolled in this course');
   });
 
   app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {
@@ -1208,6 +1267,12 @@ export function createApp() {
     const db = await readDb();
     const records = db.learningRecords.filter(r => r.studentId === req.params.id);
     ok(res, records);
+  });
+
+  app.post('/api/v1/admin/learning-records/cleanup-zombies', requireAdmin, async (req, res) => {
+    const dryRun = req.body?.dryRun !== false;
+    const result = await assignmentsRepo.cleanupZombieLearningRecords(dryRun);
+    ok(res, result);
   });
 
   // Admin middleware

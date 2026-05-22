@@ -305,23 +305,18 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       ? { context: 'homework' as const, lessonNodeId: activeLessonNodeId }
       : { context: 'homework' as const };
 
+    const tasksPromise = activeLessonNodeId
+      ? homeworkApi.tasks(selectedCourseId, { lessonNodeId: activeLessonNodeId })
+      : homeworkApi.tasks(selectedCourseId, { includeAll: true });
+
     Promise.all([
-      homeworkApi.tasks(selectedCourseId),
+      tasksPromise,
       learningRecordsApi.list(selectedCourseId, recordsContext)
     ]).then(([tasks, records]) => {
-      let filteredTasks = tasks;
-      if (activeLessonNodeId) {
-        const parts = activeLessonNodeId.replace(`${selectedCourseId}-`, '').split('-');
-        const targetUnit = parseInt(parts[0].replace('u', ''), 10);
-        const targetLesson = parseInt(parts[1].replace('l', ''), 10);
-        filteredTasks = tasks.filter(
-          (task) => task.unit === targetUnit && task.lesson === targetLesson
-        );
-      }
-      setAllTasks(filteredTasks);
+      setAllTasks(tasks);
       setLearningRecords(records);
       const lessonMap = new Map<string, LearningTask[]>();
-      for (const task of filteredTasks) {
+      for (const task of tasks) {
         const key = `${task.unit}-${task.lesson}`;
         if (!lessonMap.has(key)) lessonMap.set(key, []);
         lessonMap.get(key)!.push(task);
@@ -483,6 +478,11 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   };
 
   const latestScore = recordings[0]?.score;
+  const playTaskTts = (text?: string, lang: 'zh-CN' | 'ru-RU' = 'zh-CN') => {
+    const value = text?.trim();
+    if (!value) return;
+    ttsService.speak(value, lang);
+  };
 
   return (
     <div className="space-y-4">
@@ -717,8 +717,9 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 mb-6 tracking-wide leading-tight group flex items-center justify-center gap-4">
               <span className="font-noto">{currentTask?.zhText || ''}</span>
               <button
-                onClick={() => currentTask && ttsService.speak(currentTask.zhText, 'zh-CN')}
+                onClick={() => playTaskTts(currentTask?.zhText, 'zh-CN')}
                 className="p-3 bg-[#0056D2] text-white rounded-full hover:bg-blue-700 transition-all shadow-md hover:scale-110 active:scale-95"
+                title="播放中文"
               >
                 <Volume2 size={28} />
               </button>
@@ -727,6 +728,15 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
               <p className="text-xl text-gray-400 font-medium italic">{currentTask?.pinyin || ''}</p>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-base text-gray-500 bg-gray-100 px-5 py-2 rounded-full font-medium">{currentTask?.translationRu || ''}</span>
+                {currentTask?.translationRu && (
+                  <button
+                    onClick={() => playTaskTts(currentTask.translationRu, 'ru-RU')}
+                    className="p-2 bg-gray-900 text-white rounded-full hover:bg-gray-700 transition-all shadow-sm active:scale-95"
+                    title="播放俄语"
+                  >
+                    <Volume2 size={18} />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -913,7 +923,18 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{t('homework.model_answer')}</p>
                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
                   <p className="text-2xl font-bold text-gray-900 mb-2 leading-tight font-noto">{currentTask?.zhText || ''}</p>
-                  <p className="text-base text-gray-500 font-medium">{currentTask?.translationRu || ''}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base text-gray-500 font-medium">{currentTask?.translationRu || ''}</p>
+                    {currentTask?.translationRu && (
+                      <button
+                        onClick={() => playTaskTts(currentTask.translationRu, 'ru-RU')}
+                        className="p-2 bg-gray-900 text-white rounded-full hover:bg-gray-700 transition-all"
+                        title="播放俄语"
+                      >
+                        <Volume2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

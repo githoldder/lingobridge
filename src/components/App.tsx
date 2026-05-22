@@ -44,7 +44,7 @@ function AppContent() {
   const [prevTab, setPrevTab] = useState('dashboard');
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [navContext, setNavContext] = useState<NavigationContext>({});
-  const { requireAuth, user, showGuestGate, setShowGuestGate } = useAuth();
+  const { requireAuth, user, logout, showGuestGate, setShowGuestGate } = useAuth();
 
   // Auto-navigate to dashboard when user logs in
   React.useEffect(() => {
@@ -131,7 +131,7 @@ function AppContent() {
         if (user?.role !== 'admin') {
           return <DashboardView onNavigate={handleNavigate} />;
         }
-        return <AdminDashboardView />;
+        return <AdminDashboardView onLogout={() => { logout(); handleNavigate('landing'); }} />;
       default:
         return userRole === 'teacher' ? <TeacherDashboardView /> : <DashboardView />;
     }

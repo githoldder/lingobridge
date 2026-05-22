@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import * as XLSX from 'xlsx';
 import { createApp } from '../src/app.ts';
-import { resetDbForTests } from '../src/db.ts';
+import { readDb, resetDbForTests, writeDb } from '../src/db.ts';
 
 async function withServer(fn: (baseUrl: string) => Promise<void>) {
   resetDbForTests();
@@ -296,6 +296,238 @@ test('assignment export works', async () => {
   });
 });
 
+test('live session join validates membership', async () => {
+  await withServer(async (baseUrl) => {
+    // Create a live session as teacher
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'teacher@test.com', password: 'Test@123456' })
+    });
+    const loginJson = await login.json();
+    const teacherToken = loginJson.data.token;
+
+    const create = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ title: 'Join Test Lesson' })
+    });
+    const createJson = await create.json();
+    const lessonNodeId = createJson.data.lessonNode.id;
+
+    const sessionRes = await fetch(`${baseUrl}/api/v1/live-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ courseId: 'course-1', lessonNodeId })
+    });
+    const sessionJson = await sessionRes.json();
+    assert.equal(sessionJson.code, 0);
+    const sessionId = sessionJson.data.id;
+
+    const createAsStudent = await fetch(`${baseUrl}/api/v1/live-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' },
+      body: JSON.stringify({ courseId: 'course-1', lessonNodeId })
+    });
+    assert.equal(createAsStudent.status, 403);
+
+    const otherTeacherReg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'other_teacher@test.com',
+        password: 'Test@123456',
+        displayName: '其他老师',
+        role: 'teacher'
+      })
+    });
+    const otherTeacherJson = await otherTeacherReg.json();
+    assert.equal(otherTeacherJson.code, 0);
+    const createAsOtherTeacher = await fetch(`${baseUrl}/api/v1/live-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherTeacherJson.data.token}` },
+      body: JSON.stringify({ courseId: 'course-1', lessonNodeId })
+    });
+    assert.equal(createAsOtherTeacher.status, 403);
+
+    // Valid member (student-1 is a course member) can join
+    const joinOk = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' }
+    });
+    const joinOkJson = await joinOk.json();
+    assert.equal(joinOkJson.code, 0);
+    assert.equal(joinOkJson.data.allowed, true);
+
+    // Unauthorized (no token) cannot join
+    const joinNoAuth = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    assert.equal(joinNoAuth.status, 401);
+
+    // Authenticated non-member cannot join
+    const reg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'non_member@test.com',
+        password: 'Test@123456',
+        displayName: '非成员',
+        role: 'student'
+      })
+    });
+    const regJson = await reg.json();
+    assert.equal(regJson.code, 0);
+    const nonMemberToken = regJson.data.token;
+
+    const joinNonMember = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${nonMemberToken}` }
+    });
+    assert.equal(joinNonMember.status, 403);
+  });
+});
+
+test('live session currentPage rejects < 1', async () => {
+  await withServer(async (baseUrl) => {
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'teacher@test.com', password: 'Test@123456' })
+    });
+    const loginJson = await login.json();
+    const teacherToken = loginJson.data.token;
+
+    const create = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ title: 'Page Test Lesson' })
+    });
+    const createJson = await create.json();
+    const lessonNodeId = createJson.data.lessonNode.id;
+
+    const sessionRes = await fetch(`${baseUrl}/api/v1/live-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ courseId: 'course-1', lessonNodeId })
+    });
+    const sessionJson = await sessionRes.json();
+    assert.equal(sessionJson.code, 0);
+    const sessionId = sessionJson.data.id;
+
+    const pageNoAuth = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPage: 2 })
+    });
+    assert.equal(pageNoAuth.status, 401);
+
+    const pageAsStudent = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' },
+      body: JSON.stringify({ currentPage: 2 })
+    });
+    assert.equal(pageAsStudent.status, 403);
+
+    const otherTeacherReg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'page_other_teacher@test.com',
+        password: 'Test@123456',
+        displayName: '翻页测试老师',
+        role: 'teacher'
+      })
+    });
+    const otherTeacherJson = await otherTeacherReg.json();
+    assert.equal(otherTeacherJson.code, 0);
+    const pageAsOtherTeacher = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherTeacherJson.data.token}` },
+      body: JSON.stringify({ currentPage: 2 })
+    });
+    assert.equal(pageAsOtherTeacher.status, 403);
+
+    // PATCH with currentPage = 0 → 400
+    const pageZero = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ currentPage: 0 })
+    });
+    assert.equal(pageZero.status, 400);
+
+    // PATCH with currentPage = -1 → 400
+    const pageNeg = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ currentPage: -1 })
+    });
+    assert.equal(pageNeg.status, 400);
+
+    // PATCH with currentPage = 5 → 200
+    const pageOk = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ currentPage: 5 })
+    });
+    assert.equal(pageOk.status, 200);
+    const pageOkJson = await pageOk.json();
+    assert.equal(pageOkJson.data.currentPage, 5);
+
+    // PATCH with currentPage = "abc" (NaN) → 400
+    const pageNan = await fetch(`${baseUrl}/api/v1/live-sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${teacherToken}` },
+      body: JSON.stringify({ currentPage: 'abc' })
+    });
+    assert.equal(pageNan.status, 400);
+  });
+});
+
+test('student courses list only shows enrolled courses', async () => {
+  await withServer(async (baseUrl) => {
+    // Register a new student not enrolled in any course
+    const reg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new_enrolled@test.com',
+        password: 'Test@123456',
+        displayName: '新注册学生',
+        role: 'student'
+      })
+    });
+    const regJson = await reg.json();
+    assert.equal(regJson.code, 0);
+    const token = regJson.data.token;
+
+    // Fresh student has no courses
+    const courses1 = await fetch(`${baseUrl}/api/v1/courses`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const courses1Json = await courses1.json();
+    assert.equal(courses1Json.code, 0);
+    assert.equal(courses1Json.data.length, 0);
+
+    // Enroll student in course-1
+    await fetch(`${baseUrl}/api/v1/courses/course-1/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ userId: regJson.data.user.id })
+    });
+
+    // Now student sees course-1
+    const courses2 = await fetch(`${baseUrl}/api/v1/courses`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const courses2Json = await courses2.json();
+    assert.equal(courses2Json.code, 0);
+    assert.equal(courses2Json.data.length, 1);
+    assert.equal(courses2Json.data[0].id, 'course-1');
+  });
+});
+
 test('live class inherits course students and supports batch student adds', async () => {
   await withServer(async (baseUrl) => {
     const liveClass = await fetch(`${baseUrl}/api/v1/courses/course-1/lesson-nodes`, {
@@ -312,5 +544,113 @@ test('live class inherits course students and supports batch student adds', asyn
     assert.equal(studentsJson.code, 0);
     assert.ok(studentsJson.data.length >= 3);
     assert.ok(studentsJson.data.some((item: any) => item.user.displayName === '阿合买提'));
+  });
+});
+
+test('PDF courseware upload requires lessonNodeId (S4-T13)', async () => {
+  await withServer(async (baseUrl) => {
+    const noNode = await fetch(`${baseUrl}/api/v1/coursewares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        filename: 'test.pdf',
+        mimeType: 'application/pdf',
+        base64: Buffer.from('fake pdf').toString('base64')
+      })
+    });
+    const noNodeJson = await noNode.json();
+    assert.equal(noNodeJson.code, 400);
+    assert.ok(noNodeJson.message.includes('lessonNodeId'));
+
+    const withNode = await fetch(`${baseUrl}/api/v1/coursewares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        filename: 'test.pdf',
+        mimeType: 'application/pdf',
+        base64: Buffer.from('fake pdf').toString('base64')
+      })
+    });
+    const withNodeJson = await withNode.json();
+    assert.equal(withNodeJson.code, 0);
+    assert.equal(withNodeJson.data.pages.length, 1);
+  });
+});
+
+test('backend accepts uploaded PDF bytes regardless of PDF content (S4-T22 HTTP layer)', async () => {
+  await withServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/v1/coursewares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        filename: 'corrupted.pdf',
+        mimeType: 'application/pdf',
+        base64: Buffer.from('corrupted').toString('base64')
+      })
+    });
+    const json = await res.json();
+    assert.equal(json.code, 0);
+    assert.equal(json.data.file.renderStatus, 'ready');
+  });
+});
+
+test('page count clamp validation (S4-T35)', async () => {
+  await withServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/v1/live-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        sourceMode: 'pdf'
+      })
+    });
+    const json = await res.json();
+    assert.equal(json.code, 0);
+    assert.ok(json.data.id);
+
+    const patch = await fetch(`${baseUrl}/api/v1/live-sessions/${json.data.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ currentPage: -1 })
+    });
+    const patchJson = await patch.json();
+    assert.equal(patchJson.code, 400);
+    assert.ok(patchJson.message.includes('positive integer'));
+  });
+});
+
+test('admin can dry-run zombie learning record cleanup', async () => {
+  await withServer(async (baseUrl) => {
+    const db = await readDb();
+    db.learningRecords.push({
+      id: 'zombie-record-1',
+      studentId: 'student-1',
+      taskId: 'missing-task-id',
+      context: 'homework',
+      status: 'completed',
+      score: 80,
+      attemptsCount: 1,
+      lastRecordingId: '',
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    await writeDb(db);
+
+    const res = await fetch(`${baseUrl}/api/v1/admin/learning-records/cleanup-zombies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer admin-1' },
+      body: JSON.stringify({ dryRun: true })
+    });
+    const json = await res.json();
+    assert.equal(json.code, 0);
+    assert.equal(json.data.dryRun, true);
+    assert.equal(json.data.deleted, 1);
+    assert.equal(json.data.reasons.missing_task, 1);
   });
 });

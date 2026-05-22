@@ -166,7 +166,7 @@ export interface LiveSession {
   courseId: string;
   teacherId: string;
   lessonNodeId: string;
-  status: 'active' | 'ended';
+  status: 'active' | 'ended' | 'scheduled';
   sourceMode: 'screen' | 'pdf';
   currentPage: number;
   recordingStatus: 'idle' | 'recording' | 'saved';

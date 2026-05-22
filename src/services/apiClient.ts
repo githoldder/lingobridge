@@ -23,6 +23,7 @@ export interface Course {
 export interface CoursePage {
   id: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   contentHtml: string;
   audioText: string;
@@ -371,11 +372,12 @@ export interface LearningRecord {
 }
 
 export const homeworkApi = {
-  tasks: (courseId: string, unit?: number, lesson?: number, lessonNodeId?: string) => {
+  tasks: (courseId: string, params?: { unit?: number; lesson?: number; lessonNodeId?: string; includeAll?: boolean }) => {
     let path = `/homework/tasks?courseId=${courseId}`;
-    if (unit !== undefined) path += `&unit=${unit}`;
-    if (lesson !== undefined) path += `&lesson=${lesson}`;
-    if (lessonNodeId) path += `&lessonNodeId=${lessonNodeId}`;
+    if (params?.unit !== undefined) path += `&unit=${params.unit}`;
+    if (params?.lesson !== undefined) path += `&lesson=${params.lesson}`;
+    if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.includeAll) path += `&includeAll=true`;
     return request<LearningTask[]>(path);
   }
 };
@@ -492,6 +494,10 @@ export const liveSessionsApi = {
     }),
   getActive: (courseId: string) =>
     request<LiveSessionData | null>(`/live-sessions/active?courseId=${courseId}`),
+  get: (sessionId: string) =>
+    request<LiveSessionData>(`/live-sessions/${sessionId}`),
+  join: (sessionId: string) =>
+    request<{ allowed: boolean }>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
   patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
     request<LiveSessionData>(`/live-sessions/${id}`, {
       method: 'PATCH',
@@ -618,6 +624,13 @@ export interface AdminLearningProgress {
   students: StudentProgress[];
 }
 
+export interface CleanupLearningRecordsResult {
+  deleted: number;
+  scanned: number;
+  dryRun: boolean;
+  reasons: Record<string, number>;
+}
+
 export const adminApi = {
   listUsers: (role?: string, q?: string) => {
     let path = '/admin/users';
@@ -641,6 +654,11 @@ export const adminApi = {
     request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
   getUserRecords: (id: string) =>
     request<LearningRecord[]>(`/admin/users/${id}/records`),
+  cleanupZombieLearningRecords: (dryRun = true) =>
+    request<CleanupLearningRecordsResult>('/admin/learning-records/cleanup-zombies', {
+      method: 'POST',
+      body: JSON.stringify({ dryRun })
+    }),
   liveSessions: () => request<AdminLiveSession[]>('/admin/live-sessions'),
   recordings: (courseId?: string) => request<AdminRecording[]>(`/admin/recordings${courseId ? `?courseId=${courseId}` : ''}`),
   notes: () => request<AdminNote[]>('/admin/notes'),

@@ -83,8 +83,30 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [pdfFile, setPdfFile] = useState<string | null>(null);
-  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPage, setPdfPageRaw] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(0);
+  const pdfPageCountRef = useRef(0);
+
+  const setPdfPage = useCallback((next: number | ((prev: number) => number)) => {
+    setPdfPageRaw(prev => {
+      const raw = typeof next === 'function' ? next(prev) : next;
+      const max = pdfPageCountRef.current;
+      return max > 0 ? Math.max(1, Math.min(raw, max)) : 1;
+    });
+  }, []);
+
+  // Keep ref in sync; when count arrives, clamp current page immediately
+  useEffect(() => {
+    pdfPageCountRef.current = pdfPageCount;
+    if (pdfPageCount > 0) {
+      setPdfPageRaw(prev => Math.max(1, Math.min(prev, pdfPageCount)));
+    }
+  }, [pdfPageCount]);
+
+  const handlePageCount = useCallback((count: number) => {
+    setPdfPageCount(count);
+    setPdfPageRaw(prev => Math.max(1, Math.min(prev, count)));
+  }, []);
   const [pdfRenderState, setPdfRenderState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [coursewareStatus, setCoursewareStatus] = useState<'pending' | 'processing' | 'ready' | 'failed' | null>(null);
   const [coursePages, setCoursePages] = useState<CoursePage[]>([]);
@@ -135,6 +157,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   // Live session
   const [liveSession, setLiveSession] = useState<LiveSessionData | null>(null);
   const liveSessionRef = useRef<LiveSessionData | null>(null);
+
+  const getCurrentPageKey = useCallback((): number => {
+    return isPdfType ? pdfPage : currentPageIdx + 1;
+  }, [isPdfType, pdfPage, currentPageIdx]);
 
   const stopTracks = (stream: MediaStream | null) => {
     stream?.getTracks().forEach((track) => track.stop());
@@ -189,55 +215,29 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     };
   }, []);
 
-  // Canvas dynamic resize to match container
+  // Canvas resize to match container — ONLY on container size changes
   useEffect(() => {
     const container = canvasContainerRef.current;
-    if (!container) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!container || !canvas) return;
 
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
+      if (canvas.width === rect.width && canvas.height === rect.height) return;
       
-      // Save current content before resize
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
       const tempCtx = tempCanvas.getContext('2d');
-      if (tempCtx) {
-        tempCtx.drawImage(canvas, 0, 0);
-      }
+      if (tempCtx) tempCtx.drawImage(canvas, 0, 0);
       
       canvas.width = rect.width;
       canvas.height = rect.height;
       
-      // Restore content after resize
       if (tempCtx) {
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
-        }
-      }
-      
-      // Redraw strokes after resize
-      const pageKey = isPdfType ? pdfPage : currentPageIdx + 1;
-      const strokes = pageStrokes.get(pageKey) || [];
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (const stroke of strokes) {
-        if (stroke.points.length < 2) continue;
-        ctx.beginPath();
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.width;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
+        if (ctx) ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
       }
     };
 
@@ -245,7 +245,34 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const ro = new ResizeObserver(resizeCanvas);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [isPdfType, pdfPage, currentPageIdx, pageStrokes]);
+  }, []);
+
+  // Redraw strokes when page or strokes change — without touching canvas size
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const pageKey = getCurrentPageKey();
+    const strokes = pageStrokes.get(pageKey) || [];
+
+    for (const stroke of strokes) {
+      if (stroke.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      ctx.stroke();
+    }
+  }, [isPdfType, pdfPage, currentPageIdx, pageStrokes, getCurrentPageKey]);
 
   // Raise-hand flow: listen for grants via localStorage events
   useEffect(() => {
@@ -292,10 +319,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   // Load homework/vocab for student
   useEffect(() => {
     if (role !== 'student') return;
-    const courseId = localStorage.getItem('lingobridge_courseId') || '';
-    homeworkApi.tasks(courseId).then(setHomeworkTasks).catch(() => {});
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
+    if (!courseId) return;
+    const tasksPromise = lessonNodeId
+      ? homeworkApi.tasks(courseId, { lessonNodeId })
+      : homeworkApi.tasks(courseId, { includeAll: true });
+    tasksPromise.then(setHomeworkTasks).catch(() => {});
     vocabularyApi.list(courseId).then(setVocabItems).catch(() => {});
-  }, [role]);
+  }, [role, propCourseId, lessonNodeId]);
 
   // Live session lifecycle
   useEffect(() => {
@@ -318,8 +349,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             setLiveSession(session);
             liveSessionRef.current = session;
             if (session.currentPage) {
-              if (isPdfType) setPdfPage(session.currentPage);
-              else setCurrentPageIdx(session.currentPage - 1);
+              if (isPdfType) {
+                const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+                setPdfPage(clamped);
+              } else {
+                setCurrentPageIdx(Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0))));
+              }
             }
           }
         })
@@ -338,6 +373,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   // Update live session page/source when changed
   useEffect(() => {
     if (!liveSession?.id || !isTeacher) return;
+    if (isPdfType && pdfPageCount === 0) return;
     const page = isPdfType ? pdfPage : currentPageIdx + 1;
     const timer = setTimeout(() => {
       liveSessionsApi.patch(liveSession.id, {
@@ -346,7 +382,25 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       }).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
-  }, [pdfPage, currentPageIdx, liveMode]);
+  }, [pdfPage, pdfPageCount, currentPageIdx, liveMode]);
+
+  // Student: poll live session currentPage every 3 seconds
+  useEffect(() => {
+    if (!liveSession?.id || isTeacher) return;
+    const interval = setInterval(() => {
+      liveSessionsApi.get(liveSession.id).then((session) => {
+        if (!session?.currentPage) return;
+        if (isPdfType) {
+          const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+          if (clamped !== pdfPage) setPdfPage(clamped);
+        } else {
+          const clamped = Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0)));
+          if (clamped !== currentPageIdx) setCurrentPageIdx(clamped);
+        }
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [liveSession?.id, isTeacher, isPdfType, pdfPage, currentPageIdx]);
 
   // Poll live session comments every 5 seconds
   useEffect(() => {
@@ -557,10 +611,15 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const file = e.target.files?.[0];
     if (!file) return;
     const courseId = localStorage.getItem('lingobridge_courseId') || '';
+    const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || liveSession?.lessonNodeId || '';
+    if (!activeLessonNodeId) {
+      alert('请先选择或创建 Live Class，再上传课件。');
+      return;
+    }
     try {
       setPagesLoading(true);
       setCoursewareStatus('processing');
-      const result = await coursesApi.uploadCourseware(courseId, file);
+      const result = await coursesApi.uploadCourseware(courseId, file, activeLessonNodeId);
       const fileMeta = result.file as { mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
       const isPdf = fileMeta?.mimeType === 'application/pdf' || file.name.endsWith('.pdf');
       const isPptx = fileMeta?.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.endsWith('.pptx');
@@ -585,36 +644,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   };
 
   // Canvas Drawing logic — stroke-based with per-page storage
-  const getCurrentPageKey = useCallback((): number => {
-    return isPdfType ? pdfPage : currentPageIdx + 1;
-  }, [isPdfType, pdfPage, currentPageIdx]);
-
-  const redrawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const pageKey = getCurrentPageKey();
-    const strokes = pageStrokes.get(pageKey) || [];
-
-    for (const stroke of strokes) {
-      if (stroke.points.length < 2) continue;
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      for (let i = 1; i < stroke.points.length; i++) {
-        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-      }
-      ctx.stroke();
-    }
-  }, [pageStrokes, getCurrentPageKey]);
-
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -696,11 +725,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
     }
   };
-
-  // Redraw strokes when page changes
-  useEffect(() => {
-    redrawCanvas();
-  }, [pdfPage, currentPageIdx, redrawCanvas]);
 
   return (
     <div id="classroom-view" className="fixed inset-0 bg-[#0F172A] text-white z-[60] flex flex-col font-sans">
@@ -920,8 +944,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     <PdfViewer
                       url={pdfFile}
                       page={pdfPage}
-                      onPageCount={setPdfPageCount}
+                      lessonNodeId={lessonNodeId || liveSession?.lessonNodeId || undefined}
+                      onPageCount={handlePageCount}
                       onRenderState={setPdfRenderState}
+                      onRenderError={(detail) => {
+                        console.error(`PdfViewer error [${detail}] for lessonNode:`, lessonNodeId || liveSession?.lessonNodeId);
+                      }}
                     />
                     {pdfRenderState === 'loading' && pdfPageCount > 0 && (
                       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-black/60 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm">
@@ -1093,28 +1121,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                         </div>
                       )}
 
-                      {/* Teacher-only PG paginator */}
-                       {(pdfFile || coursePages.length > 0) && liveMode === 'multimedia' && (
-                         <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 p-2">
-                            <button
-                             onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                             className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                            >
-                             <ChevronLeft size={16} />
-                            </button>
-                            <span className="text-[11px] font-black text-gray-700 min-w-[60px] text-center">
-                              {isPdfType
-                                ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
-                                : `${t('classroom.pg')} ${currentPageIdx + 1}`}
-                            </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
-                              className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                             >
-                             <ChevronRight size={16} />
-                            </button>
-                         </div>
-                       )}
+
                     </div>
 
                     <div className="h-[1px] w-full bg-gray-100" />
@@ -1160,30 +1167,36 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     : t('classroom.presentation_active')}
               </div>
 
-              {/* Pagination controls — visible to both but label differs */}
+              {/* Pagination controls — teacher navigates, student follows */}
               <div className="flex items-center gap-8 mx-auto md:mx-0">
-                <button
-                  onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  title={t('homework.prev')}
-                >
-                  <ChevronLeft size={24} />
-                </button>
+                {isTeacher && (
+                  <button
+                    onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
+                    title={t('homework.prev')}
+                    disabled={isPdfType ? pdfPage <= 1 : coursePages.length === 0 || currentPageIdx <= 0}
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                )}
                 <div className="text-center min-w-[60px]">
                   <div className="text-xs font-black">
                     {isPdfType
-                      ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
+                      ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount))
                       : (coursePages.length > 0 ? currentPageIdx + 1 : 1)}
                   </div>
                   <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">{t('classroom.slide')}</div>
                 </div>
-                <button
-                  onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  title={t('homework.next')}
-                >
-                  <ChevronRight size={24} />
-                </button>
+                {isTeacher && (
+                  <button
+                    onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
+                    title={t('homework.next')}
+                    disabled={isPdfType ? pdfPage >= pdfPageCount : coursePages.length === 0 || currentPageIdx >= coursePages.length - 1}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-4">
@@ -1351,15 +1364,27 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                         {task.taskType} · {task.lessonTitle || `L${task.lesson}`}
                       </span>
                       <button
-                        onClick={() => ttsService.speak(task.zhText)}
+                        onClick={() => ttsService.speak(task.zhText, 'zh-CN')}
                         className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-400 transition-colors"
+                        title="播放中文"
                       >
                         <Volume2 size={14} />
                       </button>
                     </div>
                     <p className="text-lg font-bold text-white font-noto mb-1">{task.zhText}</p>
                     <p className="text-xs text-gray-400 italic mb-2">{task.pinyin}</p>
-                    <p className="text-xs text-gray-500 mb-3">{task.translationRu}</p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <p className="text-xs text-gray-500">{task.translationRu}</p>
+                      {task.translationRu && (
+                        <button
+                          onClick={() => ttsService.speak(task.translationRu, 'ru-RU')}
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-300 transition-colors"
+                          title="播放俄语"
+                        >
+                          <Volume2 size={14} />
+                        </button>
+                      )}
+                    </div>
 
                     {idx === hwCurrentIdx && (
                       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/10">
@@ -1503,7 +1528,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       <div className="text-center py-8">
                         <p className="text-3xl font-bold text-white mb-4 font-noto">{questionText}</p>
                         <button
-                          onClick={() => ttsService.speak(word.zhText)}
+                          onClick={() => ttsService.speak(vocabQuizMode === 'zh2ru' ? word.zhText : word.translationRu, vocabQuizMode === 'zh2ru' ? 'zh-CN' : 'ru-RU')}
                           className="w-12 h-12 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-all flex items-center justify-center mx-auto"
                         >
                           <Volume2 size={22} />

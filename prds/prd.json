@@ -1,6 +1,6 @@
 {
-  "version": "2026-05-19-prd-v4.4-sprint4-executable-plan",
-  "updatedAt": "2026-05-19",
+  "version": "2026-05-22-prd-v4.5-sprint4-okrts-minimum-entropy",
+  "updatedAt": "2026-05-22",
   "principles": [
     "简洁、可维护",
     "只覆盖关键逻辑",
@@ -8,13 +8,13 @@
     "不展开非关键内部实现细节"
   ],
   "implementationStatus": {
-    "summary": "Sprint 3 MVP recovery 已形成演示闭环；Sprint 4 转入真实 Postgres 数据边界、课程/学生同步、PDF 批注稳定、Live 翻页唯一可信、作业双模式和 Admin 验收。PPTX 策略 Spike 后置，本轮不投入。",
+    "summary": "Sprint 4 进入缺陷收敛：admin logout 已由用户确认可用；本轮补默认头像本地化、作业俄语 TTS、僵尸学习记录清理、PDF 渲染失败定位和 drawing 白屏高概率链路修复。后续按 OKRTS 最小可行步骤优先清零 PDF/Live/学习记录风险。",
     "verification": {
       "lint": "passed: npm run lint",
       "build": "passed: npm run build",
       "backendTests": "pending: must rerun after Sprint 3 fixes",
       "e2eTests": "pending: current defect list not covered",
-      "prdJson": "passed: JSON parse after Sprint 4 task expansion"
+      "prdJson": "passed: JSON parse after 2026-05-22 OKRTS update"
     },
     "nonBlockingWarnings": [
       "PDF.js build warning about eval usage.",
@@ -1169,8 +1169,8 @@
   "sprint4ExecutionPlan": {
     "id": "S4",
     "title": "真实数据落库、课件批注稳定与课程闭环",
-    "updatedAt": "2026-05-19",
-    "status": "ready_to_execute_with_deferred_pptx_spike",
+    "updatedAt": "2026-05-22",
+    "status": "executing_priority_reset_after_admin_logout_confirmed",
     "objective": "把 LingoBridge 从 JSON demo 可演示推进到老师创建的课程、课件、作业、Live Class 能真实同步到学生端，并可由 Admin 退出和核查的 MVP 闭环。",
     "keyResults": [
       {
@@ -1221,13 +1221,12 @@
       "currentPolicy": "PPTX 可保留上传入口和明确提示，但不做 pptx.js、服务端转换、Microsoft 365 Embed 或 MVP 策略决策。"
     },
     "executionOrder": [
-      "S4-T03 到 S4-T06：先完成 Postgres 连接、repository、seed 和 JSON cutover。",
-      "S4-T07 到 S4-T21：打通真实账号、课程、成员、学生端可见性。",
-      "S4-T32 到 S4-T35：修 Live Class 翻页唯一可信和页码边界。",
-      "S4-T22 到 S4-T27：集中突破 PDF.js 与批注。",
-      "S4-T36 到 S4-T40：作业双模式收敛到统一任务模型。",
-      "S4-T41 到 S4-T45：Admin 和三角色 E2E 收尾验收。",
-      "S4-T28 到 S4-T31：后置，不进入本轮 agent 执行。"
+      "P0：先验收 PDF 上传绑定课时、PDF 渲染错误可定位、drawing 不再导致白屏。",
+      "P0：再验收学生 Live/作业入口和 learning_record 不串课时。",
+      "P1：清理僵尸学习记录，保证 Admin 学习进度可信。",
+      "P1：补三角色 E2E，覆盖 admin logout、teacher upload PDF、student homework Russian TTS。",
+      "P2：继续课程编辑页、作业双模式、Admin 资源视图体验优化。",
+      "P3：PPTX 策略 Spike 继续后置，不进入当前修复窗口。"
     ],
     "tasks": [
       {
@@ -1466,14 +1465,15 @@
           "教师能按模块完成主要操作",
           "没有明显重复分页/重复上传入口",
           "移动端不出现文字溢出"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T13",
         "objectiveId": "O3",
         "objective": "课程编辑页功能闭环",
         "title": "上传课件绑定课时",
-        "status": "todo",
+        "status": "in_progress_patch_landed",
         "suggestedAgent": "backend/frontend",
         "operations": [
           "上传前必须选择 courseId 和 lessonNodeId",
@@ -1486,7 +1486,8 @@
           "课件只归属一个课时",
           "未选择课时不能上传",
           "学生进入课时时看到对应课件"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T14",
@@ -1506,7 +1507,8 @@
           "导入后任务数量准确",
           "错误行可见",
           "学生只看到对应课时作业"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T15",
@@ -1526,7 +1528,8 @@
           "教师可下载当前作业任务",
           "导出字段完整",
           "空作业时按钮禁用或提示"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T16",
@@ -1546,7 +1549,8 @@
           "老师设置时间后学生 schedule 可见",
           "过期/未开始状态显示正确",
           "时间字段使用 startsAt/endsAt 命名"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T17",
@@ -1566,7 +1570,8 @@
           "学生只看到自己加入课程的日程",
           "没有 course-1 静态假数据",
           "无课程时展示空状态"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T18",
@@ -1626,7 +1631,8 @@
           "学生能从真实 live session 进入课堂",
           "未授权学生不能进入",
           "入口状态跟 live status 一致"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T21",
@@ -1646,14 +1652,15 @@
           "两种入口进入同一作业状态一致",
           "学习记录不串课时",
           "无作业时不报错"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T22",
         "objectiveId": "O5",
         "objective": "PDF.js 与批注专项",
         "title": "抽离 PDF stage",
-        "status": "todo",
+        "status": "in_progress_patch_landed",
         "suggestedAgent": "frontend",
         "operations": [
           "把 PdfViewer 责任限定为 PDF 加载、worker、cache、pageCount、page render",
@@ -1666,7 +1673,8 @@
           "PDF canvas 不被外部状态频繁重建",
           "pageCount 加载准确",
           "渲染失败有错误状态"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T23",
@@ -1686,7 +1694,8 @@
           "不同尺寸渲染下批注位置稳定",
           "同一模型支持保存和重放",
           "字段足够表达本轮工具"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T24",
@@ -1766,7 +1775,8 @@
           "PDF 翻页不越界",
           "画笔和清除不白屏",
           "测试失败能定位页面/步骤"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T28",
@@ -1783,7 +1793,8 @@
         "acceptance": [
           "状态保持 deferred",
           "不得影响 Sprint 4 主线"
-        ]
+        ],
+        "priority": "P3_deferred"
       },
       {
         "id": "S4-T29",
@@ -1800,7 +1811,8 @@
         "acceptance": [
           "状态保持 deferred",
           "不得新增转换依赖"
-        ]
+        ],
+        "priority": "P3_deferred"
       },
       {
         "id": "S4-T30",
@@ -1817,7 +1829,8 @@
         "acceptance": [
           "状态保持 deferred",
           "不得新增 iframe/embed 方案"
-        ]
+        ],
+        "priority": "P3_deferred"
       },
       {
         "id": "S4-T31",
@@ -1834,7 +1847,8 @@
         "acceptance": [
           "状态保持 deferred",
           "本轮 PRD 不要求 PPTX 最终方案"
-        ]
+        ],
+        "priority": "P3_deferred"
       },
       {
         "id": "S4-T32",
@@ -1901,7 +1915,7 @@
         "objectiveId": "O7",
         "objective": "Live Class 翻页与同步",
         "title": "PDF 页数边界修复",
-        "status": "todo",
+        "status": "in_progress_patch_landed",
         "suggestedAgent": "frontend",
         "operations": [
           "pageCount 未加载时禁用下一页/跳页",
@@ -1914,7 +1928,8 @@
           "不会跳到 999",
           "未加载时不能误翻页",
           "加载失败状态清晰"
-        ]
+        ],
+        "priority": "P0"
       },
       {
         "id": "S4-T36",
@@ -1934,7 +1949,8 @@
           "Excel 和手动录入错误格式一致",
           "错误能定位到行和字段",
           "合法数据生成同一 learning_task"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T37",
@@ -1954,7 +1970,8 @@
           "错误行发布前可见",
           "未确认不影响学生端",
           "确认后学生端可见"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T38",
@@ -1974,7 +1991,8 @@
           "教师不用 Excel 也能创建作业",
           "错误提示定位到行",
           "表单不会挤压溢出"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T39",
@@ -1994,7 +2012,8 @@
           "手动作业和 Excel 作业数据结构一致",
           "发布后学生端可见",
           "非法行返回 400 和明细"
-        ]
+        ],
+        "priority": "P2"
       },
       {
         "id": "S4-T40",
@@ -2014,14 +2033,15 @@
           "两种模式均可端到端完成",
           "学习记录写入一致",
           "报告说明通过/失败项"
-        ]
+        ],
+        "priority": "P1"
       },
       {
         "id": "S4-T41",
         "objectiveId": "O9",
         "objective": "Admin UI 和验收",
         "title": "Admin 顶栏优化",
-        "status": "todo",
+        "status": "done_confirmed_by_user",
         "suggestedAgent": "frontend",
         "operations": [
           "Admin 顶栏显示当前用户和角色",
@@ -2034,7 +2054,8 @@
           "Admin 可直接退出",
           "刷新不丢失权限状态",
           "非 admin 不能访问后台"
-        ]
+        ],
+        "priority": "done_confirmed"
       },
       {
         "id": "S4-T42",
@@ -2081,7 +2102,7 @@
         "objectiveId": "O9",
         "objective": "Admin UI 和验收",
         "title": "Admin 学习进度模块",
-        "status": "todo",
+        "status": "in_progress_cleanup_endpoint_landed",
         "suggestedAgent": "backend/frontend",
         "operations": [
           "提供 course/student/lesson 维度查询参数",
@@ -2094,7 +2115,8 @@
           "Admin 能按课程看学习进度",
           "能按学生看完成情况",
           "无数据时不报错"
-        ]
+        ],
+        "priority": "P1"
       },
       {
         "id": "S4-T45",
@@ -2114,7 +2136,119 @@
           "三角色主链路通过",
           "失败项有明确复现步骤",
           "报告引用 prd.json task id"
+        ],
+        "priority": "P1"
+      }
+    ],
+    "priorityPolicy": {
+      "updatedAt": "2026-05-22",
+      "method": "P0 演示阻断 > P1 数据一致性 > P1 可观测清理 > P2 体验增强 > P3 后置 Spike",
+      "notes": [
+        "admin logout 已由用户确认可用，从 P0 移出。",
+        "PDF 上传/渲染和 drawing 白屏归并为同一条课堂稳定性主线。",
+        "作业俄语 TTS 属于演示体验增强，但已作为低风险快速项前置完成。",
+        "僵尸学习记录清理用于保护验收数据可信度，优先级上调到 P1。"
+      ]
+    },
+    "okrtsMilestones": [
+      {
+        "id": "M1",
+        "objective": "课堂课件稳定",
+        "keyResult": "老师在 Live Class 上传 PDF 后，学生/老师均可看到第 1 页；渲染失败时能看到 URL 和错误阶段。",
+        "tasks": [
+          "S4-T13",
+          "S4-T22",
+          "S4-T35"
+        ],
+        "steps": [
+          "选择/创建 lessonNodeId",
+          "上传 PDF 并确认 courseware.lessonNodeId 写入",
+          "PdfViewer 加载本地 worker，不依赖外部 cMap",
+          "pageCount 未就绪时禁用翻页",
+          "失败时记录 load/render 阶段"
         ]
+      },
+      {
+        "id": "M2",
+        "objective": "drawing 白屏清零",
+        "keyResult": "教师开关画笔、绘制、清除当前页、翻页返回后，PDF 背景不消失。",
+        "tasks": [
+          "S4-T23",
+          "S4-T27",
+          "S4-T32"
+        ],
+        "steps": [
+          "PDF canvas 与 annotation canvas 分层",
+          "画笔关闭只关输入不清空",
+          "清除只清当前页 strokes",
+          "用 Playwright 复现绘制后 canvas 非空",
+          "把复现步骤写入 E2E 或验收报告"
+        ]
+      },
+      {
+        "id": "M3",
+        "objective": "作业朗读体验",
+        "keyResult": "学生作业卡片同时支持中文原文 TTS 和俄语释义 TTS，云端失败时浏览器 fallback 可播放。",
+        "tasks": [
+          "S4-T21",
+          "S4-T40"
+        ],
+        "steps": [
+          "任务页中文按钮调用 zh-CN",
+          "俄语释义按钮调用 ru-RU",
+          "Live 作业面板同样接入俄语按钮",
+          "无 translationRu 时隐藏按钮",
+          "手动试听中文/俄语各 1 条"
+        ]
+      },
+      {
+        "id": "M4",
+        "objective": "学习记录可信",
+        "keyResult": "Admin 可预检/清理僵尸学习记录；清理后 progress 聚合不被孤儿记录污染。",
+        "tasks": [
+          "S4-T44",
+          "S4-T45"
+        ],
+        "steps": [
+          "定义 zombie 条件：缺 student/task/lessonNode/recording",
+          "提供 dryRun 接口",
+          "提供 write 清理接口",
+          "脚本输出 JSON 摘要",
+          "Admin progress 页提供预检和清理入口"
+        ]
+      },
+      {
+        "id": "M5",
+        "objective": "三角色验收",
+        "keyResult": "admin/teacher/student 三条路径每条至少 1 个端到端 smoke 通过。",
+        "tasks": [
+          "S4-T45"
+        ],
+        "steps": [
+          "admin login/logout",
+          "teacher create lesson + upload PDF",
+          "teacher draw + clear current page",
+          "student enter homework",
+          "student play Russian TTS and save record"
+        ]
+      }
+    ],
+    "phasePrompts": [
+      {
+        "phase": "Phase 1 - PDF/Drawing Stabilizer",
+        "prompt": "你是 LingoBridge 前端稳定性工程师。只处理 S4-T13/S4-T22/S4-T35/S4-T23/S4-T27。先复现 PDF 上传后无法查看和 drawing 后白屏，再修复。验收必须包含：上传绑定 lessonNodeId、PDF load/render 错误可定位、pageCount clamp、画笔绘制后 PDF 背景不消失。完成后运行 npm run lint、npm run build，并记录未覆盖风险。"
+      },
+      {
+        "phase": "Phase 2 - Homework Russian TTS",
+        "prompt": "你是 LingoBridge 作业体验工程师。只处理作业页和 Live 作业面板的 TTS 入口。中文原文使用 zh-CN，俄语释义使用 ru-RU；translationRu 为空时隐藏按钮；云 TTS 失败必须保留 browser fallback。验收试听 1 条中文和 1 条俄语，不改动作业保存协议。"
+      },
+      {
+        "phase": "Phase 3 - Learning Record Cleanup",
+        "prompt": "你是 LingoBridge 数据一致性工程师。只处理 S4-T44 的学习记录可信度。实现 dryRun 和 write 两种僵尸 learning_records 清理路径，僵尸定义为缺 student、缺 task、缺 lessonNode 或缺 lastRecording。输出 deleted/scanned/reasons，Admin 入口必须 requireAdmin。补 API 测试。"
+      },
+      {
+        "phase": "Phase 4 - Three-role Acceptance",
+        "prompt": "你是 LingoBridge 验收测试工程师。按 S4-T45 执行三角色 smoke：admin login/logout，teacher 创建课时并上传 PDF，teacher drawing 不白屏，student 进入作业播放俄语 TTS 并保存学习记录。失败时给出最短复现路径、截图位置和对应 task id。"
       }
     ]
   },

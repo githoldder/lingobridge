@@ -849,7 +849,7 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       setTasksCount(0);
       return;
     }
-    homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId)
+    homeworkApi.tasks(courseId, { lessonNodeId })
       .then((tasks) => {
         setTasksCount(tasks.length);
       })
@@ -877,7 +877,7 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       setResult(result);
       setMessage(t('course_homework.imported').replace('{filename}', file.name));
       // Re-fetch tasks count dynamically from backend
-      const tasks = await homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId);
+      const tasks = await homeworkApi.tasks(courseId, { lessonNodeId });
       setTasksCount(tasks.length);
     } catch (e: any) {
       setMessage(e.message || t('course_homework.import_failed'));

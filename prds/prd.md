@@ -1,12 +1,12 @@
-# LingoBridge PRD v4.4 Sprint 4 可执行计划
+# LingoBridge PRD v4.5 Sprint 4 OKRTS 最小熵执行计划
 
-> 更新日期：2026-05-19  
+> 更新日期：2026-05-22  
 > 目标：在 Sprint 3 演示闭环基础上，把真实数据落库、课程/学生同步、PDF 批注稳定、Live 翻页唯一可信、作业双模式和 Admin 验收拆成可直接派发给 agent 的任务。  
 > 原则：简洁、可维护；只覆盖关键逻辑；重点写清模块交界点；每个任务必须能落到具体文件、接口、验证步骤。
 
 ## 0. 当前进度与风险重估
 
-截至 2026-05-19，Sprint 3 已形成演示闭环，Sprint 4 进入“真实数据和可验收闭环”阶段。当前执行合同以 `prd.json` 的 `sprint4ExecutionPlan` 为准；agent 派活时必须引用具体 task id，并按 `operations` 逐条执行和验收。
+截至 2026-05-22，Sprint 3 已形成演示闭环，Sprint 4 进入“缺陷收敛 + 可验收闭环”阶段。Admin logout 已由用户确认可用，从 P0 阻断项移出。当前执行合同以 `prd.json` 的 `sprint4ExecutionPlan` 为准；agent 派活时必须引用具体 task id，并按 `operations` 逐条执行和验收。
 
 本轮明确后置：`O6：PPTX 策略 Spike`，即 `S4-T28` 到 `S4-T31`。当前不做 `pptx.js`、PPTX 转 PDF/图片评估、Microsoft 365 Embed 或 PPTX MVP 决策。PPTX 可以保留上传入口和清晰提示，但不能阻塞 PDF、课程、作业、Live 和 Admin 主线。
 
@@ -17,9 +17,11 @@
 | 学习记录持久化 | 已完成 | homework 保存传入 `lessonNodeId`，录音上传带 `taskId` |
 | 学生/教师 live 权限分离 | 已完成 | 学生端隐藏教师配置按钮，教师端保留控制 |
 | i18n key 暴露修复 | 已完成 | 教师端关键 `classroom.*` 已清理 |
-| PDF 与画笔 | 已完成 | PDF 预缓存/DPI 优化，画笔按页存储、清晰线条、粗细调节 |
+| PDF 与画笔 | P0 收敛中 | 已补上传绑定课时、PDF 渲染错误定位；drawing 白屏仍需 Playwright 复现验收 |
 | 教师课程编辑页 | 已完成 | 课程信息、学生、课件、时间、作业、live 六模块 |
-| 管理端后台 | 已完成 | Admin 全宽布局和核心运营模块已接入 |
+| 管理端后台 | 已完成 | Admin 全宽布局和核心运营模块已接入；logout 用户已确认可用 |
+| 作业俄语 TTS | 已完成 | 作业页和 Live 作业面板均提供 `ru-RU` 播放入口 |
+| 学习记录清理 | P1 收敛中 | 已补 dryRun/write 清理接口、脚本和 Admin 入口 |
 | 验证 | 部分通过 | `npm run lint`、`npm run build` 可通过；后端/E2E 需补充覆盖当前缺陷 |
 
 非阻断 warning：
@@ -40,6 +42,36 @@
 7. Admin 入口必须前后端双重鉴权：前端 `user.role === admin`，后端 `requireAdmin`。
 8. 课程时间字段统一使用 `startsAt/endsAt`，不要再引入 `scheduledAt`。
 9. 完成声明前必须跑：`npm run lint`、`npm run build`、`npm run backend:test`。若 sandbox 下 `backend:test` 因 `tsx` IPC pipe 失败，可提权重跑。
+
+## 0.2 OKRTS 最小可行拆解
+
+优先级规则：`P0 演示阻断 > P1 数据一致性 > P1 可观测清理 > P2 体验增强 > P3 后置 Spike`。Admin logout 已确认，不再占用 P0。
+
+| 里程碑 | Objective | Key Result | 关联任务 | 最小步骤 |
+|---|---|---|---|---|
+| M1 | 课堂课件稳定 | PDF 上传后老师/学生均可看到第 1 页；失败可定位阶段和 URL | S4-T13, S4-T22, S4-T35 | 选择课时 -> 上传 PDF -> 写入 `lessonNodeId` -> PDF.js 本地渲染 -> clamp 页码 |
+| M2 | drawing 白屏清零 | 绘制、清除、翻页返回后 PDF 背景不消失 | S4-T23, S4-T27, S4-T32 | PDF canvas 与 annotation canvas 分层 -> 画笔只写 strokes -> 清除当前页 -> Playwright 复现 |
+| M3 | 作业朗读体验 | 中文原文和俄语释义均可播放 | S4-T21, S4-T40 | `zh-CN` 按钮 -> `ru-RU` 按钮 -> 空俄语隐藏 -> 云失败 fallback |
+| M4 | 学习记录可信 | Admin 可预检/清理僵尸记录，progress 不被孤儿记录污染 | S4-T44, S4-T45 | 定义 zombie 条件 -> dryRun -> write 清理 -> Admin 入口 -> API 测试 |
+| M5 | 三角色验收 | admin/teacher/student 每条主路径至少 1 个 smoke 通过 | S4-T45 | admin logout -> teacher upload PDF -> teacher drawing -> student homework -> 保存记录 |
+
+## 0.3 阶段提示词
+
+**Phase 1 - PDF/Drawing Stabilizer**
+
+你是 LingoBridge 前端稳定性工程师。只处理 S4-T13/S4-T22/S4-T35/S4-T23/S4-T27。先复现 PDF 上传后无法查看和 drawing 后白屏，再修复。验收必须包含：上传绑定 `lessonNodeId`、PDF load/render 错误可定位、pageCount clamp、画笔绘制后 PDF 背景不消失。完成后运行 `npm run lint`、`npm run build`，并记录未覆盖风险。
+
+**Phase 2 - Homework Russian TTS**
+
+你是 LingoBridge 作业体验工程师。只处理作业页和 Live 作业面板的 TTS 入口。中文原文使用 `zh-CN`，俄语释义使用 `ru-RU`；`translationRu` 为空时隐藏按钮；云 TTS 失败必须保留 browser fallback。验收试听 1 条中文和 1 条俄语，不改动作业保存协议。
+
+**Phase 3 - Learning Record Cleanup**
+
+你是 LingoBridge 数据一致性工程师。只处理 S4-T44 的学习记录可信度。实现 dryRun 和 write 两种僵尸 `learning_records` 清理路径，僵尸定义为缺 student、缺 task、缺 lessonNode 或缺 lastRecording。输出 `deleted/scanned/reasons`，Admin 入口必须 `requireAdmin`。补 API 测试。
+
+**Phase 4 - Three-role Acceptance**
+
+你是 LingoBridge 验收测试工程师。按 S4-T45 执行三角色 smoke：admin login/logout，teacher 创建课时并上传 PDF，teacher drawing 不白屏，student 进入作业播放俄语 TTS 并保存学习记录。失败时给出最短复现路径、截图位置和对应 task id。
 
 ## 1. 问题诊断
 
@@ -298,7 +330,7 @@ Admin 必须支持：
 | ID | 任务 | 状态 | 派工重点 |
 |---|---|---|---|
 | S4-T12 | 优化教师课程编辑 UI | todo | 模块清晰、状态收敛、移动端不重叠 |
-| S4-T13 | 上传课件绑定课时 | todo | PDF/PPTX 元数据写入 lesson_node_id；PPTX 不做预览策略 |
+| S4-T13 | 上传课件绑定课时 | in_progress_patch_landed / P0 | PDF/PPTX 元数据写入 lesson_node_id；PPTX 不做预览策略 |
 | S4-T14 | 上传作业绑定作业节点 | todo | Excel 导入写 assignment_imports/learning_tasks |
 | S4-T15 | 下载作业表格 | todo | 导出当前 assignment tasks |
 | S4-T16 | 设定 live 时间 | todo | startsAt/endsAt + live scheduled 状态 |
@@ -310,19 +342,19 @@ Admin 必须支持：
 | S4-T17 | 移除学生端静态 schedule | todo | `ScheduleView` 读取真实 student course/live 数据 |
 | S4-T18 | 移除固定 `course-1` fallback | done_with_followup | 入口必须带 courseId/lessonNodeId |
 | S4-T19 | 学生课程列表过滤 | done_with_followup | 只显示 `course_members` 里该学生加入的课程 |
-| S4-T20 | 学生 live 入口 | todo | 从 active/scheduled live session 进入课堂 |
-| S4-T21 | 学生作业入口 | todo | 根据 assignment_node 读取任务和学习记录 |
+| S4-T20 | 学生 live 入口 | todo / P0 | 从 active/scheduled live session 进入课堂 |
+| S4-T21 | 学生作业入口 | todo / P0 | 根据 assignment_node 读取任务和学习记录 |
 
 ### O5：PDF.js 与批注专项
 
 | ID | 任务 | 状态 | 派工重点 |
 |---|---|---|---|
-| S4-T22 | 抽离 PDF stage | todo | `PdfViewer` 只负责 PDF 渲染、worker、cache、page count |
-| S4-T23 | 建立 annotation model | todo | text/ink/shape/highlight 与 normalized 坐标 |
+| S4-T22 | 抽离 PDF stage | in_progress_patch_landed / P0 | `PdfViewer` 只负责 PDF 渲染、worker、cache、page count |
+| S4-T23 | 建立 annotation model | todo / P0 | text/ink/shape/highlight 与 normalized 坐标 |
 | S4-T24 | Konva annotation layer Spike | todo | 批注层不污染 PDF canvas |
 | S4-T25 | 批注存储接口 | todo | lessonNode + courseware + page annotations |
 | S4-T26 | 打印导出 | todo | 输出课件页 + 批注视图 |
-| S4-T27 | PDF 回归测试 | todo | 翻页、画笔、清除、打印 smoke |
+| S4-T27 | PDF 回归测试 | todo / P0 | 翻页、画笔、清除、打印 smoke |
 
 ### O6：PPTX 策略 Spike
 
@@ -340,7 +372,7 @@ Admin 必须支持：
 | S4-T32 | 合并翻页 UI | todo | 删除重复分页，只保留主控制 |
 | S4-T33 | 教师翻页写 live state | todo | `PATCH /live-sessions/:id currentPage` 唯一可信 |
 | S4-T34 | 学生跟随页码 | todo | 学生读取 live currentPage |
-| S4-T35 | PDF 页数边界修复 | todo | pageCount 未加载禁用下一页，页码 clamp |
+| S4-T35 | PDF 页数边界修复 | in_progress_patch_landed / P0 | pageCount 未加载禁用下一页，页码 clamp |
 
 ### O8：Excel 作业双模式
 
@@ -350,27 +382,26 @@ Admin 必须支持：
 | S4-T37 | Excel 导入预览 | todo | 错误行、有效行、确认发布 |
 | S4-T38 | 手动表单 UI | todo | 表格录入 zh/pinyin/translation/taskType |
 | S4-T39 | 手动创建接口 | todo | `POST /assignments/manual` |
-| S4-T40 | 学生作业创建验证 | todo | 两种模式发布后学生端均可见 |
+| S4-T40 | 学生作业创建验证 | todo / P1 | 两种模式发布后学生端均可见；包含俄语 TTS |
 
 ### O9：Admin UI 和验收
 
 | ID | 任务 | 状态 | 派工重点 |
 |---|---|---|---|
-| S4-T41 | Admin 顶栏优化 | todo | 当前用户、刷新、logout、模块导航 |
+| S4-T41 | Admin 顶栏优化 | done_confirmed_by_user | 当前用户、刷新、logout、模块导航 |
 | S4-T42 | Admin 账号模块 | todo | 用户搜索、新增、禁用、删除接入真实 DB |
 | S4-T43 | Admin 资源模块 | todo | PDF/PPTX/XLSX/录音/录播可查 |
-| S4-T44 | Admin 学习进度模块 | todo | course/student/lesson 维度查询 |
-| S4-T45 | E2E 三角色回归 | todo | admin logout、teacher create course、student see course |
+| S4-T44 | Admin 学习进度模块 | in_progress_cleanup_endpoint_landed / P1 | course/student/lesson 维度查询；僵尸学习记录清理 |
+| S4-T45 | E2E 三角色回归 | todo / P1 | admin logout、teacher create course、student see course |
 
 ### 执行顺序
 
-1. S4-T03 到 S4-T06：先完成 Postgres 连接、repository、seed 和 JSON cutover。
-2. S4-T07 到 S4-T21：打通真实账号、课程、成员、学生端可见性。
-3. S4-T32 到 S4-T35：修 Live Class 翻页唯一可信和页码边界。
-4. S4-T22 到 S4-T27：集中突破 PDF.js 与批注。
-5. S4-T36 到 S4-T40：作业双模式收敛到统一任务模型。
-6. S4-T41 到 S4-T45：Admin 和三角色 E2E 收尾验收。
-7. S4-T28 到 S4-T31：后置，不进入本轮 agent 执行。
+1. P0：先验收 PDF 上传绑定课时、PDF 渲染错误可定位、drawing 不再导致白屏。
+2. P0：再验收学生 Live/作业入口和 `learning_record` 不串课时。
+3. P1：清理僵尸学习记录，保证 Admin 学习进度可信。
+4. P1：补三角色 E2E，覆盖 admin logout、teacher upload PDF、student homework Russian TTS。
+5. P2：继续课程编辑页、作业双模式、Admin 资源视图体验优化。
+6. P3：PPTX 策略 Spike 继续后置，不进入当前修复窗口。
 
 ## 6.1 候选 Sprint：语音演示与中俄双语字幕 Spike
 
