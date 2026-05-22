@@ -210,6 +210,7 @@ export interface CoursewareFileData {
   mimeType: string;
   type?: string;
   lessonNodeId?: string;
+  storageUrl?: string;
   liveClassTitle?: string;
   pageCount: number;
   status: 'processing' | 'ready' | 'error';

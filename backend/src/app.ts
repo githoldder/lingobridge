@@ -545,6 +545,7 @@ export function createApp() {
         mimeType: f.mimeType,
         type: f.type,
         lessonNodeId: f.lessonNodeId || '',
+        storageUrl: f.storageUrl || '',
         liveClassTitle: lesson?.title || '',
         pageCount: pages.length,
         status: ['pdf', 'pptx'].includes(f.type) ? 'ready' : 'ready' as const,

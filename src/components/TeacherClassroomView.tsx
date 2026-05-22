@@ -39,7 +39,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import Logo from './Logo.tsx';
 import PdfViewer from './PdfViewer.tsx';
-import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
+import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, coursewareFilesApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
 import { ttsService } from '../services/ttsService.ts';
 
 interface TeacherClassroomViewProps {
@@ -208,6 +208,29 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     };
     loadPages();
   }, []);
+
+  // Load existing courseware PDF on mount (both teacher & student)
+  useEffect(() => {
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
+    const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || '';
+    if (!courseId) return;
+
+    coursewareFilesApi.list(courseId, activeLessonNodeId || undefined).then((files) => {
+      // Pick the most recent PDF
+      const pdfFile = files.find((f) =>
+        f.mimeType === 'application/pdf' || f.filename?.endsWith('.pdf')
+      );
+      if (pdfFile?.storageUrl) {
+        setPdfFile(mediaUrl(pdfFile.storageUrl));
+        setIsPdfType(true);
+        setPdfPage(1);
+        setCoursewareStatus('ready');
+        console.log('[Courseware] Loaded existing PDF:', pdfFile.filename);
+      }
+    }).catch(() => {
+      // No courseware yet, that's fine
+    });
+  }, [propCourseId, lessonNodeId]);
 
   useEffect(() => {
     return () => {
