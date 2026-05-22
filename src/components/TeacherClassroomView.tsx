@@ -260,7 +260,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const strokes = pageStrokes.get(pageKey) || [];
 
     for (const stroke of strokes) {
-      if (stroke.points.length < 2) continue;
+      if (!stroke || !stroke.points || stroke.points.length < 2) continue;
       ctx.beginPath();
       ctx.strokeStyle = stroke.color;
       ctx.lineWidth = stroke.width;
@@ -698,12 +698,13 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       setIsDrawing(false);
       return;
     }
-    if (currentStroke.current && currentStroke.current.points.length > 1) {
+    const strokeToSave = currentStroke.current;
+    if (strokeToSave && strokeToSave.points.length > 1) {
       const pageKey = getCurrentPageKey();
       setPageStrokes(prev => {
         const next = new Map<number, Stroke[]>(prev);
         const strokes = next.get(pageKey);
-        next.set(pageKey, strokes ? [...strokes, currentStroke.current!] : [currentStroke.current!]);
+        next.set(pageKey, strokes ? [...strokes, strokeToSave] : [strokeToSave]);
         return next;
       });
     }
