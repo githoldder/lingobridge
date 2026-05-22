@@ -48,6 +48,20 @@ function AppContent() {
 
   // Auto-navigate to dashboard when user logs in
   React.useEffect(() => {
+    // E2E test navigation override via sessionStorage (consumed once)
+    const testNav = sessionStorage.getItem('__lingobridge_nav__');
+    if (testNav && activeTab === 'landing') {
+      try {
+        const { tab, ctx } = JSON.parse(testNav);
+        if (tab) {
+          sessionStorage.removeItem('__lingobridge_nav__');
+          setActiveTab(tab);
+          if (ctx) setNavContext((prev) => ({ ...prev, ...ctx }));
+          return;
+        }
+      } catch {}
+    }
+
     if (user && activeTab === 'landing') {
       if (user.role === 'teacher') {
         setActiveTab('teacher-dashboard');

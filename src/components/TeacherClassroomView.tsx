@@ -1004,6 +1004,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             <div ref={canvasContainerRef} className="absolute inset-0 z-40 w-full h-full pointer-events-none">
               <canvas
                 ref={canvasRef}
+                data-testid="canvas-annotation"
                 onMouseDown={isCanvasEnabled && isTeacher ? startDrawing : undefined}
                 onMouseMove={isCanvasEnabled && isTeacher ? draw : undefined}
                 onMouseUp={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
@@ -1020,6 +1021,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             {isTeacher && (
             <div className="absolute top-24 left-6 z-[120] flex flex-col items-start gap-3 pointer-events-none">
               <button
+                data-testid="btn-settings"
                 onClick={() => setIsControlsExpanded(!isControlsExpanded)}
                 className="w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
               >
@@ -1080,6 +1082,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
                       {/* Canvas toggle button — teacher only */}
                       <button
+                        data-testid="btn-pen-toggle"
                         onClick={() => setIsCanvasEnabled(!isCanvasEnabled)}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-bold border transition-all ${
                           isCanvasEnabled ? 'bg-green-50 border-green-200 text-green-600' : 'bg-gray-50 border-gray-200 text-gray-400'
@@ -1127,6 +1130,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     <div className="h-[1px] w-full bg-gray-100" />
 
                     <button
+                      data-testid="btn-clear-ink"
                       onClick={clearInk}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xl"
                     >
@@ -1171,6 +1175,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <div className="flex items-center gap-8 mx-auto md:mx-0">
                 {isTeacher && (
                   <button
+                    data-testid="btn-prev-page"
                     onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
                     className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
                     title={t('homework.prev')}
@@ -1179,7 +1184,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     <ChevronLeft size={24} />
                   </button>
                 )}
-                <div className="text-center min-w-[60px]">
+                <div className="text-center min-w-[60px]" data-testid="page-indicator">
                   <div className="text-xs font-black">
                     {isPdfType
                       ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount))
@@ -1189,6 +1194,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                 </div>
                 {isTeacher && (
                   <button
+                    data-testid="btn-next-page"
                     onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
                     className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
                     title={t('homework.next')}
