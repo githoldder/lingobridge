@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
 import { vocabularyApi, learningRecordsApi, coursesApi, type VocabularyItem, type LearningRecord, type Course } from '../services/apiClient.ts';
@@ -107,6 +107,10 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [pronunciationReady, setPronunciationReady] = useState(false);
+  const vocabRecorderRef = useRef<MediaRecorder | null>(null);
+  const vocabChunksRef = useRef<Blob[]>([]);
+  const vocabStartedAtRef = useRef<number>(0);
 
   useEffect(() => {
     const generated = initialWords.flatMap(word => {
@@ -149,9 +153,10 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
     }
   }, []);
 
-  const handleCheck = () => {
+  const handleCheck = (forcedScore?: number) => {
     if (currentQ.type === 'pronounce') {
-      const simulatedScore = Math.floor(Math.random() * 35) + 65;
+      if (forcedScore === undefined) return;
+      const simulatedScore = forcedScore;
       const correct = simulatedScore >= 80;
 
       setLastScore(simulatedScore);
@@ -167,6 +172,43 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
     setIsJuice(true);
   };
 
+  const startPronunciationRecording = async () => {
+    if (isRecording || isJuice) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      vocabRecorderRef.current = recorder;
+      vocabChunksRef.current = [];
+      vocabStartedAtRef.current = Date.now();
+      setPronunciationReady(false);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) vocabChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const duration = Math.max(1, Math.round((Date.now() - vocabStartedAtRef.current) / 1000));
+        const seed = `${currentQ.word.taskId}:${duration}:${vocabChunksRef.current.reduce((sum, blob) => sum + blob.size, 0)}`;
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 997;
+        const simulatedScore = 65 + (hash % 34);
+        setIsRecording(false);
+        setPronunciationReady(true);
+        handleCheck(simulatedScore);
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Vocabulary microphone access failed:', error);
+      setIsRecording(false);
+      alert('请允许麦克风权限后再录音。');
+    }
+  };
+
+  const stopPronunciationRecording = () => {
+    const recorder = vocabRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  };
+
   const handleNext = () => {
     if (currentIndex + 1 < questions.length) {
       setCurrentIndex(currentIndex + 1);
@@ -174,6 +216,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
       setIsJuice(false);
       setIsCorrect(null);
       setLastScore(null);
+      setPronunciationReady(false);
     } else {
       setShowResult(true);
     }
@@ -302,16 +345,21 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
                   ))}
                 </div>
                 <button
-                  onMouseDown={() => setIsRecording(true)}
-                  onMouseUp={() => { setIsRecording(false); handleCheck(); }}
+                  onMouseDown={startPronunciationRecording}
+                  onMouseUp={stopPronunciationRecording}
+                  onTouchStart={startPronunciationRecording}
+                  onTouchEnd={stopPronunciationRecording}
+                  disabled={isJuice}
                   className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
                     isRecording ? 'bg-red-500 scale-110 shadow-red-200' : 'bg-[#0056D2] hover:bg-blue-700'
-                  } text-white shadow-2xl relative group`}
+                  } text-white shadow-2xl relative group disabled:opacity-60 disabled:cursor-not-allowed`}
                 >
                   <div className={`absolute inset-0 rounded-full animate-ping bg-[#0056D2] opacity-20 ${!isRecording ? 'hidden' : ''}`} />
                   <Mic size={40} className="relative z-10" />
                 </button>
-                <div className="text-gray-400 font-bold text-sm uppercase tracking-widest">{t('vocab.hold_speak')}</div>
+                <div className="text-gray-400 font-bold text-sm uppercase tracking-widest">
+                  {pronunciationReady ? '录音已完成' : t('vocab.hold_speak')}
+                </div>
               </div>
             )}
           </div>
@@ -319,7 +367,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
       </AnimatePresence>
 
       {/* Action Area */}
-      <div className={`fixed bottom-0 left-0 right-0 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`fixed bottom-0 left-0 right-0 z-50 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}>
         <div className={`max-w-2xl mx-auto rounded-3xl p-8 shadow-2xl border flex items-center justify-between ${
           isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>

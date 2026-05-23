@@ -34,11 +34,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
 import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, homeworkSubmissionsApi, type LearningTask, type LearningRecord, type Course } from '../services/apiClient.ts';
 
 // ─── L1 Cache (Browser localStorage) — S5-T06 三级缓存 ───
 const L1_KEY = 'lingobridge_hw_draft';
+const HW_SLOT_KEY = 'lingobridge_hw_recording_slots_v1';
+const MAX_RECORDING_SLOTS = 3;
 
 interface L1Draft {
   courseId: string;
@@ -85,6 +88,60 @@ function l1ClearDraft(courseId: string, lessonNodeId: string) {
     delete all[`${courseId}:${lessonNodeId}`];
     localStorage.setItem(L1_KEY, JSON.stringify(all));
   } catch { /* ignore */ }
+}
+
+function slotStorageKey(courseId: string, lessonNodeId: string | undefined, taskId: string | undefined) {
+  return `${courseId || 'course'}:${lessonNodeId || 'lesson'}:${taskId || 'task'}`;
+}
+
+function readAllSlotCache(): Record<string, StoredRecordingSlot[]> {
+  try {
+    return JSON.parse(localStorage.getItem(HW_SLOT_KEY) || '{}') as Record<string, StoredRecordingSlot[]>;
+  } catch {
+    return {};
+  }
+}
+
+function writeAllSlotCache(cache: Record<string, StoredRecordingSlot[]>) {
+  try {
+    localStorage.setItem(HW_SLOT_KEY, JSON.stringify(cache));
+  } catch (error) {
+    console.warn('Failed to persist homework recording cache:', error);
+  }
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Failed to cache recording'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function scoreRecording(seed: string, attempt: number) {
+  let hash = attempt * 97;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 9973;
+  const total = 68 + (hash % 28);
+  return {
+    total,
+    fluency: Math.min(100, total + ((hash >> 2) % 7) - 3),
+    tone: Math.min(100, total + ((hash >> 3) % 9) - 4),
+    pronunciation: Math.min(100, total + ((hash >> 4) % 8) - 3),
+    completeness: 100
+  };
+}
+
+function homeworkTypeLabel(taskType: LearningTask['taskType'], t: (key: string, params?: Record<string, string>) => string) {
+  const labels: Record<LearningTask['taskType'], string> = {
+    pronunciation: '发音练习',
+    sentence_reading: t('homework.type.reading'),
+    vocabulary: t('homework.type.vocabulary'),
+    dialogue: '对话练习',
+    listening: '听力练习'
+  };
+  const value = labels[taskType] || taskType;
+  return value.includes('homework.type.') ? taskType : value;
 }
 
 // Add decorative components
@@ -294,6 +351,17 @@ interface Recording {
     completeness: number;
   };
   timestamp: Date;
+  durationSec?: number;
+  remoteId?: string;
+}
+
+interface StoredRecordingSlot {
+  id: string;
+  dataUrl: string;
+  score: Recording['score'];
+  timestamp: string;
+  durationSec: number;
+  remoteId?: string;
 }
 
 interface HomeworkViewProps {
@@ -303,6 +371,7 @@ interface HomeworkViewProps {
 
 const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNodeId, courseId: propCourseId }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [view, setView] = useState<'path' | 'task'>('path');
   const [selectedGroup, setSelectedGroup] = useState<LessonGroup | null>(null);
   const [groups, setGroups] = useState<LessonGroup[]>([]);
@@ -323,13 +392,52 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [uploadingRecording, setUploadingRecording] = useState(false);
   const [savingRecord, setSavingRecord] = useState(false);
+  const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  const [showExitDraftPrompt, setShowExitDraftPrompt] = useState(false);
+  const [pendingExitToPath, setPendingExitToPath] = useState(false);
+  const [serverDraftId, setServerDraftId] = useState<string | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef<number>(0);
 
   const currentTasks = selectedGroup?.tasks || allTasks;
   const currentTask = currentTasks[currentIndex];
+  const currentTaskKey = slotStorageKey(selectedCourseId, activeLessonNodeId || currentTask?.lessonNodeId, currentTask?.taskId);
+
+  const hydrateSlots = useCallback((key: string) => {
+    const slots = readAllSlotCache()[key] || [];
+    return slots
+      .slice(0, MAX_RECORDING_SLOTS)
+      .map((slot) => ({
+        id: slot.id,
+        url: slot.dataUrl,
+        score: slot.score,
+        timestamp: new Date(slot.timestamp),
+        durationSec: slot.durationSec,
+        remoteId: slot.remoteId
+      }));
+  }, []);
+
+  const persistSlots = useCallback((key: string, nextRecordings: Recording[]) => {
+    const cache = readAllSlotCache();
+    cache[key] = nextRecordings.slice(0, MAX_RECORDING_SLOTS).map((rec) => ({
+      id: rec.id,
+      dataUrl: rec.url,
+      score: rec.score,
+      timestamp: rec.timestamp.toISOString(),
+      durationSec: rec.durationSec || 0,
+      remoteId: rec.remoteId
+    }));
+    writeAllSlotCache(cache);
+  }, []);
+
+  const hasDraftProgress = useCallback(() => {
+    if (!selectedCourseId) return false;
+    const cache = readAllSlotCache();
+    return Object.keys(cache).some((key) => key.startsWith(`${selectedCourseId}:`) && cache[key]?.length > 0);
+  }, [selectedCourseId]);
 
   useEffect(() => {
     if (propCourseId) {
@@ -410,8 +518,70 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
     });
   }, [selectedCourseId, activeLessonNodeId]);
 
+  useEffect(() => {
+    if (!currentTask?.taskId) return;
+    const restored = hydrateSlots(currentTaskKey);
+    setRecordings(restored);
+    setAudioUrl(null);
+    setRecordingTime(0);
+    setShowAnalysis(false);
+    setActiveSlotIndex(Math.min(restored.length, MAX_RECORDING_SLOTS - 1));
+  }, [currentTaskKey, currentTask?.taskId, hydrateSlots]);
+
+  useEffect(() => {
+    if (!selectedCourseId || !activeLessonNodeId || !user?.id) return;
+    const assignmentNodeId = currentTask?.assignmentNodeId;
+    if (!assignmentNodeId) return;
+    homeworkSubmissionsApi.get({ studentId: user.id, assignmentNodeId })
+      .then((submission) => {
+        if (!Array.isArray(submission) && submission?.id) {
+          setServerDraftId(submission.id);
+          const draft = submission.draftData || {};
+          if (typeof draft.currentIndex === 'number') setCurrentIndex(draft.currentIndex);
+        }
+      })
+      .catch(() => {});
+  }, [selectedCourseId, activeLessonNodeId, currentTask?.assignmentNodeId, user?.id]);
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!hasDraftProgress()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasDraftProgress]);
+
   const allCurrentDone = groups.every(g => g.completedCount === g.totalCount);
   const currentGroupIndex = groups.findIndex(g => g.completedCount < g.totalCount);
+
+  const saveServerDraft = useCallback(async (override?: Record<string, any>) => {
+    const assignmentNodeId = currentTask?.assignmentNodeId;
+    const lessonNodeId = activeLessonNodeId || currentTask?.lessonNodeId;
+    if (!user?.id || !selectedCourseId || !lessonNodeId || !assignmentNodeId) return null;
+    try {
+      const cache = readAllSlotCache();
+      const submission = await homeworkSubmissionsApi.saveDraft({
+        studentId: user.id,
+        courseId: selectedCourseId,
+        lessonNodeId,
+        assignmentNodeId,
+        draftData: {
+          currentIndex,
+          activeTaskId: currentTask?.taskId,
+          recordingSlots: cache,
+          updatedAt: new Date().toISOString(),
+          ...override
+        }
+      });
+      setServerDraftId(submission.id);
+      return submission;
+    } catch (error) {
+      console.warn('Failed to sync homework draft to server; browser cache is still preserved.', error);
+      return null;
+    }
+  }, [activeLessonNodeId, currentIndex, currentTask?.assignmentNodeId, currentTask?.lessonNodeId, currentTask?.taskId, selectedCourseId, user?.id]);
 
   useEffect(() => {
     return () => {
@@ -426,14 +596,32 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      recordingStartedAtRef.current = Date.now();
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
+        const durationSec = Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000));
+        const dataUrl = await blobToDataUrl(audioBlob);
+        const score = scoreRecording(currentTask?.taskId || currentTaskKey, activeSlotIndex + 1);
+        const localRecording: Recording = {
+          id: `${currentTask?.taskId || 'task'}-${activeSlotIndex}-${Date.now()}`,
+          url: dataUrl,
+          score,
+          timestamp: new Date(),
+          durationSec
+        };
+
+        const nextRecordings = [...recordings];
+        nextRecordings[activeSlotIndex] = localRecording;
+        const compacted = nextRecordings.filter(Boolean).slice(0, MAX_RECORDING_SLOTS);
+        setRecordings(compacted);
+        persistSlots(currentTaskKey, compacted);
+        setAudioUrl(dataUrl);
+        setActiveSlotIndex(Math.min(activeSlotIndex + 1, MAX_RECORDING_SLOTS - 1));
         stream.getTracks().forEach(track => track.stop());
+        setShowAnalysis(false);
 
         if (currentTask) {
           setUploadingRecording(true);
@@ -443,8 +631,11 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
               pageNumber: currentTask.pageNumber,
               taskId: currentTask.taskId,
               blob: audioBlob,
-              durationSec: recordingTime
+              durationSec
             });
+            const withRemote = compacted.map((item) => item.id === localRecording.id ? { ...item, remoteId: rec.id } : item);
+            setRecordings(withRemote);
+            persistSlots(currentTaskKey, withRemote);
             setSavingRecord(true);
             await learningRecordsApi.save(currentTask.taskId, {
               context: 'homework',
@@ -452,13 +643,13 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
               recordingId: rec.id,
               lessonNodeId: currentTask.lessonNodeId || activeLessonNodeId
             });
-            // S5-T06: Save L1 cache on recording upload
             if (selectedCourseId && activeLessonNodeId) {
               l1SaveDraft(selectedCourseId, activeLessonNodeId, {
                 currentIndex,
                 recordingIds: [...(l1GetDraft(selectedCourseId, activeLessonNodeId)?.recordingIds || []), rec.id],
               });
             }
+            await saveServerDraft({ currentIndex });
           } catch (err) {
             console.error('Failed to upload recording:', err);
           } finally {
@@ -473,7 +664,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       setShowAnalysis(false);
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => {
-          if (prev >= 30) { stopRecording(); return 30; }
+          if (prev >= 10) { stopRecording(); return 10; }
           return prev + 1;
         });
       }, 1000);
@@ -494,10 +685,8 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   const handleCheck = async () => {
     if (!audioUrl || !currentTask) return;
     setShowAnalysis(true);
-    const score = Math.floor(Math.random() * 35) + 65;
-    const newRecording: Recording = { id: Date.now().toString(), url: audioUrl, score: { total: score, fluency: Math.floor(Math.random() * 35) + 65, tone: Math.floor(Math.random() * 35) + 65, pronunciation: Math.floor(Math.random() * 35) + 65, completeness: 100 }, timestamp: new Date() };
-    setRecordings(prev => [newRecording, ...prev].slice(0, 3));
-    setAudioUrl(null);
+    const evaluated = recordings.find((recording) => recording.url === audioUrl) || recordings[recordings.length - 1];
+    const score = evaluated?.score.total || scoreRecording(currentTask.taskId, recordings.length).total;
 
     try {
       await learningRecordsApi.save(currentTask.taskId, {
@@ -541,6 +730,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
           currentIndex: currentIndex + 1,
         });
       }
+      await saveServerDraft({ currentIndex, completedTaskId: currentTask.taskId });
     } catch (err) {
       console.error('Failed to save learning record:', err);
     }
@@ -548,13 +738,15 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
   const deleteRecording = (id: string) => {
     setRecordings(prev => {
-      const record = prev.find(r => r.id === id);
-      if (record) URL.revokeObjectURL(record.url);
-      return prev.filter(r => r.id !== id);
+      const next = prev.filter(r => r.id !== id);
+      persistSlots(currentTaskKey, next);
+      if (audioUrl && prev.find((r) => r.id === id)?.url === audioUrl) setAudioUrl(null);
+      saveServerDraft({ currentIndex });
+      return next;
     });
   };
 
-  const latestScore = recordings[0]?.score;
+  const latestScore = (recordings.find((recording) => recording.url === audioUrl) || recordings[recordings.length - 1])?.score;
   const playTaskTts = (text?: string, lang: 'zh-CN' | 'ru-RU' = 'zh-CN') => {
     const value = text?.trim();
     if (!value) return;
@@ -563,6 +755,50 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
   return (
     <div className="space-y-4">
+      <AnimatePresence>
+        {showExitDraftPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl border border-gray-100"
+            >
+              <h3 className="text-xl font-bold text-gray-900 mb-3">保存当前练习进度？</h3>
+              <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                已录制的三个槽位会保存在浏览器缓存，并尝试同步为后端草稿。下次回到这道题时会自动恢复。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowExitDraftPrompt(false)}
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-500 hover:bg-gray-50"
+                >
+                  继续练习
+                </button>
+                <button
+                  onClick={async () => {
+                    await saveServerDraft({ currentIndex });
+                    setShowExitDraftPrompt(false);
+                    if (pendingExitToPath) {
+                      setPendingExitToPath(false);
+                      setView('path');
+                    }
+                  }}
+                  className="flex-1 rounded-xl bg-[#0056D2] px-4 py-3 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  保存并退出
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
         <BookOpen size={18} className="text-gray-400" />
         <select
@@ -575,7 +811,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
           }}
           className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
         >
-          {courses.length === 0 && <option value={selectedCourseId}>{selectedCourseId}</option>}
+          {courses.length === 0 && <option value={selectedCourseId}>{t('schedule.no_classes')}</option>}
           {courses.map((c) => (
             <option key={c.id} value={c.id}>{c.title}</option>
           ))}
@@ -586,7 +822,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
           <BookOpen size={14} className="text-[#0056D2]" />
           <span className="text-sm font-semibold text-[#0056D2]">
-            {t('homework.lesson_context', { title: groups[0]?.lessonTitle || activeLessonNodeId })}
+            {t('homework.lesson_context', { title: groups[0]?.lessonTitle || t('dashboard.schedule_label') })}
           </span>
           <button
             onClick={() => {
@@ -714,7 +950,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
                              {task.taskType === 'vocabulary' ? <Layers size={28} /> : <Mic size={28} />}
                            </div>
                            <div>
-                             <h4 className="font-bold text-gray-900 text-lg leading-tight">{t(`homework.type.${task.taskType === 'sentence_reading' ? 'reading' : task.taskType}`)}</h4>
+                             <h4 className="font-bold text-gray-900 text-lg leading-tight">{homeworkTypeLabel(task.taskType, t)}</h4>
                              <p className="text-sm text-gray-500 font-medium">{task.zhText}</p>
                            </div>
                          </div>
@@ -753,7 +989,14 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
        {/* Task Back Nav */}
        <div className="flex items-center gap-4 mb-4">
          <button
-           onClick={() => setView('path')}
+           onClick={() => {
+             if (hasDraftProgress()) {
+               setPendingExitToPath(true);
+               setShowExitDraftPrompt(true);
+             } else {
+               setView('path');
+             }
+           }}
            className="flex items-center gap-2 text-gray-400 hover:text-gray-900 font-bold transition-colors group"
          >
            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
@@ -826,6 +1069,29 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
         <div className="bg-gray-50/80 backdrop-blur-md rounded-3xl p-10 border border-blue-200 relative transition-all shadow-inner">
           <div className="flex flex-col items-center gap-8">
+            <div className="grid grid-cols-3 gap-3 w-full max-w-lg">
+              {[0, 1, 2].map((slot) => {
+                const rec = recordings[slot];
+                const active = slot === activeSlotIndex;
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => {
+                      setActiveSlotIndex(slot);
+                      setAudioUrl(rec?.url || null);
+                      setShowAnalysis(false);
+                    }}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-all ${
+                      active ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-200'
+                    }`}
+                  >
+                    <div className="text-[10px] font-black uppercase tracking-widest">Slot {slot + 1}</div>
+                    <div className="mt-1 text-sm font-bold">{rec ? `${t('homework.score')}: ${rec.score.total}` : 'Empty'}</div>
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex items-end justify-center gap-1.5 h-16 w-full max-w-sm">
               {[0.4, 0.6, 1, 0.8, 1, 0.4, 1, 0.7, 0.3, 1, 0.5, 0.8, 0.6, 0.9, 0.4].map((h, i) => (
                 <motion.div
@@ -855,9 +1121,17 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
             <div className="flex items-center gap-10">
               <button
-                onClick={() => { setAudioUrl(null); setRecordingTime(0); }}
+                onClick={() => {
+                  const next = recordings.filter((_, index) => index !== activeSlotIndex);
+                  setRecordings(next);
+                  persistSlots(currentTaskKey, next);
+                  setAudioUrl(null);
+                  setRecordingTime(0);
+                  saveServerDraft({ currentIndex });
+                }}
                 className="w-14 h-14 rounded-full border-2 border-gray-200 text-gray-400 flex items-center justify-center hover:bg-white hover:text-red-500 transition-all disabled:opacity-30 shadow-sm"
-                disabled={!audioUrl || isRecording}
+                disabled={!recordings[activeSlotIndex] || isRecording}
+                title="Reset selected slot"
               >
                 <RotateCcw size={24} />
               </button>
@@ -1022,7 +1296,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       <div className="fixed bottom-0 left-[260px] right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200 p-5 h-24 flex items-center z-40 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
           <div className="flex gap-4">
-            <button onClick={() => { const prevIdx = (currentIndex - 1 + currentTasks.length) % currentTasks.length; setCurrentIndex(prevIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: prevIdx }); }} className="flex items-center gap-2 px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95">
+            <button onClick={() => { if (!currentTasks.length) return; const prevIdx = (currentIndex - 1 + currentTasks.length) % currentTasks.length; setCurrentIndex(prevIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: prevIdx }); saveServerDraft({ currentIndex: prevIdx }); }} className="flex items-center gap-2 px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95">
               <ChevronLeft size={20} />
               {t('homework.prev')}
             </button>
@@ -1032,9 +1306,9 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
             </button>
           </div>
           <div className="flex gap-4">
-            <button onClick={() => alert(t('homework.save') + '...')} className="px-8 py-3 bg-gray-50 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-all border border-gray-200">{t('homework.save')}</button>
-            <button onClick={() => { const nextIdx = (currentIndex + 1) % currentTasks.length; setCurrentIndex(nextIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: nextIdx }); }} className="flex items-center gap-2 px-10 py-3 bg-[#0056D2] text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 group">
-              {t('homework.next')}
+            <button onClick={() => saveServerDraft({ currentIndex })} className="px-8 py-3 bg-gray-50 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-all border border-gray-200">{t('homework.save')}</button>
+            <button onClick={async () => { if (!currentTasks.length) return; if (currentIndex >= currentTasks.length - 1) { const submission = await saveServerDraft({ currentIndex, completedAt: new Date().toISOString() }); if (submission?.id || serverDraftId) { const id = submission?.id || serverDraftId; if (id) await homeworkSubmissionsApi.submit(id).catch(() => {}); } setView('path'); return; } const nextIdx = currentIndex + 1; setCurrentIndex(nextIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: nextIdx }); saveServerDraft({ currentIndex: nextIdx }); }} className="flex items-center gap-2 px-10 py-3 bg-[#0056D2] text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 group">
+              {currentIndex >= currentTasks.length - 1 ? '完成并提交' : t('homework.next')}
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
