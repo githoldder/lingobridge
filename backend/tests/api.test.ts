@@ -907,3 +907,261 @@ test('student can list their classes', async () => {
     assert.ok(scJson.data.some((c: any) => c.id === classId), 'student-1 should see their class');
   });
 });
+
+test('homework submission auth: student cannot access another student\'s data', async () => {
+  await withServer(async (baseUrl) => {
+    // student-1 creates a draft
+    const ownHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' };
+    await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers: ownHeaders,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: { currentIndex: 1 }
+      })
+    });
+
+    // student-2 tries to read student-1's submission
+    const otherHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer student-2' };
+    const readRes = await fetch(`${baseUrl}/api/v1/homework-submissions?studentId=student-1&assignmentNodeId=assignment-node-1`, {
+      headers: otherHeaders
+    });
+    assert.equal(readRes.status, 403);
+
+    // student-2 tries to overwrite student-1's draft
+    const writeRes = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers: otherHeaders,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: { hacked: true }
+      })
+    });
+    assert.equal(writeRes.status, 403);
+
+    // Unauthenticated user cannot access
+    const noAuthRes = await fetch(`${baseUrl}/api/v1/homework-submissions?studentId=student-1&assignmentNodeId=assignment-node-1`);
+    assert.equal(noAuthRes.status, 401);
+  });
+});
+
+test('class detail and members require auth', async () => {
+  await withServer(async (baseUrl) => {
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: 'ACL测试班' })
+    });
+    const classId = (await cls.json()).data.id;
+
+    // Unauthenticated → 401
+    const noAuthDetail = await fetch(`${baseUrl}/api/v1/classes/${classId}`);
+    assert.equal(noAuthDetail.status, 401);
+    const noAuthMembers = await fetch(`${baseUrl}/api/v1/classes/${classId}/members`);
+    assert.equal(noAuthMembers.status, 401);
+
+    // Other teacher (register one first) → 403
+    const otherTeacherReg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'other_teacher_acl@test.com',
+        password: 'Test@123456',
+        displayName: '其他老师',
+        role: 'teacher'
+      })
+    });
+    const otherTeacherToken = (await otherTeacherReg.json()).data.token;
+    const otherTeacher = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      headers: { Authorization: `Bearer ${otherTeacherToken}` }
+    });
+    assert.equal(otherTeacher.status, 403);
+
+    // Student not in class → 403
+    const nonMember = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      headers: { Authorization: 'Bearer student-2' }
+    });
+    assert.equal(nonMember.status, 403);
+
+    // Class member student → 200
+    await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ studentId: 'student-1' })
+    });
+    const memberView = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      headers: { Authorization: 'Bearer student-1' }
+    });
+    assert.equal(memberView.status, 200);
+
+    // Admin → 200
+    const adminView = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      headers: { Authorization: 'Bearer admin-1' }
+    });
+    assert.equal(adminView.status, 200);
+  });
+});
+
+test('removing class member also revokes course access', async () => {
+  await withServer(async (baseUrl) => {
+    // Create class
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '课程继承断联测试' })
+    });
+    const classId = (await cls.json()).data.id;
+
+    // Create course bound to class
+    const course = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: '继承断联课程', classId })
+    });
+    const courseId = (await course.json()).data.id;
+
+    // Add student-2 to class (auto-adds to course_members)
+    await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ studentId: 'student-2' })
+    });
+
+    // Verify student-2 sees the course
+    const beforeCourses = await fetch(`${baseUrl}/api/v1/courses`, {
+      headers: { Authorization: 'Bearer student-2' }
+    });
+    const beforeJson = await beforeCourses.json();
+    assert.ok(beforeJson.data.some((c: any) => c.id === courseId), 'student-2 should see course before removal');
+
+    // Remove student-2 from class
+    await fetch(`${baseUrl}/api/v1/classes/${classId}/members/student-2`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+
+    // Verify student-2 no longer sees the course
+    const afterCourses = await fetch(`${baseUrl}/api/v1/courses`, {
+      headers: { Authorization: 'Bearer student-2' }
+    });
+    const afterJson = await afterCourses.json();
+    assert.ok(!afterJson.data.some((c: any) => c.id === courseId), 'student-2 should NOT see course after removal');
+  });
+});
+
+test('homework draft rejects mismatched assignment/lesson/course', async () => {
+  await withServer(async (baseUrl) => {
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' };
+
+    // Mismatched assignment → 400
+    const badAssignment = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'nonexistent-assignment',
+        draftData: {}
+      })
+    });
+    assert.equal(badAssignment.status, 404);
+
+    // Mismatched lesson/assignment → 400
+    const mismatch = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'wrong-lesson',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: {}
+      })
+    });
+    assert.equal(mismatch.status, 400);
+
+    // Non-existent courseId fails assignment/course consistency check → 400
+    const noAccess = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' },
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'nonexistent-course',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: {}
+      })
+    });
+    assert.equal(noAccess.status, 400);
+  });
+});
+
+test('homework submission draft save and submit flow', async () => {
+  await withServer(async (baseUrl) => {
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' };
+
+    // Save draft
+    const draftRes = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: { currentIndex: 3, recordings: ['rec-1'], answers: { q1: 'hello' } }
+      })
+    });
+    assert.equal(draftRes.status, 201);
+    const draftJson = await draftRes.json();
+    assert.equal(draftJson.status, 'draft');
+    assert.deepEqual(draftJson.draftData.answers, { q1: 'hello' });
+
+    // Update draft (same assignment → upsert)
+    const updateRes = await fetch(`${baseUrl}/api/v1/homework-submissions/draft`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        studentId: 'student-1',
+        courseId: 'course-1',
+        lessonNodeId: 'lesson-node-1',
+        assignmentNodeId: 'assignment-node-1',
+        draftData: { currentIndex: 5, recordings: ['rec-1', 'rec-2'], answers: { q1: 'hello', q2: 'world' } }
+      })
+    });
+    assert.equal(updateRes.status, 200);
+    const updateJson = await updateRes.json();
+    assert.equal(updateJson.draftData.currentIndex, 5);
+
+    // Query by assignment
+    const queryRes = await fetch(`${baseUrl}/api/v1/homework-submissions?studentId=student-1&assignmentNodeId=assignment-node-1`, {
+      headers
+    });
+    const queryJson = await queryRes.json();
+    assert.equal(queryJson.assignmentNodeId, 'assignment-node-1');
+
+    // Submit
+    const submitRes = await fetch(`${baseUrl}/api/v1/homework-submissions/${updateJson.id}/submit`, {
+      method: 'POST',
+      headers
+    });
+    assert.ok(submitRes.ok);
+    const submitJson = await submitRes.json();
+    assert.equal(submitJson.status, 'submitted');
+    assert.ok(submitJson.submittedAt);
+
+    // Cannot re-submit
+    const reSubmitRes = await fetch(`${baseUrl}/api/v1/homework-submissions/${updateJson.id}/submit`, {
+      method: 'POST',
+      headers
+    });
+    assert.equal(reSubmitRes.status, 404);
+  });
+});

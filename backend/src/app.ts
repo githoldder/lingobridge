@@ -13,6 +13,7 @@ import * as filesRepo from './repositories/files.ts';
 import * as assignmentsRepo from './repositories/assignments.ts';
 import * as liveRepo from './repositories/live.ts';
 import * as classesRepo from './repositories/classes.ts';
+import * as homeworkSubmissionsRepo from './repositories/homework-submissions.ts';
 import * as XLSX from 'xlsx';
 import { query, queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
@@ -655,7 +656,161 @@ export function createApp() {
     ok(res, { removed: true });
   });
 
-  // ─── Course Members (existing) ───
+  // ─── Homework Submissions (S5-T06: 三级缓存 L3) ───
+
+  async function assertHomeworkAccess(res: Response, userId: string | undefined, targetStudentId: string): Promise<{ ok: boolean; user?: import('./repositories/types.ts').UserDto }> {
+    if (!userId) { fail(res, 401, 'Unauthorized'); return { ok: false }; }
+    const user = await usersRepo.findById(userId);
+    if (!user) { fail(res, 401, 'Unauthorized'); return { ok: false }; }
+    if (user.role === 'admin') return { ok: true, user };
+    if (user.role === 'student' && userId === targetStudentId) return { ok: true, user };
+    if (user.role === 'teacher') {
+      const linked = await usersRepo.findStudentIdsByTeacherId(userId);
+      if (linked.includes(targetStudentId)) return { ok: true, user };
+      const classIds = await classesRepo.findClassIdsByTeacherId(userId);
+      const allMembers = await Promise.all(classIds.map((id) => classesRepo.findMembers(id)));
+      if (allMembers.flat().some((m) => m.studentId === targetStudentId)) return { ok: true, user };
+    }
+    fail(res, 403, 'Forbidden');
+    return { ok: false };
+  }
+
+  // Get submissions for a student in a lesson
+  app.get('/api/v1/homework-submissions', async (req, res) => {
+    const userId = currentUserId(req);
+    const { studentId: rawStudentId, lessonNodeId, courseId, assignmentNodeId } = req.query as Record<string, string>;
+    const studentId = rawStudentId || userId;
+    if (!studentId) { res.status(400).json({ error: 'studentId is required' }); return; }
+    const access = await assertHomeworkAccess(res, userId, studentId);
+    if (!access.ok) return;
+
+    if (assignmentNodeId) {
+      const sub = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
+      res.json(sub || null);
+    } else if (lessonNodeId) {
+      const subs = await homeworkSubmissionsRepo.findByStudentAndLesson(studentId, lessonNodeId);
+      res.json(subs);
+    } else if (courseId) {
+      const subs = await homeworkSubmissionsRepo.findByStudentAndCourse(studentId, courseId);
+      res.json(subs);
+    } else {
+      res.status(400).json({ error: 'lessonNodeId, courseId, or assignmentNodeId is required' });
+    }
+  });
+
+  // Save draft (create or update)
+  app.put('/api/v1/homework-submissions/draft', async (req, res) => {
+    const userId = currentUserId(req);
+    const { studentId: rawStudentId, courseId, lessonNodeId, assignmentNodeId, draftData } = req.body as {
+      studentId: string; courseId: string; lessonNodeId: string; assignmentNodeId: string; draftData?: Record<string, any>;
+    };
+    const studentId = rawStudentId || userId;
+    if (!studentId || !courseId || !lessonNodeId || !assignmentNodeId) {
+      res.status(400).json({ error: 'studentId, courseId, lessonNodeId, assignmentNodeId are required' }); return;
+    }
+    const access = await assertHomeworkAccess(res, userId, studentId);
+    if (!access.ok) return;
+
+    // Validate assignment/lesson/course consistency and student course access
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const assignment = db.assignmentNodes.find((a: any) => a.id === assignmentNodeId);
+      if (!assignment) return fail(res, 404, 'Assignment node not found');
+      if (assignment.lessonNodeId !== lessonNodeId || assignment.courseId !== courseId) {
+        return fail(res, 400, 'Assignment/lesson/course mismatch');
+      }
+      const lesson = db.lessonNodes.find((n: any) => n.id === lessonNodeId);
+      if (!lesson || lesson.courseId !== courseId) {
+        return fail(res, 400, 'Lesson node not found or course mismatch');
+      }
+      const hasCourseAccess = db.courseMembers.some((m: any) => m.courseId === courseId && m.userId === studentId)
+        || db.classMembers.filter((m: any) => m.studentId === studentId).some((cm: any) =>
+          db.courses.some((c: any) => c.id === courseId && c.classId === cm.classId));
+      if (!hasCourseAccess) return fail(res, 403, 'Student does not have access to this course');
+    } else {
+      const assignment = await queryRow('SELECT * FROM assignment_nodes WHERE id = $1', [assignmentNodeId]);
+      if (!assignment) return fail(res, 404, 'Assignment node not found');
+      if (assignment.lesson_node_id !== lessonNodeId || assignment.course_id !== courseId) {
+        return fail(res, 400, 'Assignment/lesson/course mismatch');
+      }
+      const lesson = await queryRow('SELECT * FROM lesson_nodes WHERE id = $1 AND course_id = $2', [lessonNodeId, courseId]);
+      if (!lesson) return fail(res, 400, 'Lesson node not found or course mismatch');
+      const memberRow = await queryRow(
+        'SELECT id FROM course_members WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL',
+        [courseId, studentId]
+      );
+      let hasAccess = !!memberRow;
+      if (!hasAccess) {
+        const inheritedRow = await queryRow(
+          `SELECT c.id FROM courses c
+           JOIN class_members clm ON clm.class_id = c.class_id AND clm.student_id = $1 AND clm.removed_at IS NULL
+           WHERE c.id = $2`,
+          [studentId, courseId]
+        );
+        hasAccess = !!inheritedRow;
+      }
+      if (!hasAccess) return fail(res, 403, 'Student does not have access to this course');
+    }
+
+    const existing = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
+    if (existing) {
+      const updated = await homeworkSubmissionsRepo.updateDraft(existing.id, draftData || {});
+      res.json(updated);
+    } else {
+      const created = await homeworkSubmissionsRepo.create({ studentId, courseId, lessonNodeId, assignmentNodeId, draftData });
+      res.status(201).json(created);
+    }
+  });
+
+  // Submit homework (draft → submitted)
+  app.post('/api/v1/homework-submissions/:id/submit', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    // Look up submission to verify ownership
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const sub = (db.homeworkSubmissions || []).find((s: any) => s.id === req.params.id);
+      if (!sub) return fail(res, 404, 'Draft not found or already submitted');
+      if (user.role !== 'admin' && sub.studentId !== userId) return fail(res, 403, 'Forbidden');
+    } else {
+      const row = await queryRow('SELECT * FROM homework_submissions WHERE id = $1', [req.params.id]);
+      if (!row) return fail(res, 404, 'Draft not found or already submitted');
+      if (user.role !== 'admin' && row.student_id !== userId) return fail(res, 403, 'Forbidden');
+    }
+
+    const submitted = await homeworkSubmissionsRepo.submit(req.params.id);
+    if (!submitted) { res.status(404).json({ error: 'Draft not found or already submitted' }); return; }
+    res.json(submitted);
+  });
+
+  // Delete a submission
+  app.delete('/api/v1/homework-submissions/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    // Look up submission to verify ownership
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const sub = (db.homeworkSubmissions || []).find((s: any) => s.id === req.params.id);
+      if (!sub) return fail(res, 404, 'Not found');
+      if (user.role !== 'admin' && sub.studentId !== userId) return fail(res, 403, 'Forbidden');
+    } else {
+      const row = await queryRow('SELECT * FROM homework_submissions WHERE id = $1', [req.params.id]);
+      if (!row) return fail(res, 404, 'Not found');
+      if (user.role !== 'admin' && row.student_id !== userId) return fail(res, 403, 'Forbidden');
+    }
+
+    const ok = await homeworkSubmissionsRepo.deleteById(req.params.id);
+    if (!ok) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json({ ok: true });
+  });
+
+// ─── Course Members (existing) ───
 
   app.get('/api/v1/courses/:id/members', async (req, res) => {
     const members = await coursesRepo.findMembers(req.params.id);

@@ -245,3 +245,16 @@ export interface ClassMemberDto {
   studentId: string;
   joinedAt: string;
 }
+
+export interface HomeworkSubmissionDto {
+  id: string;
+  studentId: string;
+  courseId: string;
+  lessonNodeId: string;
+  assignmentNodeId: string;
+  status: 'draft' | 'submitted' | 'graded';
+  draftData: Record<string, any>;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

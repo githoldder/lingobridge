@@ -387,6 +387,38 @@ export const homeworkApi = {
   }
 };
 
+export interface HomeworkSubmission {
+  id: string;
+  studentId: string;
+  courseId: string;
+  lessonNodeId: string;
+  assignmentNodeId: string;
+  status: 'draft' | 'submitted' | 'graded';
+  draftData: Record<string, any>;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const homeworkSubmissionsApi = {
+  get: (params: { studentId: string; assignmentNodeId?: string; lessonNodeId?: string; courseId?: string }) => {
+    let path = `/homework-submissions?studentId=${params.studentId}`;
+    if (params.assignmentNodeId) path += `&assignmentNodeId=${params.assignmentNodeId}`;
+    if (params.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params.courseId) path += `&courseId=${params.courseId}`;
+    return request<HomeworkSubmission | HomeworkSubmission[]>(path);
+  },
+  saveDraft: (data: { studentId: string; courseId: string; lessonNodeId: string; assignmentNodeId: string; draftData: Record<string, any> }) =>
+    request<HomeworkSubmission>('/homework-submissions/draft', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  submit: (id: string) =>
+    request<HomeworkSubmission>(`/homework-submissions/${id}/submit`, { method: 'POST' }),
+  delete: (id: string) =>
+    request<{ ok: boolean }>(`/homework-submissions/${id}`, { method: 'DELETE' }),
+};
+
 export const vocabularyApi = {
   list: (courseId: string, params?: { q?: string; initial?: string; final?: string; tone?: string }) => {
     let path = `/vocabulary?courseId=${courseId}`;

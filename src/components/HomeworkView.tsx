@@ -35,7 +35,57 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
-import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, type LearningTask, type LearningRecord, type Course } from '../services/apiClient.ts';
+import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, homeworkSubmissionsApi, type LearningTask, type LearningRecord, type Course } from '../services/apiClient.ts';
+
+// ─── L1 Cache (Browser localStorage) — S5-T06 三级缓存 ───
+const L1_KEY = 'lingobridge_hw_draft';
+
+interface L1Draft {
+  courseId: string;
+  lessonNodeId: string;
+  currentIndex: number;
+  recordingIds: string[];
+  answers: Record<string, any>;
+  updatedAt: string;
+}
+
+function l1GetDraft(courseId: string, lessonNodeId: string): L1Draft | null {
+  try {
+    const raw = localStorage.getItem(L1_KEY);
+    if (!raw) return null;
+    const all = JSON.parse(raw) as Record<string, L1Draft>;
+    const key = `${courseId}:${lessonNodeId}`;
+    const draft = all[key];
+    if (!draft) return null;
+    // 7-day expiry
+    if (Date.now() - new Date(draft.updatedAt).getTime() > 7 * 86400000) {
+      l1ClearDraft(courseId, lessonNodeId);
+      return null;
+    }
+    return draft;
+  } catch { return null; }
+}
+
+function l1SaveDraft(courseId: string, lessonNodeId: string, data: Partial<L1Draft>) {
+  try {
+    const raw = localStorage.getItem(L1_KEY);
+    const all: Record<string, L1Draft> = raw ? JSON.parse(raw) : {};
+    const key = `${courseId}:${lessonNodeId}`;
+    const existing = all[key] || { courseId, lessonNodeId, currentIndex: 0, recordingIds: [], answers: {}, updatedAt: new Date().toISOString() };
+    all[key] = { ...existing, ...data, courseId, lessonNodeId, updatedAt: new Date().toISOString() };
+    localStorage.setItem(L1_KEY, JSON.stringify(all));
+  } catch (e) { console.warn('L1 save failed', e); }
+}
+
+function l1ClearDraft(courseId: string, lessonNodeId: string) {
+  try {
+    const raw = localStorage.getItem(L1_KEY);
+    if (!raw) return;
+    const all = JSON.parse(raw);
+    delete all[`${courseId}:${lessonNodeId}`];
+    localStorage.setItem(L1_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
 
 // Add decorative components
 const FloatingElement = ({ children, className, duration = 4, delay = 0, yOffset = -15 }: { children: React.ReactNode, className?: string, duration?: number, delay?: number, yOffset?: number }) => (
@@ -345,6 +395,14 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       result.sort((a, b) => a.unit - b.unit || a.lesson - b.lesson);
       setGroups(result);
       setLoading(false);
+
+      // S5-T06: Restore L1 cache after data loaded
+      if (activeLessonNodeId && selectedCourseId) {
+        const l1 = l1GetDraft(selectedCourseId, activeLessonNodeId);
+        if (l1 && l1.currentIndex >= 0 && l1.currentIndex < tasks.length) {
+          setCurrentIndex(l1.currentIndex);
+        }
+      }
     }).catch((err) => {
       console.error('Failed to load homework data:', err);
       setError(t('homework.load_error'));
@@ -394,6 +452,13 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
               recordingId: rec.id,
               lessonNodeId: currentTask.lessonNodeId || activeLessonNodeId
             });
+            // S5-T06: Save L1 cache on recording upload
+            if (selectedCourseId && activeLessonNodeId) {
+              l1SaveDraft(selectedCourseId, activeLessonNodeId, {
+                currentIndex,
+                recordingIds: [...(l1GetDraft(selectedCourseId, activeLessonNodeId)?.recordingIds || []), rec.id],
+              });
+            }
           } catch (err) {
             console.error('Failed to upload recording:', err);
           } finally {
@@ -470,6 +535,12 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
             .some(r => r.taskId === t.taskId && r.status === 'completed')
         ).length
       })));
+      // S5-T06: Save L1 cache on task completion
+      if (selectedCourseId && activeLessonNodeId) {
+        l1SaveDraft(selectedCourseId, activeLessonNodeId, {
+          currentIndex: currentIndex + 1,
+        });
+      }
     } catch (err) {
       console.error('Failed to save learning record:', err);
     }
@@ -951,7 +1022,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       <div className="fixed bottom-0 left-[260px] right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200 p-5 h-24 flex items-center z-40 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between">
           <div className="flex gap-4">
-            <button onClick={() => { const prevIdx = (currentIndex - 1 + currentTasks.length) % currentTasks.length; setCurrentIndex(prevIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); }} className="flex items-center gap-2 px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95">
+            <button onClick={() => { const prevIdx = (currentIndex - 1 + currentTasks.length) % currentTasks.length; setCurrentIndex(prevIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: prevIdx }); }} className="flex items-center gap-2 px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95">
               <ChevronLeft size={20} />
               {t('homework.prev')}
             </button>
@@ -962,7 +1033,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
           </div>
           <div className="flex gap-4">
             <button onClick={() => alert(t('homework.save') + '...')} className="px-8 py-3 bg-gray-50 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-all border border-gray-200">{t('homework.save')}</button>
-            <button onClick={() => { const nextIdx = (currentIndex + 1) % currentTasks.length; setCurrentIndex(nextIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); }} className="flex items-center gap-2 px-10 py-3 bg-[#0056D2] text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 group">
+            <button onClick={() => { const nextIdx = (currentIndex + 1) % currentTasks.length; setCurrentIndex(nextIdx); setShowAnalysis(false); setAudioUrl(null); setRecordingTime(0); if (selectedCourseId && activeLessonNodeId) l1SaveDraft(selectedCourseId, activeLessonNodeId, { currentIndex: nextIdx }); }} className="flex items-center gap-2 px-10 py-3 bg-[#0056D2] text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 group">
               {t('homework.next')}
               <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </button>

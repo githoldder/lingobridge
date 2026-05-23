@@ -348,6 +348,7 @@ CREATE TABLE IF NOT EXISTS homework_submissions (
   submitted_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  draft_data jsonb DEFAULT '{}',
   CONSTRAINT homework_submissions_unique UNIQUE (student_id, assignment_node_id)
 );
 CREATE INDEX IF NOT EXISTS idx_homework_submissions_student_course ON homework_submissions(student_id, course_id);
@@ -488,3 +489,8 @@ DO $$ BEGIN
     ADD CONSTRAINT lesson_nodes_default_courseware_fk
     FOREIGN KEY (default_courseware_file_id) REFERENCES files(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Migration: ensure homework_submissions has draft_data column (for DBs created before the column was added)
+DO $$ BEGIN
+  ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS draft_data jsonb DEFAULT '{}';
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;

@@ -253,6 +253,19 @@ export interface ClassMember {
   joinedAt: string;
 }
 
+export interface HomeworkSubmission {
+  id: string;
+  studentId: string;
+  courseId: string;
+  lessonNodeId: string;
+  assignmentNodeId: string;
+  status: 'draft' | 'submitted' | 'graded';
+  draftData: Record<string, any>;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Database {
   users: User[];
   courses: Course[];
@@ -275,4 +288,5 @@ export interface Database {
   homeworkImports: HomeworkImport[];
   classes: Class[];
   classMembers: ClassMember[];
+  homeworkSubmissions: HomeworkSubmission[];
 }
