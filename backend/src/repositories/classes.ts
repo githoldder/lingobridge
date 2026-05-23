@@ -1,9 +1,5 @@
-/**
- * S5-T02: Classes repository — JSON + Postgres dual mode
- */
-
+import { queryRow, queryRows, query, getDbMode } from '../db/postgres.ts';
 import { readDb, writeDb } from '../db.ts';
-import { getDbMode, query, queryRow, queryRows } from '../db/postgres.ts';
 import type { ClassDto, ClassMemberDto } from './types.ts';
 
 function mapClass(row: Record<string, any>): ClassDto {
@@ -26,69 +22,56 @@ function mapClassMember(row: Record<string, any>): ClassMemberDto {
   };
 }
 
-// ─── Class CRUD ───
+export async function findByTeacherId(teacherId: string): Promise<ClassDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    return (db as any).classes?.filter((c: any) => c.teacherId === teacherId).map(mapClass) || [];
+  }
+  const rows = await queryRows('SELECT * FROM classes WHERE teacher_id = $1 ORDER BY created_at DESC', [teacherId]);
+  return rows.map(mapClass);
+}
 
 export async function findById(id: string): Promise<ClassDto | null> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const c = db.classes.find((c) => c.id === id);
+    const c = (db as any).classes?.find((c: any) => c.id === id);
     return c ? mapClass(c) : null;
   }
   const row = await queryRow('SELECT * FROM classes WHERE id = $1', [id]);
   return row ? mapClass(row) : null;
 }
 
-export async function findByTeacherId(teacherId: string): Promise<ClassDto[]> {
+export async function create(data: { teacherId: string; name: string; description?: string }): Promise<ClassDto> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    return db.classes.filter((c) => c.teacherId === teacherId).map(mapClass);
-  }
-  const rows = await queryRows('SELECT * FROM classes WHERE teacher_id = $1 ORDER BY created_at DESC', [teacherId]);
-  return rows.map(mapClass);
-}
-
-export async function findAll(): Promise<ClassDto[]> {
-  if (getDbMode() === 'json') {
-    const db = await readDb();
-    return db.classes.map(mapClass);
-  }
-  const rows = await queryRows('SELECT * FROM classes ORDER BY created_at DESC');
-  return rows.map(mapClass);
-}
-
-export async function createClass(data: { teacherId: string; name: string; description?: string }): Promise<ClassDto> {
-  if (getDbMode() === 'json') {
-    const db = await readDb();
-    const now = new Date().toISOString();
+    if (!(db as any).classes) (db as any).classes = [];
     const cls = {
       id: crypto.randomUUID(),
       teacherId: data.teacherId,
       name: data.name,
       description: data.description ?? '',
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    db.classes.push(cls as any);
+    (db as any).classes.push(cls);
     await writeDb(db);
     return mapClass(cls);
   }
   const row = await queryRow(
-    `INSERT INTO classes (teacher_id, name, description)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
+    `INSERT INTO classes (teacher_id, name, description) VALUES ($1, $2, $3) RETURNING *`,
     [data.teacherId, data.name, data.description ?? '']
   );
   return mapClass(row!);
 }
 
-export async function updateClass(id: string, data: Partial<{ name: string; description: string }>): Promise<ClassDto | null> {
+export async function update(id: string, data: Partial<{ name: string; description: string }>): Promise<ClassDto | null> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const idx = db.classes.findIndex((c) => c.id === id);
+    const idx = ((db as any).classes || []).findIndex((c: any) => c.id === id);
     if (idx === -1) return null;
-    Object.assign(db.classes[idx], data, { updatedAt: new Date().toISOString() });
+    Object.assign((db as any).classes[idx], data, { updatedAt: new Date().toISOString() });
     await writeDb(db);
-    return mapClass(db.classes[idx]);
+    return mapClass((db as any).classes[idx]);
   }
   const sets: string[] = [];
   const vals: any[] = [];
@@ -104,28 +87,22 @@ export async function updateClass(id: string, data: Partial<{ name: string; desc
 export async function deleteClass(id: string): Promise<boolean> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const idx = db.classes.findIndex((c) => c.id === id);
-    if (idx === -1) return false;
-    db.classes.splice(idx, 1);
-    // class_members with this classId will be removed (matches CASCADE)
-    db.classMembers = db.classMembers.filter((m) => m.classId !== id);
+    const before = ((db as any).classes || []).length;
+    (db as any).classes = ((db as any).classes || []).filter((c: any) => c.id !== id);
     await writeDb(db);
-    return true;
+    return before !== ((db as any).classes || []).length;
   }
-  // CASCADE on class_members and SET NULL on courses.class_id handled by DB
-  const result = await query('DELETE FROM classes WHERE id = $1', [id]);
+  const result = await query(`DELETE FROM classes WHERE id = $1`, [id]);
   return (result.rowCount ?? 0) > 0;
 }
-
-// ─── Class Members ───
 
 export async function findMembers(classId: string): Promise<ClassMemberDto[]> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    return db.classMembers.filter((m) => m.classId === classId).map(mapClassMember);
+    return ((db as any).classMembers || []).filter((m: any) => m.classId === classId).map(mapClassMember);
   }
   const rows = await queryRows(
-    'SELECT * FROM class_members WHERE class_id = $1 AND removed_at IS NULL ORDER BY joined_at',
+    'SELECT * FROM class_members WHERE class_id = $1 AND removed_at IS NULL',
     [classId]
   );
   return rows.map(mapClassMember);
@@ -134,15 +111,11 @@ export async function findMembers(classId: string): Promise<ClassMemberDto[]> {
 export async function addMember(classId: string, studentId: string): Promise<ClassMemberDto> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const existing = db.classMembers.find((m) => m.classId === classId && m.studentId === studentId);
+    if (!(db as any).classMembers) (db as any).classMembers = [];
+    const existing = (db as any).classMembers.find((m: any) => m.classId === classId && m.studentId === studentId);
     if (existing) return mapClassMember(existing);
-    const member = {
-      id: crypto.randomUUID(),
-      classId,
-      studentId,
-      joinedAt: new Date().toISOString(),
-    };
-    db.classMembers.push(member as any);
+    const member = { id: crypto.randomUUID(), classId, studentId, joinedAt: new Date().toISOString() };
+    (db as any).classMembers.push(member);
     await writeDb(db);
     return mapClassMember(member);
   }
@@ -159,9 +132,9 @@ export async function addMember(classId: string, studentId: string): Promise<Cla
 export async function removeMember(classId: string, studentId: string): Promise<boolean> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const idx = db.classMembers.findIndex((m) => m.classId === classId && m.studentId === studentId);
+    const idx = ((db as any).classMembers || []).findIndex((m: any) => m.classId === classId && m.studentId === studentId);
     if (idx === -1) return false;
-    db.classMembers.splice(idx, 1);
+    (db as any).classMembers.splice(idx, 1);
     await writeDb(db);
     return true;
   }
@@ -172,26 +145,49 @@ export async function removeMember(classId: string, studentId: string): Promise<
   return (result.rowCount ?? 0) > 0;
 }
 
+export async function findClassesByStudentId(studentId: string): Promise<ClassDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const classIds = ((db as any).classMembers || []).filter((m: any) => m.studentId === studentId).map((m: any) => m.classId);
+    return ((db as any).classes || []).filter((c: any) => classIds.includes(c.id)).map(mapClass);
+  }
+  const rows = await queryRows(
+    `SELECT c.* FROM classes c
+     JOIN class_members cm ON cm.class_id = c.id
+     WHERE cm.student_id = $1 AND cm.removed_at IS NULL
+     ORDER BY c.created_at DESC`,
+    [studentId]
+  );
+  return rows.map(mapClass);
+}
+
+export async function findAll(): Promise<ClassDto[]> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    return ((db as any).classes || []).map(mapClass);
+  }
+  const rows = await queryRows('SELECT * FROM classes ORDER BY created_at DESC');
+  return rows.map(mapClass);
+}
+
 export async function findClassIdsByStudentId(studentId: string): Promise<string[]> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    return db.classMembers.filter((m) => m.studentId === studentId).map((m) => m.classId);
+    return ((db as any).classMembers || [])
+      .filter((m: any) => m.studentId === studentId)
+      .map((m: any) => m.classId);
   }
   const rows = await queryRows(
-    'SELECT class_id FROM class_members WHERE student_id = $1 AND removed_at IS NULL',
+    `SELECT class_id FROM class_members WHERE student_id = $1 AND removed_at IS NULL`,
     [studentId]
   );
-  return rows.map((r: any) => r.class_id);
+  return rows.map((r) => r.class_id);
 }
 
 export async function findClassIdsByTeacherId(teacherId: string): Promise<string[]> {
-  if (getDbMode() === 'json') {
-    const db = await readDb();
-    return db.classes.filter((c) => c.teacherId === teacherId).map((c) => c.id);
-  }
-  const rows = await queryRows(
-    'SELECT id FROM classes WHERE teacher_id = $1',
-    [teacherId]
-  );
-  return rows.map((r: any) => r.id);
+  const list = await findByTeacherId(teacherId);
+  return list.map((c) => c.id);
 }
+
+export { create as createClass, update as updateClass };
+

@@ -1120,7 +1120,8 @@ test('homework submission draft save and submit flow', async () => {
       })
     });
     assert.equal(draftRes.status, 201);
-    const draftJson = await draftRes.json();
+    const draftEnvelope = await draftRes.json();
+    const draftJson = draftEnvelope.data;
     assert.equal(draftJson.status, 'draft');
     assert.deepEqual(draftJson.draftData.answers, { q1: 'hello' });
 
@@ -1137,14 +1138,16 @@ test('homework submission draft save and submit flow', async () => {
       })
     });
     assert.equal(updateRes.status, 200);
-    const updateJson = await updateRes.json();
+    const updateEnvelope = await updateRes.json();
+    const updateJson = updateEnvelope.data;
     assert.equal(updateJson.draftData.currentIndex, 5);
 
     // Query by assignment
     const queryRes = await fetch(`${baseUrl}/api/v1/homework-submissions?studentId=student-1&assignmentNodeId=assignment-node-1`, {
       headers
     });
-    const queryJson = await queryRes.json();
+    const queryEnvelope = await queryRes.json();
+    const queryJson = queryEnvelope.data;
     assert.equal(queryJson.assignmentNodeId, 'assignment-node-1');
 
     // Submit
@@ -1153,7 +1156,8 @@ test('homework submission draft save and submit flow', async () => {
       headers
     });
     assert.ok(submitRes.ok);
-    const submitJson = await submitRes.json();
+    const submitEnvelope = await submitRes.json();
+    const submitJson = submitEnvelope.data;
     assert.equal(submitJson.status, 'submitted');
     assert.ok(submitJson.submittedAt);
 

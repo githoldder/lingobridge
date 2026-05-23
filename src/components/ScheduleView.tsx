@@ -37,14 +37,15 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'agenda' | 'replays'>('agenda');
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
   const [lectures, setLectures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveSessions, setLiveSessions] = useState<Map<string, LiveSessionData>>(new Map());
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
 
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   useEffect(() => {
@@ -88,8 +89,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
             allLectures.push({
               id: lec.id,
               title: lec.title,
+              createdAt: lec.createdAt,
               date: new Date(lec.createdAt).toLocaleDateString(),
-              day: new Date(lec.createdAt).getDate(),
               url: mediaUrl(lec.videoUrl),
               courseTitle,
             });
@@ -140,12 +141,16 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   }, [onNavigate]);
 
   const filteredAgenda = agenda.filter((item) => {
-    if (item.isLive || !item.startsAt) return true;
-    const day = new Date(item.startsAt).getDate();
-    return day === selectedDay;
+    const itemDateStr = item.startsAt || item.createdAt;
+    if (!itemDateStr) return false;
+    const d = new Date(itemDateStr);
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth && d.getDate() === selectedDay;
   });
 
-  const filteredRecordings = lectures.filter(rec => rec.day === selectedDay);
+  const filteredRecordings = lectures.filter((rec) => {
+    const d = new Date(rec.createdAt);
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth && d.getDate() === selectedDay;
+  });
 
   const todayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
 
@@ -161,7 +166,35 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-1 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
           <div className="flex justify-between items-center mb-4">
+            <button 
+              onClick={() => {
+                if (currentMonth === 0) {
+                  setCurrentMonth(11);
+                  setCurrentYear(currentYear - 1);
+                } else {
+                  setCurrentMonth(currentMonth - 1);
+                }
+                setSelectedDay(1);
+              }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
             <h3 className="font-bold text-gray-900">{currentYear}年{currentMonth + 1}月</h3>
+            <button 
+              onClick={() => {
+                if (currentMonth === 11) {
+                  setCurrentMonth(0);
+                  setCurrentYear(currentYear + 1);
+                } else {
+                  setCurrentMonth(currentMonth + 1);
+                }
+                setSelectedDay(1);
+              }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
             {t('schedule.days_short').split(' ').map((day, i) => (
@@ -172,7 +205,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
             {[...Array(daysInMonth)].map((_, i) => {
               const day = i + 1;
               const isSelected = day === selectedDay;
-              const hasEvents = agenda.some((item) => item.startsAt && new Date(item.startsAt).getDate() === day);
+              const hasEvents = agenda.some((item) => {
+                const dateStr = item.startsAt || item.createdAt;
+                if (!dateStr) return false;
+                const d = new Date(dateStr);
+                return d.getFullYear() === currentYear && d.getMonth() === currentMonth && d.getDate() === day;
+              });
               
               return (
               <button
@@ -322,7 +360,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
                             </div>
                          </div>
                          <button 
-                           onClick={() => window.open(rec.url, '_blank')}
+                           onClick={() => setActiveVideoUrl(rec.url)}
                            className="px-6 py-2 bg-blue-50 text-[#0056D2] rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors"
                          >
                             {t('schedule.view_replay')}
@@ -340,6 +378,42 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
            </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {activeVideoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setActiveVideoUrl(null)}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 md:p-8"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 max-w-4xl w-full shadow-2xl relative border border-gray-100"
+            >
+              <button
+                onClick={() => setActiveVideoUrl(null)}
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all hover:bg-gray-100 font-bold"
+              >
+                ✕
+              </button>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">{t('schedule.view_replay')}</h3>
+              <div className="aspect-video w-full bg-black rounded-2xl overflow-hidden shadow-inner">
+                <video
+                  src={activeVideoUrl}
+                  controls
+                  autoPlay
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

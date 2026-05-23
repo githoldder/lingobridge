@@ -146,6 +146,7 @@ export interface Recording {
   id: string;
   studentId: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   taskId?: string;
   audioUrl: string;

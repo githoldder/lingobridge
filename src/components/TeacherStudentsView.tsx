@@ -3,10 +3,13 @@ import {
   Users,
   Search,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { coursesApi, courseMembersApi, teacherStudentsApi } from '../services/apiClient.ts';
+import { StudentProgressModal } from './TeacherCourseDetailView.tsx';
+import { AnimatePresence } from 'motion/react';
 
 interface StudentRow {
   id: string;
@@ -21,6 +24,7 @@ const TeacherStudentsView = () => {
   const [query, setQuery] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStudentForProgress, setSelectedStudentForProgress] = useState<{ studentId: string; displayName: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -89,13 +93,14 @@ const TeacherStudentsView = () => {
               <th className="px-6 py-4">{t('students.table_student')}</th>
               <th className="px-6 py-4">{t('course.my_courses')}</th>
               <th className="px-6 py-4">{t('students.table_status')}</th>
+              <th className="px-6 py-4 text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={3} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course.loading')}</td></tr>
+              <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course.loading')}</td></tr>
             ) : students.length === 0 ? (
-              <tr><td colSpan={3} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course_students.empty')}</td></tr>
+              <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course_students.empty')}</td></tr>
             ) : students.map((student) => (
               <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-5">
@@ -118,6 +123,15 @@ const TeacherStudentsView = () => {
                     {student.courseCount > 0 ? t('students.on_track') : t('live_class.unassigned')}
                   </span>
                 </td>
+                <td className="px-6 py-5 text-right">
+                  <button
+                    onClick={() => setSelectedStudentForProgress({ studentId: student.id, displayName: student.displayName })}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#0056D2] rounded-xl hover:bg-blue-100 font-bold text-xs transition-colors"
+                  >
+                    <Eye size={12} />
+                    检查进度与作业
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -129,6 +143,17 @@ const TeacherStudentsView = () => {
         <Metric icon={<CheckCircle size={26} />} value={stats.assigned} label={t('course.my_courses')} tone="green" />
         <Metric icon={<AlertCircle size={26} />} value={stats.unassigned} label={t('live_class.unassigned')} tone="yellow" />
       </div>
+
+      <AnimatePresence>
+        {selectedStudentForProgress && (
+          <StudentProgressModal
+            studentId={selectedStudentForProgress.studentId}
+            displayName={selectedStudentForProgress.displayName}
+            onClose={() => setSelectedStudentForProgress(null)}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -46,6 +46,7 @@ export interface Recording {
   id: string;
   studentId: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   taskId?: string;
   audioUrl: string;
@@ -290,14 +291,22 @@ export const lessonNodesApi = {
 };
 
 export const recordingsApi = {
-  list: (courseId: string, page = 1) => request<Recording[]>(`/recordings?courseId=${courseId}&page=${page}`),
-  async upload(params: { courseId: string; pageNumber: number; taskId?: string; blob: Blob; durationSec: number; filename?: string }) {
+  list: (courseId: string, params?: { page?: number; taskId?: string; lessonNodeId?: string; studentId?: string }) => {
+    let path = `/recordings?courseId=${courseId}`;
+    if (params?.page) path += `&page=${params.page}`;
+    if (params?.taskId) path += `&taskId=${params.taskId}`;
+    if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.studentId) path += `&studentId=${params.studentId}`;
+    return request<Recording[]>(path);
+  },
+  async upload(params: { courseId: string; pageNumber: number; taskId?: string; lessonNodeId?: string; blob: Blob; durationSec: number; filename?: string }) {
     return request<Recording>('/recordings', {
       method: 'POST',
       body: JSON.stringify({
         courseId: params.courseId,
         pageNumber: params.pageNumber,
         taskId: params.taskId,
+        lessonNodeId: params.lessonNodeId,
         filename: params.filename || `recording-${Date.now()}.webm`,
         durationSec: params.durationSec,
         base64: await fileToBase64(params.blob)
@@ -443,10 +452,11 @@ export const learningRecordsApi = {
       method: 'POST',
       body: JSON.stringify({ taskId, ...params })
     }),
-  list: (courseId: string, params?: { context?: string; lessonNodeId?: string }) => {
+  list: (courseId: string, params?: { context?: string; lessonNodeId?: string; studentId?: string }) => {
     let path = `/learning-records?courseId=${courseId}`;
     if (params?.context) path += `&context=${params.context}`;
     if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.studentId) path += `&studentId=${params.studentId}`;
     return request<LearningRecord[]>(path);
   }
 };
@@ -727,3 +737,6 @@ export const adminApi = {
     }),
   deleteRecording: (id: string) => request<{ deleted: boolean }>(`/recordings/${id}`, { method: 'DELETE' })
 };
+
+export { request as apiFetch };
+

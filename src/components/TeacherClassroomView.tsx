@@ -721,15 +721,35 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (!isTeacher) return;
     if (!isRecording) {
       try {
-        let stream = (liveMode === 'local' && screenStream) ? screenStream : localStream;
-        if (!stream) {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
+        let displayStream = screenStream || screenStreamRef.current;
+        if (!displayStream) {
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: "browser",
+            } as any,
             audio: true,
           });
         }
-        recordingStreamRef.current = stream;
-        const recorder = new MediaRecorder(stream);
+        
+        let audioTrack = displayStream.getAudioTracks()[0] || localStream?.getAudioTracks()[0];
+        if (!audioTrack) {
+          try {
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioTrack = micStream.getAudioTracks()[0];
+          } catch (e) {
+            console.warn("Could not get microphone track for recording", e);
+          }
+        }
+        
+        const tracks = [];
+        const videoTrack = displayStream.getVideoTracks()[0];
+        if (videoTrack) tracks.push(videoTrack);
+        if (audioTrack) tracks.push(audioTrack);
+        
+        const combinedStream = new MediaStream(tracks);
+        recordingStreamRef.current = combinedStream;
+        
+        const recorder = new MediaRecorder(combinedStream);
         const chunks: Blob[] = [];
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) chunks.push(e.data);
@@ -744,15 +764,18 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
             });
             if (liveSessionRef.current?.id) {
-              liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'saved' }).catch(() => {});
+               liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'saved' }).catch(() => {});
             }
             alert(t('classroom.recording_uploaded'));
           } catch (error: any) {
             console.error("Failed to upload recording", error);
             alert(error.message || t('classroom.recording_upload_failed'));
           } finally {
-            if (recordingStreamRef.current && recordingStreamRef.current !== screenStreamRef.current && recordingStreamRef.current !== localStreamRef.current) {
+            if (recordingStreamRef.current) {
               stopTracks(recordingStreamRef.current);
+            }
+            if (displayStream && displayStream !== screenStream && displayStream !== screenStreamRef.current) {
+              stopTracks(displayStream);
             }
             recordingStreamRef.current = null;
           }

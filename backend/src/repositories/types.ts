@@ -105,6 +105,7 @@ export interface LearningTaskDto {
   lessonNodeId?: string;
   assignmentNodeId?: string;
   taskKey: string;
+  taskId?: string;
   taskType: string;
   unit: number;
   lesson: number;

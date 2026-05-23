@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -17,8 +17,12 @@ import {
   Download,
   UserPlus,
   AlertCircle,
+  Eye,
+  Volume2,
+  Search,
+  Award,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import {
   coursesApi,
@@ -28,6 +32,9 @@ import {
   assignmentsApi,
   homeworkApi,
   lessonNodesApi,
+  learningRecordsApi,
+  recordingsApi,
+  mediaUrl,
   fileToBase64,
   type Course,
   type LiveSessionData,
@@ -405,6 +412,7 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState('');
+  const [selectedStudentForProgress, setSelectedStudentForProgress] = useState<{ studentId: string; displayName: string } | null>(null);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -518,19 +526,326 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                   <p className="text-xs text-gray-400">{m.email}</p>
                 </div>
               </div>
-              <button
-                onClick={() => removeStudent(m.id)}
-                className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedStudentForProgress({ studentId: m.userId, displayName: m.displayName })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#0056D2] rounded-xl hover:bg-blue-100 font-bold text-xs transition-colors"
+                >
+                  <Eye size={12} />
+                  检查进度与作业
+                </button>
+                <button
+                  onClick={() => removeStudent(m.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedStudentForProgress && (
+          <StudentProgressModal
+            courseId={courseId}
+            studentId={selectedStudentForProgress.studentId}
+            displayName={selectedStudentForProgress.displayName}
+            onClose={() => setSelectedStudentForProgress(null)}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+export interface StudentProgressModalProps {
+  courseId?: string;
+  studentId: string;
+  displayName: string;
+  onClose: () => void;
+  t: (k: string) => string;
+}
+
+export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({ courseId, studentId, displayName, onClose, t }) => {
+  const [activeTab, setActiveTab] = useState<'homework' | 'recordings'>('homework');
+  const [loading, setLoading] = useState(true);
+  const [homeworkTasks, setHomeworkTasks] = useState<any[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(courseId || '');
+
+  useEffect(() => {
+    async function fetchCourses() {
+      try {
+        const list = await coursesApi.list();
+        setCourses(list || []);
+        if (!selectedCourseId && list.length > 0) {
+          setSelectedCourseId(list[0].id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchCourses();
+  }, [courseId]);
+
+  const loadData = useCallback(async () => {
+    if (!selectedCourseId) return;
+    setLoading(true);
+    try {
+      const [tasksData, recordsData, recordingsData] = await Promise.all([
+        homeworkApi.tasks(selectedCourseId, { includeAll: true }).catch(() => []),
+        learningRecordsApi.list(selectedCourseId, { studentId }).catch(() => []),
+        recordingsApi.list(selectedCourseId, { studentId }).catch(() => [])
+      ]);
+      setHomeworkTasks(tasksData || []);
+      setRecords(recordsData || []);
+      setRecordings(recordingsData || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCourseId, studentId]);
+
+  useEffect(() => {
+    loadData();
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [loadData]);
+
+  const handlePlayRecording = (url: string, id: string) => {
+    if (playingId === id) {
+      audioRef.current?.pause();
+      setPlayingId(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      const audio = new Audio(mediaUrl(url));
+      audio.onended = () => setPlayingId(null);
+      audio.onerror = () => setPlayingId(null);
+      audioRef.current = audio;
+      audio.play();
+      setPlayingId(id);
+    }
+  };
+
+  // Stats calculation
+  const hwTasks = homeworkTasks.filter(t => t.publishToHomework);
+  const hwRecords = records.filter(r => r.context === 'homework');
+  const completedHwTasks = hwTasks.filter(task => 
+    hwRecords.some(r => r.taskId === task.taskId && r.status === 'completed')
+  );
+  const hwProgress = hwTasks.length > 0 ? Math.round((completedHwTasks.length / hwTasks.length) * 100) : 0;
+
+  const vocabTasks = homeworkTasks.filter(t => t.publishToVocab || t.taskType === 'vocabulary');
+  const vocabRecords = records.filter(r => r.context === 'vocabulary');
+  const masteredVocab = vocabTasks.filter(task =>
+    vocabRecords.some(r => r.taskId === task.taskId && r.status === 'completed' && r.score >= 80)
+  );
+  const vocabProgress = vocabTasks.length > 0 ? Math.round((masteredVocab.length / vocabTasks.length) * 100) : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 text-left"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-[2rem] p-6 md:p-8 max-w-3xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative border border-gray-100 flex flex-col gap-6"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all hover:bg-gray-100 font-bold"
+        >
+          ✕
+        </button>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+              <Award className="text-[#0056D2]" size={28} />
+              学生学习进度检查
+            </h2>
+            <p className="text-sm font-semibold text-gray-400 mt-1">学生: <span className="text-gray-700">{displayName}</span></p>
+          </div>
+          {courses.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">选择课程:</span>
+              <select
+                value={selectedCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-[#0056D2] cursor-pointer"
+              >
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="py-20 text-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-400 font-bold">{t('course.loading')}</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-blue-800 tracking-wider uppercase mb-1">口语作业进度</h4>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-black text-blue-900">{completedHwTasks.length}</span>
+                    <span className="text-gray-400 font-bold">/ {hwTasks.length} 个任务已完成</span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex justify-between text-xs font-bold text-blue-700 mb-1.5">
+                    <span>完成度</span>
+                    <span>{hwProgress}%</span>
+                  </div>
+                  <div className="w-full bg-blue-100 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-[#0056D2] h-full rounded-full" style={{ width: `${hwProgress}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-orange-800 tracking-wider uppercase mb-1">单词掌握进度</h4>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-black text-orange-900">{masteredVocab.length}</span>
+                    <span className="text-gray-400 font-bold">/ {vocabTasks.length} 个单词已掌握</span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex justify-between text-xs font-bold text-orange-700 mb-1.5">
+                    <span>掌握度 (得分≥80)</span>
+                    <span>{vocabProgress}%</span>
+                  </div>
+                  <div className="w-full bg-orange-100 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-orange-500 h-full rounded-full" style={{ width: `${vocabProgress}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex bg-gray-50 rounded-xl p-1 border border-gray-100 self-start">
+              <button
+                onClick={() => setActiveTab('homework')}
+                className={`px-4 py-2 rounded-lg text-sm font-extrabold transition-all ${activeTab === 'homework' ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-900'}`}
+              >
+                作业明细
+              </button>
+              <button
+                onClick={() => setActiveTab('recordings')}
+                className={`px-4 py-2 rounded-lg text-sm font-extrabold transition-all ${activeTab === 'recordings' ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-900'}`}
+              >
+                学生录音记录 ({recordings.length})
+              </button>
+            </div>
+
+            {/* Tab Contents */}
+            <div className="flex-1 overflow-y-auto max-h-[40vh] min-h-[25vh]">
+              {activeTab === 'homework' ? (
+                <div className="space-y-3">
+                  {hwTasks.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 font-bold">当前课程未发布口语作业。</div>
+                  ) : (
+                    hwTasks.map((task) => {
+                      const record = hwRecords.find(r => r.taskId === task.taskId);
+                      const isCompleted = record?.status === 'completed';
+                      return (
+                        <div key={task.taskId} className="flex justify-between items-center p-4 rounded-2xl border border-gray-100 hover:border-gray-200 transition-colors">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded">
+                              Unit {task.unit} · Lesson {task.lesson}
+                            </span>
+                            <h5 className="font-bold text-gray-800 text-sm mt-1">{task.zhText}</h5>
+                            <p className="text-xs text-gray-400 font-mono">{task.pinyin}</p>
+                          </div>
+                          <div>
+                            {isCompleted ? (
+                              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-bold px-3 py-1 rounded-full border border-green-100">
+                                最佳分: {record.score}
+                              </span>
+                            ) : (
+                              <span className="bg-gray-50 text-gray-400 text-xs font-bold px-3 py-1 rounded-full border border-gray-100">
+                                未完成
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recordings.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 font-bold">无录音记录。</div>
+                  ) : (
+                    recordings.map((rec) => {
+                      const matchedTask = homeworkTasks.find(t => t.taskId === rec.taskId);
+                      const isPlaying = playingId === rec.id;
+                      return (
+                        <div key={rec.id} className="flex justify-between items-center p-4 rounded-2xl border border-gray-100 hover:border-gray-200 transition-colors">
+                          <div className="space-y-1 flex-1">
+                            <h5 className="font-bold text-gray-800 text-sm">{matchedTask ? matchedTask.zhText : '口语练习'}</h5>
+                            <p className="text-xs text-gray-400">
+                              提交时间: {new Date(rec.createdAt).toLocaleString()} · 时长: {rec.durationSec}秒
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handlePlayRecording(rec.audioUrl, rec.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isPlaying ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50 text-[#0056D2] border border-blue-100 hover:bg-blue-100'}`}
+                          >
+                            {isPlaying ? (
+                              <>
+                                <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-ping" />
+                                停止
+                              </>
+                            ) : (
+                              <>
+                                <Play size={12} fill="currentColor" />
+                                播放录音
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
 
 function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => string }) {
   const [files, setFiles] = useState<CoursewareFile[]>([]);

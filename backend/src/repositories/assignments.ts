@@ -20,12 +20,14 @@ function mapAssignmentNode(row: Record<string, any>): AssignmentNodeDto {
 }
 
 function mapTask(row: Record<string, any>): LearningTaskDto {
+  const taskKey = row.task_key ?? row.taskKey ?? row.taskId ?? row.id;
   return {
     id: row.id,
     courseId: row.course_id ?? row.courseId,
     lessonNodeId: row.lesson_node_id ?? row.lessonNodeId,
     assignmentNodeId: row.assignment_node_id ?? row.assignmentNodeId,
-    taskKey: row.task_key ?? row.taskKey,
+    taskKey,
+    taskId: taskKey,
     taskType: row.task_type ?? row.taskType,
     unit: row.unit ?? 1,
     lesson: row.lesson ?? 1,

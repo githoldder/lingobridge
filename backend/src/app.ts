@@ -144,7 +144,7 @@ export function createApp() {
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -493,7 +493,7 @@ export function createApp() {
     const user = await usersRepo.findById(userId);
     if (!user) return fail(res, 401, 'Unauthorized');
 
-    let result;
+    let result: any[];
     if (user.role === 'admin') {
       result = await classesRepo.findAll();
     } else if (user.role === 'teacher') {
@@ -501,10 +501,15 @@ export function createApp() {
     } else {
       // Student: return classes they belong to
       const classIds = await classesRepo.findClassIdsByStudentId(userId);
-      result = await Promise.all(classIds.map((id) => classesRepo.findById(id)));
-      result = result.filter(Boolean);
+      const fetched = await Promise.all(classIds.map((id) => classesRepo.findById(id)));
+      result = fetched.filter(Boolean);
     }
-    ok(res, result);
+
+    const withCounts = await Promise.all(result.map(async (c: any) => {
+      const members = await classesRepo.findMembers(c.id);
+      return { ...c, studentCount: members.length };
+    }));
+    ok(res, withCounts);
   });
 
   app.post('/api/v1/classes', async (req, res) => {
@@ -701,15 +706,15 @@ export function createApp() {
 
     if (assignmentNodeId) {
       const sub = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
-      res.json(sub || null);
+      ok(res, sub || null);
     } else if (lessonNodeId) {
       const subs = await homeworkSubmissionsRepo.findByStudentAndLesson(studentId, lessonNodeId);
-      res.json(subs);
+      ok(res, subs);
     } else if (courseId) {
       const subs = await homeworkSubmissionsRepo.findByStudentAndCourse(studentId, courseId);
-      res.json(subs);
+      ok(res, subs);
     } else {
-      res.status(400).json({ error: 'lessonNodeId, courseId, or assignmentNodeId is required' });
+      fail(res, 400, 'lessonNodeId, courseId, or assignmentNodeId is required');
     }
   });
 
@@ -721,7 +726,7 @@ export function createApp() {
     };
     const studentId = rawStudentId || userId;
     if (!studentId || !courseId || !lessonNodeId || !assignmentNodeId) {
-      res.status(400).json({ error: 'studentId, courseId, lessonNodeId, assignmentNodeId are required' }); return;
+      fail(res, 400, 'studentId, courseId, lessonNodeId, assignmentNodeId are required'); return;
     }
     const access = await assertHomeworkAccess(res, userId, studentId);
     if (!access.ok) return;
@@ -770,10 +775,10 @@ export function createApp() {
     const existing = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
     if (existing) {
       const updated = await homeworkSubmissionsRepo.updateDraft(existing.id, draftData || {});
-      res.json(updated);
+      ok(res, updated);
     } else {
       const created = await homeworkSubmissionsRepo.create({ studentId, courseId, lessonNodeId, assignmentNodeId, draftData });
-      res.status(201).json(created);
+      res.status(201).json({ code: 0, data: created, message: 'success' });
     }
   });
 
@@ -797,8 +802,8 @@ export function createApp() {
     }
 
     const submitted = await homeworkSubmissionsRepo.submit(req.params.id);
-    if (!submitted) { res.status(404).json({ error: 'Draft not found or already submitted' }); return; }
-    res.json(submitted);
+    if (!submitted) return fail(res, 404, 'Draft not found or already submitted');
+    ok(res, submitted);
   });
 
   // Delete a submission
@@ -821,8 +826,8 @@ export function createApp() {
     }
 
     const ok = await homeworkSubmissionsRepo.deleteById(req.params.id);
-    if (!ok) { res.status(404).json({ error: 'Not found' }); return; }
-    res.json({ ok: true });
+    if (!ok) return fail(res, 404, 'Not found');
+    res.json({ code: 0, data: { ok: true }, message: 'success' });
   });
 
 // ─── Course Members (existing) ───
@@ -1203,8 +1208,16 @@ export function createApp() {
   });
 
   app.get('/api/v1/learning-records', async (req, res) => {
+    const userId = currentUserId(req);
+    const queryStudentId = req.query.studentId ? String(req.query.studentId) : undefined;
+    const studentId = queryStudentId || userId || 'student-1';
+
+    if (queryStudentId && queryStudentId !== userId) {
+      const access = await assertHomeworkAccess(res, userId, queryStudentId);
+      if (!access.ok) return;
+    }
+
     const db = await readDb();
-    const studentId = currentUserId(req) || 'student-1';
     const courseId = String(req.query.courseId || '');
     const context = String(req.query.context || '');
     const lessonNodeId = String(req.query.lessonNodeId || '');
@@ -1257,7 +1270,7 @@ export function createApp() {
   });
 
   app.post('/api/v1/recordings', async (req, res) => {
-    const { courseId, pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId, lessonNodeId, pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
     if (!courseId) return fail(res, 400, 'courseId is required');
     if (!base64) return fail(res, 400, 'base64 audio is required');
     const db = await readDb();
@@ -1266,6 +1279,7 @@ export function createApp() {
       id: saved.id,
       studentId: currentUserId(req) || 'student-1',
       courseId,
+      lessonNodeId: lessonNodeId || undefined,
       pageNumber: Number(pageNumber),
       taskId: taskId || undefined,
       audioUrl: saved.url,
@@ -1279,10 +1293,27 @@ export function createApp() {
   });
 
   app.get('/api/v1/recordings', async (req, res) => {
+    const userId = currentUserId(req);
+    const queryStudentId = req.query.studentId ? String(req.query.studentId) : undefined;
+    const studentId = queryStudentId || userId;
+
+    if (studentId && studentId !== userId) {
+      const access = await assertHomeworkAccess(res, userId, studentId);
+      if (!access.ok) return;
+    }
+
     const db = await readDb();
     const courseId = req.query.courseId ? String(req.query.courseId) : undefined;
     const page = req.query.page ? Number(req.query.page) : undefined;
-    ok(res, db.recordings.filter((item) => (!courseId || item.courseId === courseId) && (!page || item.pageNumber === page)));
+    const taskId = req.query.taskId ? String(req.query.taskId) : undefined;
+    const lessonNodeId = req.query.lessonNodeId ? String(req.query.lessonNodeId) : undefined;
+    ok(res, db.recordings.filter((item) =>
+      (!studentId || item.studentId === studentId)
+      && (!courseId || item.courseId === courseId)
+      && (!page || item.pageNumber === page)
+      && (!taskId || item.taskId === taskId)
+      && (!lessonNodeId || item.lessonNodeId === lessonNodeId)
+    ));
   });
 
   app.delete('/api/v1/recordings/:id', async (req, res) => {

@@ -312,22 +312,30 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
               currentQ.options?.map((opt, i) => {
                 const val = currentQ.type === 'mc_ru_zh' ? opt.zhText : opt.translationRu;
                 const isSelected = selectedOption === val;
+                const isAnswer = val === currentQ.correctAnswer;
+                const reviewedClass = isJuice
+                  ? isAnswer
+                    ? 'border-green-300 bg-green-50 text-green-800'
+                    : isSelected
+                      ? 'border-red-300 bg-red-50 text-red-800'
+                      : 'border-gray-100 bg-white text-gray-400'
+                  : isSelected
+                    ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]'
+                    : 'border-gray-100 bg-white text-gray-700 hover:border-gray-300';
                 return (
                   <button
                     key={i}
                     disabled={isJuice}
                     onClick={() => setSelectedOption(val)}
-                    className={`p-6 rounded-2xl border-2 text-left font-bold transition-all flex items-center justify-between group ${
-                      isSelected
-                        ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]'
-                        : 'border-gray-100 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
+                    className={`p-6 rounded-2xl border-2 text-left font-bold transition-all flex items-center justify-between group ${reviewedClass}`}
                   >
                     <span className="text-xl">{val}</span>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      isSelected ? 'border-[#0056D2] bg-[#0056D2] text-white' : 'border-gray-200'
+                      isJuice && isAnswer ? 'border-green-500 bg-green-500 text-white'
+                      : isJuice && isSelected ? 'border-red-500 bg-red-500 text-white'
+                      : isSelected ? 'border-[#0056D2] bg-[#0056D2] text-white' : 'border-gray-200'
                     }`}>
-                      {isSelected && <CheckCircle2 size={14} />}
+                      {isJuice && isSelected && !isAnswer ? <XCircle size={14} /> : (isSelected || (isJuice && isAnswer)) && <CheckCircle2 size={14} />}
                     </div>
                   </button>
                 );
@@ -368,10 +376,10 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
 
       {/* Action Area */}
       <div className={`fixed bottom-0 left-0 right-0 z-50 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}>
-        <div className={`max-w-2xl mx-auto rounded-3xl p-8 shadow-2xl border flex items-center justify-between ${
+        <div className={`max-w-2xl mx-auto rounded-3xl p-8 shadow-2xl border flex flex-col items-center justify-center gap-6 text-center ${
           isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col items-center gap-4">
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
               isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
             }`}>

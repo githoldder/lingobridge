@@ -18,6 +18,31 @@ export interface HomeworkSubmissionDto {
   updatedAt: string;
 }
 
+const DRAFT_CACHE_TTL_MS = 5 * 60 * 1000;
+const submissionCache = new Map<string, { value: HomeworkSubmissionDto | null; expiresAt: number }>();
+
+function cacheKey(studentId: string, assignmentNodeId: string) {
+  return `${studentId}:${assignmentNodeId}`;
+}
+
+function getCached(studentId: string, assignmentNodeId: string): HomeworkSubmissionDto | null | undefined {
+  const item = submissionCache.get(cacheKey(studentId, assignmentNodeId));
+  if (!item) return undefined;
+  if (item.expiresAt < Date.now()) {
+    submissionCache.delete(cacheKey(studentId, assignmentNodeId));
+    return undefined;
+  }
+  return item.value;
+}
+
+function setCached(value: HomeworkSubmissionDto | null) {
+  if (!value) return;
+  submissionCache.set(cacheKey(value.studentId, value.assignmentNodeId), {
+    value,
+    expiresAt: Date.now() + DRAFT_CACHE_TTL_MS
+  });
+}
+
 function rowToDto(row: any): HomeworkSubmissionDto {
   return {
     id: row.id,
@@ -35,17 +60,24 @@ function rowToDto(row: any): HomeworkSubmissionDto {
 
 export async function findByStudentAndAssignment(studentId: string, assignmentNodeId: string): Promise<HomeworkSubmissionDto | null> {
   if (getDbMode() === 'postgres') {
+    const cached = getCached(studentId, assignmentNodeId);
+    if (cached !== undefined) return cached;
+
     const row = await queryRow(
       'SELECT * FROM homework_submissions WHERE student_id = $1 AND assignment_node_id = $2',
       [studentId, assignmentNodeId]
     );
-    return row ? rowToDto(row) : null;
+    const dto = row ? rowToDto(row) : null;
+    if (dto) setCached(dto);
+    return dto;
   }
   const db = await readDb();
   const item = (db.homeworkSubmissions || []).find(
     (s: any) => s.studentId === studentId && s.assignmentNodeId === assignmentNodeId
   );
-  return item || null;
+  const dto = item || null;
+  if (dto) setCached(dto);
+  return dto;
 }
 
 export async function findByStudentAndLesson(studentId: string, lessonNodeId: string): Promise<HomeworkSubmissionDto[]> {
@@ -89,7 +121,9 @@ export async function create(data: {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [data.studentId, data.courseId, data.lessonNodeId, data.assignmentNodeId, JSON.stringify(data.draftData || {})]
     );
-    return rowToDto(row!);
+    const dto = rowToDto(row!);
+    setCached(dto);
+    return dto;
   }
   const db = await readDb();
   if (!db.homeworkSubmissions) db.homeworkSubmissions = [];
@@ -107,6 +141,7 @@ export async function create(data: {
   };
   db.homeworkSubmissions.push(item);
   await writeDb(db);
+  setCached(item);
   return item;
 }
 
@@ -116,7 +151,9 @@ export async function updateDraft(id: string, draftData: Record<string, any>): P
       `UPDATE homework_submissions SET draft_data = $1, updated_at = now() WHERE id = $2 RETURNING *`,
       [JSON.stringify(draftData), id]
     );
-    return row ? rowToDto(row) : null;
+    const dto = row ? rowToDto(row) : null;
+    if (dto) setCached(dto);
+    return dto;
   }
   const db = await readDb();
   const item = (db.homeworkSubmissions || []).find((s: any) => s.id === id);
@@ -124,6 +161,7 @@ export async function updateDraft(id: string, draftData: Record<string, any>): P
   item.draftData = draftData;
   item.updatedAt = new Date().toISOString();
   await writeDb(db);
+  setCached(item);
   return item;
 }
 
@@ -133,7 +171,9 @@ export async function submit(id: string): Promise<HomeworkSubmissionDto | null> 
       `UPDATE homework_submissions SET status = 'submitted', submitted_at = now(), updated_at = now() WHERE id = $1 AND status = 'draft' RETURNING *`,
       [id]
     );
-    return row ? rowToDto(row) : null;
+    const dto = row ? rowToDto(row) : null;
+    if (dto) setCached(dto);
+    return dto;
   }
   const db = await readDb();
   const item = (db.homeworkSubmissions || []).find((s: any) => s.id === id);
@@ -142,17 +182,22 @@ export async function submit(id: string): Promise<HomeworkSubmissionDto | null> 
   item.submittedAt = new Date().toISOString();
   item.updatedAt = new Date().toISOString();
   await writeDb(db);
+  setCached(item);
   return item;
 }
 
 export async function deleteById(id: string): Promise<boolean> {
   if (getDbMode() === 'postgres') {
+    const existing = await queryRow('SELECT * FROM homework_submissions WHERE id = $1', [id]);
     const result = await query('DELETE FROM homework_submissions WHERE id = $1', [id]);
+    if (existing) submissionCache.delete(cacheKey(existing.student_id, existing.assignment_node_id));
     return (result?.rowCount ?? 0) > 0;
   }
   const db = await readDb();
   const before = (db.homeworkSubmissions || []).length;
+  const removed = (db.homeworkSubmissions || []).find((s: any) => s.id === id);
   db.homeworkSubmissions = (db.homeworkSubmissions || []).filter((s: any) => s.id !== id);
+  if (removed) submissionCache.delete(cacheKey(removed.studentId, removed.assignmentNodeId));
   if (db.homeworkSubmissions.length < before) { await writeDb(db); return true; }
   return false;
 }

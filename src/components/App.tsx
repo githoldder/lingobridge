@@ -12,6 +12,7 @@ import VocabularyView from './VocabularyView.tsx';
 import HomeView from './HomeView.tsx';
 import TeacherDashboardView from './TeacherDashboardView.tsx';
 import TeacherCoursesView from './TeacherCoursesView.tsx';
+import TeacherClassesView from './TeacherClassesView.tsx';
 import TeacherClassroomView from './TeacherClassroomView.tsx';
 import TeacherStudentsView from './TeacherStudentsView.tsx';
 import TeacherReportsView from './TeacherReportsView.tsx';
@@ -36,7 +37,7 @@ export interface NavigationContext {
 
 const PROTECTED_TABS = [
   'dashboard', 'schedule', 'vocabulary', 'homework', 'student-classroom',
-  'teacher-dashboard', 'teacher-courses', 'students', 'teacher-classroom', 'reports', 'teacher-course-detail',
+  'teacher-dashboard', 'teacher-courses', 'teacher-classes', 'students', 'teacher-classroom', 'reports', 'teacher-course-detail',
   'admin',
 ];
 
@@ -85,7 +86,7 @@ function AppContent() {
     }
 
     if (target === 'dashboard' || target === 'schedule' || target === 'vocabulary' || target === 'homework' || target === 'student-classroom') setUserRole('student');
-    if (target === 'teacher-dashboard' || target === 'teacher-courses' || target === 'students' || target === 'teacher-classroom' || target === 'reports' || target === 'teacher-course-detail') setUserRole('teacher');
+    if (target === 'teacher-dashboard' || target === 'teacher-courses' || target === 'teacher-classes' || target === 'students' || target === 'teacher-classroom' || target === 'reports' || target === 'teacher-course-detail') setUserRole('teacher');
     if (target === 'admin') {
       const currentUser = user ?? authApi.currentUser();
       if (currentUser?.role !== 'admin') {
@@ -135,6 +136,8 @@ function AppContent() {
         return <TeacherDashboardView onNavigate={handleNavigate} />;
       case 'teacher-courses':
         return <TeacherCoursesView onNavigate={handleNavigate} onOpenCourse={handleOpenCourseDetail} />;
+      case 'teacher-classes':
+        return <TeacherClassesView />;
       case 'teacher-classroom':
         return <TeacherClassroomView onExit={handleClassExit} role="teacher" lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
       case 'student-classroom':
