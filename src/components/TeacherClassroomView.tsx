@@ -2088,23 +2088,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             </div>
             <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('classroom.translate')}</span>
           </div>
-          {/* Student: homework and vocabulary panel buttons */}
-          {!isTeacher && (
-            <>
-              <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowHomeworkPanel(!showHomeworkPanel)}>
-                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showHomeworkPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
-                  <BookOpen size={18} />
-                </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('homework.title')}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowVocabPanel(!showVocabPanel)}>
-                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showVocabPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
-                  <Layers size={18} />
-                </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('nav.vocabulary')}</span>
-              </div>
-            </>
-          )}
+          {/* Student: homework and vocabulary panel buttons deleted to avoid bloat */}
           {isTeacher && (
           <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setIsControlsExpanded((value) => !value)}>
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center group-hover:bg-white/5 transition-all text-gray-400">
