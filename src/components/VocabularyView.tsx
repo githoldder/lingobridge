@@ -390,8 +390,14 @@ const VocabularyView = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || '');
 
   useEffect(() => {
-    coursesApi.list().then(setCourses).catch(() => {});
-  }, []);
+    coursesApi.list().then((list) => {
+      setCourses(list);
+      if (!selectedCourseId && list.length > 0) {
+        setSelectedCourseId(list[0].id);
+        localStorage.setItem('lingobridge_courseId', list[0].id);
+      }
+    }).catch(() => {});
+  }, [selectedCourseId]);
 
   useEffect(() => {
     if (!selectedCourseId) return;

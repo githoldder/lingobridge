@@ -16,14 +16,58 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { coursesApi, liveSessionsApi, lessonNodesApi } from '../services/apiClient.ts';
 
 interface DashboardViewProps {
-  onNavigate?: (target: string) => void;
+  onNavigate?: (target: string, ctx?: { courseId?: string; lessonNodeId?: string }) => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const [liveInfo, setLiveInfo] = React.useState<{ courseId: string; lessonNodeId: string } | null>(null);
+
+  React.useEffect(() => {
+    const fetchLiveContext = async () => {
+      try {
+        const courses = await coursesApi.list();
+        if (!courses || courses.length === 0) return;
+
+        // 1. Try finding active live session
+        for (const course of courses) {
+          const activeSession = await liveSessionsApi.getActive(course.id);
+          if (activeSession && activeSession.status === 'active') {
+            const lessonNodeId = (activeSession as any).lessonNodeId;
+            if (lessonNodeId) {
+              setLiveInfo({ courseId: course.id, lessonNodeId });
+              return;
+            }
+          }
+        }
+
+        // 2. Fallback to latest lesson node of the first course
+        const firstCourse = courses[0];
+        const nodes = await lessonNodesApi.list(firstCourse.id);
+        if (nodes && nodes.length > 0) {
+          const latestNode = nodes[nodes.length - 1];
+          setLiveInfo({ courseId: firstCourse.id, lessonNodeId: latestNode.id });
+        }
+      } catch (err) {
+        console.error('Failed to load student live context:', err);
+      }
+    };
+    fetchLiveContext();
+  }, []);
+
+  const handleJoinClassroom = () => {
+    if (liveInfo) {
+      localStorage.setItem('lingobridge_courseId', liveInfo.courseId);
+      localStorage.setItem('lingobridge_lessonNodeId', liveInfo.lessonNodeId);
+      onNavigate?.('student-classroom', { courseId: liveInfo.courseId, lessonNodeId: liveInfo.lessonNodeId });
+    } else {
+      onNavigate?.('student-classroom');
+    }
+  };
 
   const leaderboard = [
     { rank: 2, name: t('leaderboard.li_min'), points: '2,940', avatar: 'Li Min' },
@@ -129,7 +173,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <p className="text-sm text-orange-600 font-medium">{t('stats.starting_in')} 15 {t('stats.minutes')}</p>
             </div>
             <button 
-              onClick={() => onNavigate?.('student-classroom')}
+              onClick={handleJoinClassroom}
               className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
             >
               {t('dashboard.join_classroom')}

@@ -138,11 +138,6 @@ export function createApp() {
   const app = express();
 
   app.use(express.json({ limit: '90mb' }));
-  app.use('/uploads', express.static(storageRoot));
-
-  const ttsCacheDir = path.resolve(process.cwd(), 'backend/data/tts-cache');
-  if (!fs.existsSync(ttsCacheDir)) fs.mkdirSync(ttsCacheDir, { recursive: true });
-  app.use('/uploads/tts-cache', express.static(ttsCacheDir));
 
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
@@ -151,6 +146,12 @@ export function createApp() {
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
+
+  app.use('/uploads', express.static(storageRoot));
+
+  const ttsCacheDir = path.resolve(process.cwd(), 'backend/data/tts-cache');
+  if (!fs.existsSync(ttsCacheDir)) fs.mkdirSync(ttsCacheDir, { recursive: true });
+  app.use('/uploads/tts-cache', express.static(ttsCacheDir));
 
   app.get('/api/v1/health', async (_req, res) => {
     const dbStatus = await pgHealthCheck();
@@ -539,16 +540,17 @@ export function createApp() {
     const items = files.map((f) => {
       const pages = db.coursePages.filter((p) => p.courseId === f.courseId && p.fileUrl === f.storageUrl);
       const lesson = f.lessonNodeId ? db.lessonNodes.find((n) => n.id === f.lessonNodeId) : undefined;
+      const fileType = f.type || (f as any).kind || '';
       return {
         id: f.id,
         filename: f.filename,
         mimeType: f.mimeType,
-        type: f.type,
+        type: fileType,
         lessonNodeId: f.lessonNodeId || '',
         storageUrl: f.storageUrl || '',
         liveClassTitle: lesson?.title || '',
         pageCount: pages.length,
-        status: ['pdf', 'pptx'].includes(f.type) ? 'ready' : 'ready' as const,
+        status: ['pdf', 'pptx'].includes(fileType) ? 'ready' : 'ready' as const,
         createdAt: f.createdAt
       };
     });

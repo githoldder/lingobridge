@@ -391,9 +391,29 @@ git -c http.proxy= -c https.proxy= push origin main
 - S4-T17：移除学生端静态 schedule。
 - S4-T20：学生 live 入口从真实 active/scheduled live session 进入。
 - S4-T21：学生作业入口按 `assignmentNodeId/lessonNodeId` 读取任务和学习记录。
+- 继续保持规则：
+  - 当前不要启动 speechDemoSprintPlan，除非 Sprint 4 core green 且用户明确切换到语音演示 Spike。
+  - 当前不要做 PPTX S4-T28~T31，仍保持 deferred。
+  - 不要再引入新的业务级 `course-1` fallback；测试 fixture 中出现 `course-1` 可以接受。
 
-继续保持规则：
+---
 
-- 当前不要启动 speechDemoSprintPlan，除非 Sprint 4 core green 且用户明确切换到语音演示 Spike。
-- 当前不要做 PPTX S4-T28~T31，仍保持 deferred。
-- 不要再引入新的业务级 `course-1` fallback；测试 fixture 中出现 `course-1` 可以接受。
+# E2E Blockage Resolution & MVP Pipeline Context Update
+Date: 2026-05-22
+Action: Resolve student classroom, homework and vocabulary E2E blockages.
+
+## Changes:
+1. `src/components/DashboardView.tsx`: Integrate `coursesApi`, `liveSessionsApi`, and `lessonNodesApi` to retrieve active live sessions on load. Cache and pass resolved `courseId` and `lessonNodeId` upon joining classroom.
+2. `src/components/HomeworkView.tsx`: Auto-fallback `selectedCourseId` to the first fetched course, and save records using `currentTask.lessonNodeId`.
+3. `src/components/VocabularyView.tsx`: Auto-fallback `selectedCourseId` to the first fetched course.
+
+---
+
+# Seamless PDF Upload & Zero-Blockage Preview Context Update
+Date: 2026-05-22
+Action: Resolve manual testing PDF upload blockers via intelligent lessonNodeId automatic fallback & creation.
+
+## Changes:
+1. `src/components/TeacherClassroomView.tsx`: Added `lessonNodesApi` import and enhanced `handlePdfUpload` to automatically fetch first available lesson node or create a default new one when `lessonNodeId` is missing, resolving popup blockers completely.
+2. `src/components/TeacherCourseDetailView.tsx`: Refactored `handleUpload` in `CoursewareTab` to dynamically resolve or build a default lesson node context on PDF upload when no schedule is active, displaying progressive status messaging to the user.
+3. `src/components/TeacherCoursesView.tsx`: Added `lessonNodesApi` import and upgraded "Enter Classroom" action to pre-emptively load and write the first valid lesson node ID into `localStorage` during list entry.

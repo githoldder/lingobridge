@@ -35,6 +35,12 @@ async function uploadPdfCourseware(lessonNodeId: string) {
   const json = await res.json();
   if (json.code !== 0) console.error('uploadPdfCourseware failed:', JSON.stringify(json));
   expect(json.code).toBe(0);
+  const pdfRes = await fetch(`${BACKEND}${json.data.file.storageUrl}`, {
+    headers: { Origin: FRONTEND }
+  });
+  expect(pdfRes.ok).toBe(true);
+  expect(pdfRes.headers.get('access-control-allow-origin')).toBe(FRONTEND);
+  expect(pdfRes.headers.get('content-type') || '').toContain('application/pdf');
   return json.data;
 }
 
@@ -103,6 +109,17 @@ test.describe('PDF/Drawing Stability Regression (S4) — browser-level', () => {
     // Wait for classroom view to fully render
     await expect(page.locator('#classroom-view')).toBeAttached({ timeout: 15000 });
     await page.waitForTimeout(3000);
+
+    const pdfCanvas = page.locator('[data-testid="pdf-page-canvas"]');
+    await expect(pdfCanvas).toBeAttached({ timeout: 10000 });
+    await expect(page.locator('[data-testid="pdf-error"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '重新加载' })).toHaveCount(0);
+    const pdfCanvasSize = await pdfCanvas.evaluate((canvas: HTMLCanvasElement) => ({
+      width: canvas.width,
+      height: canvas.height
+    }));
+    expect(pdfCanvasSize.width).toBeGreaterThan(0);
+    expect(pdfCanvasSize.height).toBeGreaterThan(0);
 
     // Assert the annotation canvas exists (rendered after PDF loads)
     const annotCanvas = page.locator('[data-testid="canvas-annotation"]');
@@ -199,6 +216,11 @@ test.describe('PDF/Drawing Stability Regression (S4) — browser-level', () => {
     await page.waitForTimeout(2000);
 
     // Assert annotation canvas present (PDF viewer loaded)
+    const pdfCanvas = page.locator('[data-testid="pdf-page-canvas"]');
+    await expect(pdfCanvas).toBeAttached({ timeout: 10000 });
+    await expect(page.locator('[data-testid="pdf-error"]')).toHaveCount(0);
+
+    // Assert annotation canvas present
     const annotCanvas = page.locator('[data-testid="canvas-annotation"]');
     await expect(annotCanvas).toBeAttached({ timeout: 5000 });
 

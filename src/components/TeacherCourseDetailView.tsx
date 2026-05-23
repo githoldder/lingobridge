@@ -526,10 +526,6 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
   const handleUpload = async (file: File) => {
-    if (!lessonNodeId) {
-      setMessage(t('live_class.required_before_upload'));
-      return;
-    }
     if (!file.name.match(/\.(pdf|pptx)$/i)) {
       setMessage(t('course_courseware.invalid_type'));
       return;
@@ -543,7 +539,22 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
     }, 200);
 
     try {
-      await coursesApi.uploadCourseware(courseId, file, lessonNodeId);
+      let finalLessonNodeId = lessonNodeId;
+      if (!finalLessonNodeId) {
+        setMessage('正在为您自动创建课时节点...');
+        const nodes = await lessonNodesApi.list(courseId);
+        if (nodes && nodes.length > 0) {
+          finalLessonNodeId = nodes[0].id;
+        } else {
+          const created = await lessonNodesApi.create(courseId, {
+            title: `Live Lesson ${new Date().toLocaleDateString()}`
+          });
+          finalLessonNodeId = created.lessonNode.id;
+        }
+        setLessonNodeId(finalLessonNodeId);
+      }
+
+      await coursesApi.uploadCourseware(courseId, file, finalLessonNodeId);
       setProgress(100);
       setMessage(t('course_courseware.uploaded').replace('{filename}', file.name));
       loadFiles();

@@ -54,6 +54,13 @@ test('courseware upload creates pages and excel exercises', async () => {
     assert.equal(pdfJson.data.pages.length, 1);
     assert.equal(pdfJson.data.pages[0].fileUrl, pdfJson.data.file.storageUrl);
 
+    const staticPdf = await fetch(`${baseUrl}${pdfJson.data.file.storageUrl}`, {
+      headers: { Origin: 'http://127.0.0.1:3000' }
+    });
+    assert.equal(staticPdf.status, 200);
+    assert.equal(staticPdf.headers.get('access-control-allow-origin'), 'http://127.0.0.1:3000');
+    assert.match(staticPdf.headers.get('content-type') || '', /application\/pdf/);
+
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([[
       'course_code', 'unit', 'lesson', 'task_id', 'task_type',

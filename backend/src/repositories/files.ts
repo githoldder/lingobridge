@@ -64,6 +64,7 @@ export async function createFile(data: {
       courseId: data.courseId,
       lessonNodeId: data.lessonNodeId,
       kind: data.kind,
+      type: data.kind,
       filename: data.filename,
       mimeType: data.mimeType,
       sizeBytes: data.sizeBytes,

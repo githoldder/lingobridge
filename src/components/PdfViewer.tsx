@@ -56,68 +56,87 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, lessonNodeId, onPageCo
   const wrapperRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<any>(null);
   const renderTaskRef = useRef<any>(null);
+  const renderQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const pageCacheRef = useRef<Map<number, PageCacheEntry>>(new Map());
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
 
-  const renderPage = useCallback(async (num: number, targetCanvas?: HTMLCanvasElement): Promise<boolean> => {
-    const doc = docRef.current;
+  const renderPage = useCallback((num: number, targetCanvas?: HTMLCanvasElement): Promise<boolean> => {
+    const executeRender = async (): Promise<boolean> => {
+      const doc = docRef.current;
       const canvas = targetCanvas || canvasRef.current;
-    if (!doc || !canvas) return false;
+      if (!doc || !canvas) return false;
 
-    if (renderTaskRef.current && !targetCanvas) {
-      try { renderTaskRef.current.cancel(); } catch {}
-    }
+      try {
+        const pdfPage = await doc.getPage(num);
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return false;
 
-    try {
-      const pdfPage = await doc.getPage(num);
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return false;
+        const maxW = Math.max(wrapper.clientWidth || 800, 320);
+        const maxH = Math.max(wrapper.clientHeight || 600, 240);
+        const vp = pdfPage.getViewport({ scale: 1 });
+        const scale = Math.min(maxW / vp.width, maxH / vp.height);
+        const outputScale = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
 
-      const maxW = wrapper.clientWidth || 800;
-      const maxH = wrapper.clientHeight || 600;
-      const vp = pdfPage.getViewport({ scale: 1 });
-      const scale = Math.min(maxW / vp.width, maxH / vp.height, 1.5);
+        const viewport = pdfPage.getViewport({ scale });
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
 
-      const viewport = pdfPage.getViewport({ scale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return false;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const task = pdfPage.render({ canvasContext: ctx, viewport });
-      if (!targetCanvas) renderTaskRef.current = task;
-      await task.promise;
-
-      if (!targetCanvas) {
-        const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = canvas.width;
-        cacheCanvas.height = canvas.height;
-        const cacheCtx = cacheCanvas.getContext('2d');
-        if (cacheCtx) cacheCtx.drawImage(canvas, 0, 0);
-        const entry: PageCacheEntry = { pageNum: num, canvas: cacheCanvas, rendered: true };
-        pageCacheRef.current.set(num, entry);
-        if (pageCacheRef.current.size > MAX_CACHE_SIZE) {
-          const oldest = pageCacheRef.current.keys().next().value;
-          pageCacheRef.current.delete(oldest);
+        const task = pdfPage.render({
+          canvasContext: ctx,
+          viewport,
+          transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined,
+        });
+        if (!targetCanvas) renderTaskRef.current = task;
+        await task.promise;
+        if (!targetCanvas && renderTaskRef.current === task) {
+          renderTaskRef.current = null;
         }
-      }
-      return true;
-    } catch (err: any) {
-      if (err?.name !== 'RenderingCancelledException') {
-        const detail = describePdfError(err);
-        const category = categorizePdfError(err);
+
         if (!targetCanvas) {
-          console.error(`PDF render error [${category}]: ${detail}`, { url, page: num, lessonNodeId });
-          setError('render_failed');
-          onRenderError?.(`[${category}] ${detail}`);
+          const cacheCanvas = document.createElement('canvas');
+          cacheCanvas.width = canvas.width;
+          cacheCanvas.height = canvas.height;
+          const cacheCtx = cacheCanvas.getContext('2d');
+          if (cacheCtx) cacheCtx.drawImage(canvas, 0, 0);
+          const entry: PageCacheEntry = { pageNum: num, canvas: cacheCanvas, rendered: true };
+          pageCacheRef.current.set(num, entry);
+          if (pageCacheRef.current.size > MAX_CACHE_SIZE) {
+            const oldest = pageCacheRef.current.keys().next().value;
+            pageCacheRef.current.delete(oldest);
+          }
         }
+        return true;
+      } catch (err: any) {
+        if (err?.name !== 'RenderingCancelledException') {
+          const detail = describePdfError(err);
+          const category = categorizePdfError(err);
+          if (!targetCanvas) {
+            console.error(`PDF render error [${category}]: ${detail}`, { url, page: num, lessonNodeId });
+            setError('render_failed');
+            onRenderError?.(`[${category}] ${detail}`);
+          }
+        }
+        return false;
       }
-      return false;
+    };
+
+    if (targetCanvas) {
+      return executeRender();
     }
+
+    const queuedRender = renderQueueRef.current
+      .catch(() => false)
+      .then(() => executeRender());
+    renderQueueRef.current = queuedRender;
+    return queuedRender;
   }, [onRenderError, url, lessonNodeId]);
 
   const preRenderAdjacent = useCallback(async (current: number, total: number) => {
@@ -216,7 +235,7 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, lessonNodeId, onPageCo
 
   if (error === 'load_failed' || error === 'render_failed') {
     return (
-      <div ref={wrapperRef} className="relative w-full h-full flex items-center justify-center bg-gray-50">
+      <div ref={wrapperRef} data-testid="pdf-error" className="relative w-full h-full flex items-center justify-center bg-gray-50">
         <div className="text-center p-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
             <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -248,7 +267,8 @@ const PdfViewer: React.FC<PdfViewerProps> = ({ url, page, lessonNodeId, onPageCo
       )}
       <canvas
         ref={canvasRef}
-        className="block shadow-md"
+        data-testid="pdf-page-canvas"
+        className="block shadow-md bg-white"
         style={{ maxWidth: '100%', maxHeight: '100%', opacity: rendering ? 0.5 : 1, transition: 'opacity 150ms' }}
       />
     </div>

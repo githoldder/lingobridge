@@ -293,8 +293,14 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   }, [propLessonNodeId]);
 
   useEffect(() => {
-    coursesApi.list().then(setCourses).catch(() => {});
-  }, []);
+    coursesApi.list().then((list) => {
+      setCourses(list);
+      if (!selectedCourseId && list.length > 0) {
+        setSelectedCourseId(list[0].id);
+        localStorage.setItem('lingobridge_courseId', list[0].id);
+      }
+    }).catch(() => {});
+  }, [selectedCourseId]);
 
   useEffect(() => {
     if (!selectedCourseId) return;
@@ -386,7 +392,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
               context: 'homework',
               status: 'in_progress',
               recordingId: rec.id,
-              lessonNodeId: activeLessonNodeId
+              lessonNodeId: currentTask.lessonNodeId || activeLessonNodeId
             });
           } catch (err) {
             console.error('Failed to upload recording:', err);
@@ -433,7 +439,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
         context: 'homework',
         status: 'completed',
         score,
-        lessonNodeId: activeLessonNodeId
+        lessonNodeId: currentTask.lessonNodeId || activeLessonNodeId
       });
       setLearningRecords(prev => {
         const existing = prev.find(r => r.taskId === currentTask.taskId);

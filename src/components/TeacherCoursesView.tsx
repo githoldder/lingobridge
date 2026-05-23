@@ -8,7 +8,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { coursesApi, type Course } from '../services/apiClient.ts';
+import { coursesApi, lessonNodesApi, type Course } from '../services/apiClient.ts';
 import { useLanguage } from '../context/LanguageContext.tsx';
 
 interface TeacherCoursesViewProps {
@@ -130,9 +130,19 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
                     {course.exercisesCount || 0} {t('course.exercises')}
                   </button>
                   <button
-                    onClick={(event) => {
+                    onClick={async (event) => {
                       event.stopPropagation();
                       localStorage.setItem('lingobridge_courseId', course.id);
+                      try {
+                        const nodes = await lessonNodesApi.list(course.id);
+                        if (nodes && nodes.length > 0) {
+                          localStorage.setItem('lingobridge_lessonNodeId', nodes[0].id);
+                        } else {
+                          localStorage.removeItem('lingobridge_lessonNodeId');
+                        }
+                      } catch {
+                        localStorage.removeItem('lingobridge_lessonNodeId');
+                      }
                       onNavigate?.('teacher-classroom');
                     }}
                     className="flex-1 py-2 bg-blue-50 text-[#0056D2] rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
