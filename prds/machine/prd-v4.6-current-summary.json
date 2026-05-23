@@ -1,0 +1,357 @@
+{
+  "version": "2026-05-23-prd-v4.6-class-live-learning-cache",
+  "updatedAt": "2026-05-23",
+  "principles": [
+    "简洁、可维护",
+    "只覆盖关键逻辑",
+    "优先定义模块与模块之间的交界点",
+    "不展开非关键内部实现细节"
+  ],
+  "implementationStatus": {
+    "summary": "Sprint 4 进入缺陷收敛 + S5-T02 班级绑定完成。S5-T02 包含完整班级 CRUD API、班级成员管理、课程 classId 绑定及 defaultCoursewareFileId 支持。23/23 后端测试通过，lint/build 通过。下一步可继续 O1 余项 (S5-T03/T04) 或进入 O2 精细化作业。",
+    "verification": {
+      "lint": "passed: npm run lint",
+      "build": "passed: npm run build",
+      "backendTests": "passed: 23/23 (JSON mode, includes 7 S5-T02 tests)",
+      "e2eTests": "pending: current defect list not covered",
+      "prdJson": "passed: JSON parse after 2026-05-22 OKRTS update"
+    },
+    "nonBlockingWarnings": [
+      "PDF.js build warning about eval usage.",
+      "Vite chunk-size warning because main bundle is larger than 500KB."
+    ],
+    "lastAuditResult": "Current state has P0/P1 blockers; do not claim teacher/student data collection is ready until Sprint 3 acceptance passes.",
+    "e2ePipeline": [
+      "01: Backend health check",
+      "02: Course CRUD API",
+      "03: Lesson nodes CRUD API",
+      "04: Live session requires lessonNodeId",
+      "05: Course members API",
+      "06: TTS provider facade",
+      "07: TTS usage requires admin",
+      "08: Teacher login → dashboard",
+      "09: Teacher → courses page",
+      "10: Student login → dashboard",
+      "11: Student → homework page",
+      "12: Student → vocabulary page",
+      "13: Admin login → dashboard",
+      "14: Student cannot access admin",
+      "15: Learning record persists after refresh"
+    ]
+  },
+  "closeoutExecutionList": {
+    "status": "final_pre_demo_closeout",
+    "objective": "不再扩大范围，只把老师端创建内容到学生端真实可见、作业俄语 TTS + 录音 + 提交、录制回放、演示材料这条链路收尾。",
+    "tasks": [
+      {
+        "id": "CLOSE-T01",
+        "title": "学生 Dashboard/Schedule 去 mock 化",
+        "status": "patched_verify_green",
+        "acceptance": "学生登录后 Dashboard/Schedule 基于真实 courses -> lesson_nodes -> live_sessions 渲染，未排期课时和正在直播的课时都可进入。"
+      },
+      {
+        "id": "CLOSE-T02",
+        "title": "Live 课堂默认课件同步",
+        "status": "patched_verify_green",
+        "acceptance": "老师上传或选择 PDF/PPTX 课件后，学生进入对应 live 能看到当前课时课件；无课件显示等待态。"
+      },
+      {
+        "id": "CLOSE-T03",
+        "title": "课堂录制与本地共享录屏",
+        "status": "patched_verify_green",
+        "acceptance": "点击录制时若没有摄像头/屏幕流，浏览器请求录屏；录制结束上传为 lecture 回放；本地共享时隐藏翻页栏。"
+      },
+      {
+        "id": "CLOSE-T04",
+        "title": "Drawing 设置抽屉化",
+        "status": "patched_verify_green",
+        "acceptance": "设置从左侧短抽屉弹出，默认隐藏；未全屏时不被底部控制栏遮挡。"
+      },
+      {
+        "id": "CLOSE-T05",
+        "title": "学生作业俄语 TTS + 录音 + 提交",
+        "status": "in_progress_next",
+        "acceptance": "学生从 Schedule/Homework 进入真实作业，播放俄语 TTS，录音，确认评分，最终提交为 homework_submission。"
+      },
+      {
+        "id": "CLOSE-T06",
+        "title": "演示数据清理与最小 seed",
+        "status": "todo_next",
+        "acceptance": "清理历史测试课程，只保留 1 老师、1 班级、2-3 学生、1 课程、1 课时、1 PDF、1 Excel 作业。"
+      },
+      {
+        "id": "CLOSE-T07",
+        "title": "三角色 E2E 最终脚本",
+        "status": "todo_next",
+        "acceptance": "覆盖老师创建课程/课时/上传课件/上传作业/开始 live，学生登录看到课程、进入 live、看到课件、进入作业并提交。"
+      },
+      {
+        "id": "CLOSE-T08",
+        "title": "演示视频与图文教程",
+        "status": "todo_after_green",
+        "acceptance": "端到端脚本跑通后，再录制演示视频并输出老师版/学生版图文教程。"
+      }
+    ],
+    "executionOrder": [
+      "先清理测试数据并固化最小 demo seed。",
+      "跑通老师创建课程 -> 上传课件/作业 -> 创建 live -> 学生 Schedule 看到入口 -> 学生进入 live 看到课件。",
+      "跑通学生作业 -> 俄语 TTS -> 录音 -> 确认 -> 提交。",
+      "补三角色 E2E，将上述两条主链路固定成回归脚本。",
+      "最后录演示视频和图文教程。"
+    ]
+  },
+  "productBoundary": {
+    "positioning": "LingoBridge 是面向哈萨克斯坦留学生的中文学习 MVP。",
+    "coreLoop": [
+      "用户登录或进入游客态",
+      "教师创建课程",
+      "教师上传 PDF 课件和 Excel 作业；PPTX 仅保留上传/提示，不做本轮渲染策略 Spike",
+      "教师创建 live 课时",
+      "系统为每个课时创建一个作业节点",
+      "学生进入课程、直播或作业",
+      "学生录音并完成单词/作业",
+      "学习记录持久化",
+      "管理端维护账号、资源、live 与学习记录"
+    ],
+    "outOfScope": [
+      "在线 PPT 编辑",
+      "复杂多租户",
+      "支付",
+      "完整 AI 评分",
+      "社交社区",
+      "实时多人白板协同",
+      "Sprint 4 内完成 PPTX 原生预览、PPTX 转图片/PDF策略选型、Microsoft 365 Embed 集成"
+    ]
+  },
+  "recommendedNextWork": [
+    {
+      "id": "N01",
+      "title": "Platform integration spike",
+      "scope": "比较 Teams、腾讯会议、Azure Speech、可选 ASR 服务的权限、API 能力、成本、地区可用性、录播/字幕回流能力。",
+      "output": "一页技术路线表 + 一个最小会议链接创建/回填 demo。"
+    },
+    {
+      "id": "N02",
+      "title": "Provider adapter hardening",
+      "scope": "为 TTS/ASR/translation 定义 backend provider interface、env 配置、用量日志、缓存和 fallback。",
+      "output": "前端只调用 LingoBridge facade，不直接调用云厂商。"
+    },
+    {
+      "id": "N03",
+      "title": "Browser/manual E2E pass",
+      "scope": "用真实浏览器验证游客门禁、课程编辑、创建课时、创建/进入 live、上传 Excel、完成作业、刷新后记录保持、admin 权限。",
+      "output": "手动验收报告和必要的 Playwright 回归测试。"
+    },
+    {
+      "id": "N04",
+      "title": "Sprint 2: Bug fixes & UX improvements",
+      "scope": [
+        "修复 Live class 画笔白屏问题",
+        "修复 PDF 课件渲染失败",
+        "优化学生添加为班级学号/模糊搜索",
+        "完善 Admin 后台功能（文件存储、多媒体管理）",
+        "完善教师班级管理（学生名单、live classes、课件）"
+      ],
+      "output": "稳定的课堂体验，可用的课件系统，完善的班级管理。"
+    },
+    {
+      "id": "N05",
+      "title": "Sprint 3: MVP recovery",
+      "scope": [
+        "修复 admin 独立后台路由",
+        "修复登录页 GuestGate 重复弹窗",
+        "设计并落地注册登录 schema",
+        "重构 teacher-student-liveClass 关系",
+        "修复 PDF 渲染失败和画笔白屏",
+        "让课程/Live Class/homework 对学生端可见",
+        "生成 xlsx/pdf/pptx samples 并补测试"
+      ],
+      "output": "老师可创建 Live Class、选择学生、上传课件和 homework；学生可看到并完成；admin 可看后台数据。"
+    },
+    {
+      "id": "N06",
+      "title": "Sprint 4 executable delivery",
+      "scope": [
+        "Postgres repository cutover",
+        "真实 teacher-student-course-members 同步",
+        "PDF annotation layer and live currentPage",
+        "Excel/manual assignment unified workflow",
+        "Admin logout/resources/progress and three-role E2E"
+      ],
+      "deferred": [
+        "PPTX strategy spike S4-T28 to S4-T31"
+      ],
+      "output": "按 prd.json sprint4ExecutionPlan.operations 逐项执行，并在完成后更新 task status。"
+    },
+    {
+      "id": "N07",
+      "title": "Candidate Sprint: speech demo and subtitle spike",
+      "scope": [
+        "上台演示 TTS 采用预生成 MP3，不实时依赖云 API",
+        "中文 provider 候选：火山/百度；俄语 provider 候选：ElevenLabs/Azure",
+        "实时 ASR + 翻译 + 双语字幕只做独立 Spike，不进入 Sprint 4 主链路",
+        "所有 provider 额度、限流、认证和商用限制必须以官方文档和控制台实测为准"
+      ],
+      "blockedBy": [
+        "当前 TS errors 修复",
+        "backend:test 恢复 green",
+        "Sprint 4 课程/作业/Live/PDF/Admin 主链路完成核心验收"
+      ],
+      "output": "speechDemoSprintPlan 中 SD-T01 到 SD-T05 的审计、脚本、adapter、字幕 demo 和 runbook。"
+    }
+  ],
+  "latestProductRequirements": {
+    "id": "LPR-2026-05-23-class-live-learning-cache",
+    "source": "User product direction update on 2026-05-23",
+    "priority": "P0 for data model and classroom/manual-test experience; P1 for learning-cache depth",
+    "requirements": [
+      {
+        "id": "LPR01",
+        "title": "清理教师端测试课程数据",
+        "details": [
+          "教师端课程列表不得被历史测试课程污染。",
+          "提供本地开发清理脚本或 admin 清理入口，删除无用 course、lesson、courseware、assignment、learning records。",
+          "保留最小 demo seed，便于重新验收。"
+        ]
+      },
+      {
+        "id": "LPR02",
+        "title": "班级是老师-学生绑定的核心容器",
+        "details": [
+          "老师与学生是主从关系，但实际绑定通过班级发生。",
+          "一个老师可以带多个班；一个班级可以有多门课；一门课归属于一个班级或明确成员集合。",
+          "老师添加学生到课程/班级后，学生端课程、课时、schedule 和 live 入口必须同步。"
+        ]
+      },
+      {
+        "id": "LPR03",
+        "title": "课程、课时、live classroom 合并建模",
+        "details": [
+          "老师点击课程可以修改课程信息，包括标题、描述、封面、班级、课程时间和状态。",
+          "每门课程拥有固定 classroom。",
+          "老师创建上课时间即创建课时；课时就是一次 live。",
+          "学生非上课时间进入为空教室/等待态，上课时间进入对应 live classroom。"
+        ]
+      },
+      {
+        "id": "LPR04",
+        "title": "默认课件机制",
+        "details": [
+          "课程信息页上传课件后，教师可以选择默认 PDF 课件。",
+          "默认课件可设置在课程级，也可覆盖到课时级。",
+          "live classroom 默认打开当前课时设置的默认课件；没有默认课件时提示老师选择或上传。"
+        ]
+      },
+      {
+        "id": "LPR05",
+        "title": "作业录音题目级三槽位缓存",
+        "details": [
+          "每一道录音题最多保留三个录音槽位。",
+          "录音完成后先进入本地/应用缓存；点击重置删除当前题当前槽位缓存。",
+          "点击确认后进入 AI 评分流程并持久化。",
+          "每个录音应按第几题第几次练习标号，切换题目只显示当前题数据，不显示全局录音。"
+        ]
+      },
+      {
+        "id": "LPR06",
+        "title": "作业提交边界与三级缓存",
+        "details": [
+          "课时作业做到最后一题时显示完成作业并确认提交。",
+          "点击提交后推送到教师端；提交前只是学生端草稿。",
+          "缓存策略分为浏览器缓存、应用缓存、数据库缓存。",
+          "学生意外退出再进入时，应加载上一次状态记录。"
+        ]
+      },
+      {
+        "id": "LPR07",
+        "title": "单词学习真实化与遗忘曲线",
+        "details": [
+          "单词是长期巩固学习，不是一次性完成。",
+          "每完整完成一次学习只增加约三分之一掌握度。",
+          "完成三次后该单词才完全掌握。",
+          "超过一周未复习时进度衰减；长期不复习最低回落到第一次接触后的 1/3 状态。"
+        ]
+      },
+      {
+        "id": "LPR08",
+        "title": "课程成员通知与 schedule 同步",
+        "details": [
+          "老师将阿合买提等学生加入课程/班级后，学生端必须同步课程入口。",
+          "老师上传课程封面、添加学生、上传课件、上传作业、创建课时后，相关学生端入口和 schedule 同步更新。",
+          "同一课程中的老师和学生都能接收到最新课时直播通知。"
+        ]
+      },
+      {
+        "id": "LPR09",
+        "title": "真实 live 入会情况",
+        "details": [
+          "教师在 live classroom 右上角点击 Students 时，应看到真实学生入会情况。",
+          "数据包括已加入、在线、离开、举手等状态，不再使用 mock 数据。",
+          "入会状态来自 live attendance/participants API。"
+        ]
+      },
+      {
+        "id": "LPR10",
+        "title": "课堂 annotation 工具继续增强",
+        "details": [
+          "左侧设置键移动到最左上角，展开时不被下方 layer 遮挡。",
+          "几何图形之外继续增加箭头和橡皮擦。",
+          "文本输入不能用浏览器 prompt，必须在页面内出现动态输入框，像评论/标注一样直接落在 canvas 上。",
+          "调色板支持取色和调色。"
+        ]
+      },
+      {
+        "id": "LPR11",
+        "title": "全局 i18n 语言优先级",
+        "details": [
+          "系统全局默认语言第一顺位为中文 zh-CN。",
+          "面向哈萨克斯坦留学生的本地化第二顺位为哈萨克语 kk-KZ。",
+          "俄语 ru-RU 是第三顺位，用于教学辅助、TTS 和演示字幕补充。",
+          "英语 en-US 只作为最终 fallback 或开发兜底。",
+          "新增 i18n key、学习任务字段、翻译字段和演示脚本时，必须按 zh-CN -> kk-KZ -> ru-RU -> en-US 的顺序检查覆盖。"
+        ]
+      },
+      {
+        "id": "LPR12",
+        "title": "演示版 ASR 与双语翻译临时测试版",
+        "details": [
+          "为了演示完整版功能，允许加入免费方案 ASR 语音识别和双语翻译字幕临时测试版。",
+          "ASR/翻译只作为 demo/spike 能力，不进入正式课堂主链路的强依赖。",
+          "优先使用免费额度、免费试用或本地预生成 fallback，不承诺生产 SLA、无限额度或长期免费。",
+          "支持实时麦克风输入和预录音频 fallback；实时 API 失败时仍可展示预生成识别文本和双语字幕。",
+          "字幕语言遵循全局优先级：中文为主，哈萨克语优先于俄语，英语仅兜底。"
+        ]
+      }
+    ],
+    "implementationNotes": [
+      "Excel 上传本身暂不深究后续处理细节，重点是课程/课时/默认课件/学生同步和作业学习记录真实化。",
+      "上述需求会影响 schema、API、教师课程详情页、学生 dashboard/schedule、live classroom、homework/vocabulary 两条学习链路。",
+      "实现时应先清理测试数据和固化班级/课程/课时模型，再改作业和单词缓存。",
+      "上线前 sprint 允许用 feature flag 或 demo route 隔离 ASR/翻译临时测试版，用于演示完整能力，不阻塞主链路打包部署。"
+    ]
+  },
+  "acceptanceChecklist": [
+    "学生账号默认不再显示 Anna，登录后显示测试账号个人信息。",
+    "从落地页直接进入时，游客只能预览；受保护操作弹注册登录提示。",
+    "每个 live 必须绑定且只绑定一个课时节点。",
+    "每个课时节点有且只有一个作业节点。",
+    "课时节点颜色/样式创建后稳定，不随刷新变化。",
+    "学生完成第一个节点作业后，跳转页面再回来仍是已完成。",
+    "学生端 live 不显示作业/单词映射按钮。",
+    "教师端不暴露 classroom.content_mode、classroom.stopped 等 key。",
+    "PDF/PPTX 课件上传后课堂可流畅翻页，失败时有明确状态。",
+    "画笔为清晰圆珠笔效果，可调粗细。",
+    "关闭画笔不会清空笔迹，清除笔迹按钮才清空。",
+    "教师点击课程卡片进入课程编辑页。",
+    "课程编辑页统一管理课程信息、学生、课件、时间、作业、live。",
+    "管理端可管理老师、学生、课程、课件、Excel、live、录播、note、字幕、schedule、学习进度。",
+    "Admin 登录后进入独立后台，不进入学生 Dashboard。",
+    "登录/注册页不会再弹出 GuestGate 解锁完整功能窗口。",
+    "注册登录有明确数据库 schema 和后端业务代码。",
+    "教师可按用户名/姓名/学号搜索并批量添加学生到 Live Class。",
+    "教师创建课程/Live Class 后，绑定学生可在学生端看到对应内容。",
+    "PDF samples 上传后可查看，画笔绘制不白屏。",
+    "samples 里的 Excel 作业能导入，学生端能看到 homework。",
+    "Admin 后台可查看账户、文件、多媒体、作业、学习记录、学习进度和服务状态。"
+  ]
+}

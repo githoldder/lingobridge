@@ -111,7 +111,7 @@
 - 不承诺长期免费、无限额度或生产 SLA。
 
 执行顺序：
-1. 先读 prds/prd.md、prds/prd.json、prds/sprint-6-prelaunch.md，确认当前验收范围。
+1. 先读 `prds/prd.md`、`prds/current/01-current-status-and-guardrails.md`、`prds/sprints/sprint-06-prelaunch-smoke-deploy.md`，必要时再读 `prds/prd.json` 做兼容校验，确认当前验收范围。
 2. 跑 npm run backend:test、npm run lint、npm run build。若 backend:test 在 sandbox 因 tsx IPC pipe 失败，可按项目规则提权复跑。
 3. 用接近真人鼠标点击行为进行三角色 smoke：
    - Admin：登录、清理入口/dry-run、退出。

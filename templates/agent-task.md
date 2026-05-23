@@ -5,7 +5,8 @@
 ## Source
 
 - `prds/prd.md`
-- `prds/prd.json`
+- `prds/sprints/sprint-NN-topic.md`
+- `prds/prd.json` if legacy machine-readable task details are needed
 
 ## Owned Files
 
@@ -20,4 +21,3 @@
 ## Verification
 
 ## Handoff Notes
-

@@ -319,7 +319,7 @@ Remote: pushed to `origin/main`
   - Courseware/Homework 上传前都有课时选择；后端对 PDF/PPTX 做强制校验。
   - Homework tab 增加作业任务计数和下载按钮。
 - 文档同步：
-  - `prd.md`、`sprint-4-okrts.md` 与 `prd.json` 的 S4 状态对齐。
+  - `prd.md`、`sprints/sprint-04-data-pdf-course-okrts.md` 与 `prd.json` 的 S4 状态对齐。
   - 新增 `speechDemoSprintPlan`，语音演示/字幕 Spike 状态保持 `proposed_after_sprint4_core_green`，不进入当前 Sprint 4 主线。
 - i18n 修复：
   - `course_homework.download` 已补四语言。
@@ -570,6 +570,5 @@ Date: 2026-05-24
 Action: Resolve global centering overflow in vocabulary practice feedback panel by offsetting its fixed boundaries (`lg:left-[260px]`) so that it centers beautifully inside the right-hand content workspace instead of overlapping the left sidebar.
 
 [Status] | All changes integrated, committed, pushed & E2E regression passed green | Done
-
 
 

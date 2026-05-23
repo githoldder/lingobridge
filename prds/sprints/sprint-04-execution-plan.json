@@ -1,0 +1,1086 @@
+{
+  "id": "S4",
+  "title": "真实数据落库、课件批注稳定与课程闭环",
+  "updatedAt": "2026-05-22",
+  "status": "executing_priority_reset_after_admin_logout_confirmed",
+  "objective": "把 LingoBridge 从 JSON demo 可演示推进到老师创建的课程、课件、作业、Live Class 能真实同步到学生端，并可由 Admin 退出和核查的 MVP 闭环。",
+  "keyResults": [
+    {
+      "id": "KR1",
+      "metric": "Postgres 数据边界完成",
+      "acceptance": "schema 覆盖账号、课程、学生、课件、作业、live、学习记录、索引和约束"
+    },
+    {
+      "id": "KR2",
+      "metric": "教师课程编辑闭环",
+      "acceptance": "老师创建/修改课程，可模糊搜索真实学生、批量加入、设定 live 时间"
+    },
+    {
+      "id": "KR3",
+      "metric": "学生端真实同步",
+      "acceptance": "学生只看到自己加入的课程、课时、作业、live，不再依赖固定 course-1"
+    },
+    {
+      "id": "KR4",
+      "metric": "PDF.js 课件稳定",
+      "acceptance": "PDF 可翻页、可批注、可打印导出，画笔不破坏 PDF canvas"
+    },
+    {
+      "id": "KR5",
+      "metric": "Live 翻页唯一可信",
+      "acceptance": "教师端只有一个主翻页状态；学生默认跟随 live session currentPage"
+    },
+    {
+      "id": "KR6",
+      "metric": "作业双模式上线",
+      "acceptance": "Excel 导入和手动表单都能生成同一类 learning tasks"
+    },
+    {
+      "id": "KR7",
+      "metric": "Admin 可退出可核查",
+      "acceptance": "Admin 页面有 logout，并能查看用户、资源、作业、live、学习进度"
+    }
+  ],
+  "deferredScope": {
+    "objective": "O6 PPTX 策略 Spike",
+    "reason": "用户明确要求后置，目前不考虑；本轮只保证 PPTX 不阻塞 PDF/课程/作业主链路。",
+    "taskIds": [
+      "S4-T28",
+      "S4-T29",
+      "S4-T30",
+      "S4-T31"
+    ],
+    "currentPolicy": "PPTX 可保留上传入口和明确提示，但不做 pptx.js、服务端转换、Microsoft 365 Embed 或 MVP 策略决策。"
+  },
+  "executionOrder": [
+    "P0：先验收 PDF 上传绑定课时、PDF 渲染错误可定位、drawing 不再导致白屏。",
+    "P0：再验收学生 Live/作业入口和 learning_record 不串课时。",
+    "P1：清理僵尸学习记录，保证 Admin 学习进度可信。",
+    "P1：补三角色 E2E，覆盖 admin logout、teacher upload PDF、student homework Russian TTS。",
+    "P2：继续课程编辑页、作业双模式、Admin 资源视图体验优化。",
+    "P3：PPTX 策略 Spike 继续后置，不进入当前修复窗口。"
+  ],
+  "tasks": [
+    {
+      "id": "S4-T01",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "新增 Postgres docker service",
+      "status": "done",
+      "suggestedAgent": "devops",
+      "operations": [
+        "确认 docker/docker-compose.yml 已包含 postgres service、端口、volume 和环境变量",
+        "确认 healthcheck 使用 pg_isready 或等价检查",
+        "确认 backend 可通过 DATABASE_URL 指向 compose 内 postgres",
+        "记录本地启动命令和默认账号到 backend/README.md"
+      ],
+      "acceptance": [
+        "docker compose up 后 postgres healthy",
+        "DATABASE_URL 可连接",
+        "不破坏现有 api/frontend service"
+      ]
+    },
+    {
+      "id": "S4-T02",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "定义业务 schema",
+      "status": "done",
+      "suggestedAgent": "backend",
+      "operations": [
+        "检查 backend/db/init/001_lingobridge_schema.sql 覆盖 users、profiles、teacher_student_links、courses、course_members、lesson_nodes、courseware_files、assignment_imports、learning_tasks、live_sessions、learning_records",
+        "为外键、唯一约束和常用查询字段补索引",
+        "确保 init schema 可重复在空库执行",
+        "把 schema 与 prd.json dataModel 字段对齐"
+      ],
+      "acceptance": [
+        "空库初始化无错误",
+        "核心关系有外键/唯一约束",
+        "常用列表查询有索引"
+      ]
+    },
+    {
+      "id": "S4-T03",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "引入数据库连接层",
+      "status": "done",
+      "suggestedAgent": "backend",
+      "operations": [
+        "在 backend 新增或扩展 db 连接模块，读取 DATABASE_URL",
+        "实现 connection pool、query helper、transaction helper",
+        "health endpoint 返回 postgres 连接状态",
+        "为测试环境提供可切换的 JSON fallback 或 test database 配置",
+        "补一个连接失败时的清晰错误日志"
+      ],
+      "acceptance": [
+        "后端启动时不因未配置 DB 崩溃，除非明确要求 Postgres 模式",
+        "/health 能显示数据库状态",
+        "backend:test 可在测试配置下运行"
+      ]
+    },
+    {
+      "id": "S4-T04",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "Repository 抽象",
+      "status": "done",
+      "suggestedAgent": "backend",
+      "operations": [
+        "建立 users repository：me/login/register/search 基础查询",
+        "建立 courses repository：课程 CRUD、成员、课时节点",
+        "建立 assignments repository：导入记录、任务、学习记录",
+        "建立 live repository：session 创建、翻页、状态更新",
+        "建立 files repository：课件和上传资源元数据",
+        "让 API handler 通过 repository 访问数据，减少直接操作存储"
+      ],
+      "acceptance": [
+        "业务 handler 不直接散落 SQL",
+        "repository 返回统一 DTO",
+        "至少覆盖 users/courses/live/assignments/files 主路径"
+      ]
+    },
+    {
+      "id": "S4-T05",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "Seed 迁移",
+      "status": "done",
+      "suggestedAgent": "backend",
+      "operations": [
+        "设计 Postgres seed 数据：admin、teacher、多个 student、demo course、lesson、assignment tasks",
+        "把现有 JSON demo 数据映射为 SQL seed 或脚本 seed",
+        "seed 重复执行时使用 upsert/冲突忽略",
+        "补 npm/backend seed 命令说明"
+      ],
+      "acceptance": [
+        "全新数据库 seed 后可直接登录三角色",
+        "teacher 默认有学生池",
+        "student 能看到 seed 课程"
+      ]
+    },
+    {
+      "id": "S4-T06",
+      "objectiveId": "O1",
+      "objective": "Postgres Schema 与数据访问层",
+      "title": "JSON DB 兼容策略",
+      "status": "done",
+      "suggestedAgent": "backend",
+      "operations": [
+        "梳理 backend 当前 JSON db.ts 调用点",
+        "确定环境变量开关：Postgres 优先，JSON 仅本地 fallback 或废弃",
+        "在 README/PRD 标注切换规则",
+        "删除或隔离会和 Postgres 双写冲突的旧路径",
+        "补测试确认目标模式下数据来源唯一"
+      ],
+      "acceptance": [
+        "运行时数据源明确",
+        "不会同一接口混用 JSON 与 Postgres 造成状态不一致",
+        "文档写明本轮默认数据源"
+      ]
+    },
+    {
+      "id": "S4-T07",
+      "objectiveId": "O2",
+      "objective": "账号、课程、学生关系",
+      "title": "登录注册接入 Postgres",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend",
+      "operations": [
+        "将 login/register/users/me 改为 users/sessions 表",
+        "实现 password_hash 校验和 token_hash 会话存储",
+        "注册时写入 student_profiles 或 teacher_profiles",
+        "保留 demo 账号 seed 登录能力",
+        "补 login/register/me API 测试"
+      ],
+      "acceptance": [
+        "登录返回真实 DB 用户",
+        "刷新后 /users/me 可恢复会话",
+        "密码不明文存储"
+      ]
+    },
+    {
+      "id": "S4-T08",
+      "objectiveId": "O2",
+      "objective": "账号、课程、学生关系",
+      "title": "教师学生关系落库",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend",
+      "operations": [
+        "实现 teacher_student_links repository",
+        "seed 默认 teacher 绑定一批 student",
+        "新增查询教师默认学生池接口或复用 search 接口",
+        "处理 disabled/removed 状态过滤",
+        "补去重约束测试"
+      ],
+      "acceptance": [
+        "老师有默认学生池",
+        "禁用关系不出现在可选列表",
+        "重复绑定不会产生重复行"
+      ]
+    },
+    {
+      "id": "S4-T09",
+      "objectiveId": "O2",
+      "objective": "账号、课程、学生关系",
+      "title": "学生模糊搜索",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "后端支持按 displayName、username、email、student_no 模糊搜索",
+        "限制只返回当前老师学生池或允许可配置全局搜索",
+        "前端添加搜索框、加载、空状态和错误状态",
+        "选择结果返回 userId 而不是手输邮箱",
+        "补 API smoke 和 UI 手动验证"
+      ],
+      "acceptance": [
+        "输入姓名/username/学号能找到学生",
+        "结果不暴露密码/敏感字段",
+        "无结果时 UI 清晰"
+      ]
+    },
+    {
+      "id": "S4-T10",
+      "objectiveId": "O2",
+      "objective": "账号、课程、学生关系",
+      "title": "课程成员 CRUD",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "实现 course_members 批量加入接口",
+        "实现移除/禁用成员接口",
+        "后端用唯一约束防重复加入",
+        "教师课程编辑页接入添加/移除学生",
+        "学生端课程列表基于 course_members 过滤"
+      ],
+      "acceptance": [
+        "同一学生重复添加只保留一条有效成员",
+        "移除后学生端不可见课程",
+        "批量加入部分失败时返回明确错误"
+      ]
+    },
+    {
+      "id": "S4-T11",
+      "objectiveId": "O2",
+      "objective": "账号、课程、学生关系",
+      "title": "课程编辑保存",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "实现 PATCH /courses/:id 写入 title/description/status/starts_at/ends_at",
+        "前端课程信息表单接入保存/取消/脏状态",
+        "保存后列表和详情同步刷新",
+        "处理权限：只有 owner teacher 或 admin 可改",
+        "补字段校验和错误提示"
+      ],
+      "acceptance": [
+        "编辑课程后刷新仍保持",
+        "无权限修改返回 403",
+        "空标题等非法输入被拦截"
+      ]
+    },
+    {
+      "id": "S4-T12",
+      "objectiveId": "O3",
+      "objective": "课程编辑页功能闭环",
+      "title": "优化教师课程编辑 UI",
+      "status": "todo",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "重整 TeacherCourseDetailView 信息层级：课程信息、学生、课件、作业、live 时间",
+        "减少重复状态和散落按钮",
+        "为每个模块增加 loading/empty/error/saved 状态",
+        "移动危险操作到明确位置",
+        "跑桌面和移动视口检查不重叠"
+      ],
+      "acceptance": [
+        "教师能按模块完成主要操作",
+        "没有明显重复分页/重复上传入口",
+        "移动端不出现文字溢出"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T13",
+      "objectiveId": "O3",
+      "objective": "课程编辑页功能闭环",
+      "title": "上传课件绑定课时",
+      "status": "in_progress_patch_landed",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "上传前必须选择 courseId 和 lessonNodeId",
+        "后端 files/courseware_files 写入 lesson_node_id",
+        "前端课件列表按课时展示转换/可用状态",
+        "PPTX 本轮仅保存元数据并提示建议转 PDF，不做策略 Spike",
+        "补上传 PDF smoke"
+      ],
+      "acceptance": [
+        "课件只归属一个课时",
+        "未选择课时不能上传",
+        "学生进入课时时看到对应课件"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T14",
+      "objectiveId": "O3",
+      "objective": "课程编辑页功能闭环",
+      "title": "上传作业绑定作业节点",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "上传 Excel 时必须绑定 assignment_node 或 lessonNodeId",
+        "导入写入 assignment_imports 和 learning_tasks",
+        "解析错误行保存到 imports.errors",
+        "前端显示导入结果和任务预览",
+        "学生端按 assignment_node 拉取任务"
+      ],
+      "acceptance": [
+        "导入后任务数量准确",
+        "错误行可见",
+        "学生只看到对应课时作业"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T15",
+      "objectiveId": "O3",
+      "objective": "课程编辑页功能闭环",
+      "title": "下载作业表格",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "定义 assignment tasks 导出字段",
+        "后端实现 xlsx 导出或 CSV fallback",
+        "前端在作业模块增加下载按钮",
+        "文件名包含 course/lesson/date",
+        "验证导出的文件可重新导入或人工阅读"
+      ],
+      "acceptance": [
+        "教师可下载当前作业任务",
+        "导出字段完整",
+        "空作业时按钮禁用或提示"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T16",
+      "objectiveId": "O3",
+      "objective": "课程编辑页功能闭环",
+      "title": "设定 live 时间",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "lesson_nodes 增加/使用 starts_at、ends_at、status",
+        "课程编辑页提供时间设置控件",
+        "创建/更新 live session 时继承或关联 scheduled 状态",
+        "学生 ScheduleView 读取真实时间",
+        "处理时区显示一致性"
+      ],
+      "acceptance": [
+        "老师设置时间后学生 schedule 可见",
+        "过期/未开始状态显示正确",
+        "时间字段使用 startsAt/endsAt 命名"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T17",
+      "objectiveId": "O4",
+      "objective": "学生端真实数据",
+      "title": "移除学生端静态 schedule",
+      "status": "todo",
+      "suggestedAgent": "frontend/backend",
+      "operations": [
+        "梳理 ScheduleView 静态数据来源",
+        "新增或接入学生 schedule API",
+        "按当前 studentId 返回 course/live/assignment 时间",
+        "前端展示 loading/empty/error",
+        "删除固定 demo schedule fallback"
+      ],
+      "acceptance": [
+        "学生只看到自己加入课程的日程",
+        "没有 course-1 静态假数据",
+        "无课程时展示空状态"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T18",
+      "objectiveId": "O4",
+      "objective": "学生端真实数据",
+      "title": "移除固定 course-1 fallback",
+      "status": "done_with_followup",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "扫描 entryResolver、homework、recordings、classroom 入口中的 course-1",
+        "把入口参数改为必须携带 courseId/lessonNodeId",
+        "缺少参数时跳回课程选择或显示错误",
+        "更新相关链接生成逻辑",
+        "补路由回归测试"
+      ],
+      "acceptance": [
+        "代码中不再依赖固定 course-1 作为业务 fallback",
+        "非法入口不写入错误记录",
+        "所有入口都能定位真实课时"
+      ]
+    },
+    {
+      "id": "S4-T19",
+      "objectiveId": "O4",
+      "objective": "学生端真实数据",
+      "title": "学生课程列表过滤",
+      "status": "done_with_followup",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "后端课程列表按 course_members 过滤 student",
+        "教师/admin 保持各自权限范围",
+        "前端 CoursesView 使用真实 API 数据",
+        "去掉学生端全量课程展示",
+        "补 teacher 创建课程后 student 可见验证"
+      ],
+      "acceptance": [
+        "学生 A 不看到未加入课程",
+        "加入后刷新可见",
+        "教师仍能看自己课程"
+      ]
+    },
+    {
+      "id": "S4-T20",
+      "objectiveId": "O4",
+      "objective": "学生端真实数据",
+      "title": "学生 live 入口",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "提供学生 active/scheduled live 查询",
+        "课程页和 schedule 页显示进入 live 按钮",
+        "进入课堂时校验学生属于 course_members",
+        "未开始/已结束状态有清晰提示",
+        "补学生入口 smoke"
+      ],
+      "acceptance": [
+        "学生能从真实 live session 进入课堂",
+        "未授权学生不能进入",
+        "入口状态跟 live status 一致"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T21",
+      "objectiveId": "O4",
+      "objective": "学生端真实数据",
+      "title": "学生作业入口",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "根据 assignment_node 查询 tasks 和 learning_records",
+        "HomeworkView 接收 lessonNodeId/assignmentNodeId",
+        "保存记录时写入真实 studentId、lessonNodeId、taskId",
+        "处理无作业课时的空状态",
+        "补完成后刷新仍完成验证"
+      ],
+      "acceptance": [
+        "两种入口进入同一作业状态一致",
+        "学习记录不串课时",
+        "无作业时不报错"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T22",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "抽离 PDF stage",
+      "status": "in_progress_patch_landed",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "把 PdfViewer 责任限定为 PDF 加载、worker、cache、pageCount、page render",
+        "把课堂控制/批注/工具栏逻辑从 PDF 渲染中隔离",
+        "暴露稳定 props：fileUrl、pageIndex、onPageCount、renderState",
+        "处理 worker 加载失败和文件错误",
+        "补组件级 smoke 或页面手动验证"
+      ],
+      "acceptance": [
+        "PDF canvas 不被外部状态频繁重建",
+        "pageCount 加载准确",
+        "渲染失败有错误状态"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T23",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "建立 annotation model",
+      "status": "todo",
+      "suggestedAgent": "frontend/backend",
+      "operations": [
+        "定义 Annotation 类型：text、ink、shape、highlight",
+        "统一坐标系统为 page-relative normalized coordinates",
+        "定义 stroke/color/width/author/page/version 字段",
+        "决定前后端 DTO 命名",
+        "补序列化/反序列化测试"
+      ],
+      "acceptance": [
+        "不同尺寸渲染下批注位置稳定",
+        "同一模型支持保存和重放",
+        "字段足够表达本轮工具"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T24",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "Konva annotation layer Spike",
+      "status": "todo",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "引入或验证 Konva/react-konva 是否已安装；未安装先评估依赖成本",
+        "在 PDF canvas 上方叠加独立 annotation layer",
+        "实现 ink、text、highlight 最小交互",
+        "确认缩放/翻页时 layer 尺寸与 PDF 对齐",
+        "用浏览器检查绘制不导致白屏"
+      ],
+      "acceptance": [
+        "画笔不污染 PDF canvas",
+        "翻页后批注按页显示",
+        "绘制过程中 UI 不白屏"
+      ]
+    },
+    {
+      "id": "S4-T25",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "批注存储接口",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "后端新增保存/读取 annotations API",
+        "key 使用 lessonNodeId + coursewareId + pageIndex",
+        "支持 upsert 和按页读取",
+        "前端绘制后节流保存或手动保存",
+        "处理并发版本或最后写入规则"
+      ],
+      "acceptance": [
+        "刷新后批注恢复",
+        "不同页批注不串页",
+        "不同课件批注不串文件"
+      ]
+    },
+    {
+      "id": "S4-T26",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "打印导出",
+      "status": "todo",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "设计打印视图：PDF 页 + annotation layer 合成显示",
+        "实现浏览器 print 样式或 download canvas image fallback",
+        "确保导出不依赖教师工具栏",
+        "处理多页或当前页范围选择",
+        "验证至少当前页打印正常"
+      ],
+      "acceptance": [
+        "打印/导出包含批注",
+        "工具栏不出现在打印内容",
+        "空批注也能正常打印"
+      ]
+    },
+    {
+      "id": "S4-T27",
+      "objectiveId": "O5",
+      "objective": "PDF.js 与批注专项",
+      "title": "PDF 回归测试",
+      "status": "todo",
+      "suggestedAgent": "testing",
+      "operations": [
+        "增加 PDF 翻页 smoke",
+        "增加画笔绘制/清除 smoke",
+        "增加 pageCount 未加载时下一页禁用验证",
+        "增加打印视图基础检查",
+        "把测试命令和报告位置写入验收说明"
+      ],
+      "acceptance": [
+        "PDF 翻页不越界",
+        "画笔和清除不白屏",
+        "测试失败能定位页面/步骤"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T28",
+      "objectiveId": "O6",
+      "objective": "PPTX 策略 Spike",
+      "title": "pptx.js 翻页验证",
+      "status": "deferred",
+      "suggestedAgent": "research",
+      "operations": [
+        "后置：本轮不安装/验证 pptx.js",
+        "保留样例和评估入口，等待 PDF/真实数据闭环稳定后再做",
+        "若被 agent 分配，应只记录 deferred，不改代码"
+      ],
+      "acceptance": [
+        "状态保持 deferred",
+        "不得影响 Sprint 4 主线"
+      ],
+      "priority": "P3_deferred"
+    },
+    {
+      "id": "S4-T29",
+      "objectiveId": "O6",
+      "objective": "PPTX 策略 Spike",
+      "title": "PPTX 转 PDF/图片评估",
+      "status": "deferred",
+      "suggestedAgent": "research",
+      "operations": [
+        "后置：本轮不评估服务端转换方案",
+        "不引入 LibreOffice/外部转换服务依赖",
+        "未来评估时再比较保真度、性能、部署成本"
+      ],
+      "acceptance": [
+        "状态保持 deferred",
+        "不得新增转换依赖"
+      ],
+      "priority": "P3_deferred"
+    },
+    {
+      "id": "S4-T30",
+      "objectiveId": "O6",
+      "objective": "PPTX 策略 Spike",
+      "title": "Microsoft 365 Embed 决策备忘",
+      "status": "deferred",
+      "suggestedAgent": "research",
+      "operations": [
+        "后置：本轮不做账号、OneDrive、iframe、权限、隐私调研",
+        "不接入 Microsoft 365 Embed",
+        "未来作为独立 privacy/security spike"
+      ],
+      "acceptance": [
+        "状态保持 deferred",
+        "不得新增 iframe/embed 方案"
+      ],
+      "priority": "P3_deferred"
+    },
+    {
+      "id": "S4-T31",
+      "objectiveId": "O6",
+      "objective": "PPTX 策略 Spike",
+      "title": "PPTX MVP 决策",
+      "status": "deferred",
+      "suggestedAgent": "product",
+      "operations": [
+        "后置：依赖 S4-T28 到 S4-T30 后再决策",
+        "本轮默认策略为 PPTX 可上传但建议/转换为 PDF 或提示不保证预览",
+        "不要阻塞 PDF 与课程闭环"
+      ],
+      "acceptance": [
+        "状态保持 deferred",
+        "本轮 PRD 不要求 PPTX 最终方案"
+      ],
+      "priority": "P3_deferred"
+    },
+    {
+      "id": "S4-T32",
+      "objectiveId": "O7",
+      "objective": "Live Class 翻页与同步",
+      "title": "合并翻页 UI",
+      "status": "todo",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "定位 TeacherClassroomView 中重复分页控件",
+        "确定保留底部主分页控件",
+        "删除或隐藏设置面板内重复分页",
+        "统一 disabled/loading/pageCount 显示",
+        "回归教师端和学生端课堂布局"
+      ],
+      "acceptance": [
+        "教师端只看到一套主翻页",
+        "学生端不出现教师分页配置",
+        "移动端不重叠"
+      ]
+    },
+    {
+      "id": "S4-T33",
+      "objectiveId": "O7",
+      "objective": "Live Class 翻页与同步",
+      "title": "教师翻页写 live state",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "后端 PATCH /live-sessions/:id 支持 currentPage 更新并校验范围",
+        "教师端翻页只写这个 live state",
+        "移除其他本地伪状态作为可信来源",
+        "处理失败回滚或提示",
+        "补 API 测试"
+      ],
+      "acceptance": [
+        "currentPage 是唯一可信页码",
+        "翻页失败不造成 UI 假成功",
+        "页码不超过 pageCount"
+      ]
+    },
+    {
+      "id": "S4-T34",
+      "objectiveId": "O7",
+      "objective": "Live Class 翻页与同步",
+      "title": "学生跟随页码",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "学生课堂读取 live session currentPage",
+        "先用轮询实现，保留 SSE/WebSocket 扩展口",
+        "学生默认跟随教师页码",
+        "如允许自由浏览，必须有明确跟随/自由模式",
+        "补教师翻页后学生同步验证"
+      ],
+      "acceptance": [
+        "教师翻页后学生页码跟随",
+        "学生本地不写 live currentPage",
+        "live 结束后同步停止"
+      ]
+    },
+    {
+      "id": "S4-T35",
+      "objectiveId": "O7",
+      "objective": "Live Class 翻页与同步",
+      "title": "PDF 页数边界修复",
+      "status": "in_progress_patch_landed",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "pageCount 未加载时禁用下一页/跳页",
+        "所有 setPage 操作 clamp 到 1..pageCount",
+        "处理 pageCount 为 0 或加载失败",
+        "显示当前页/总页数一致",
+        "补越界回归"
+      ],
+      "acceptance": [
+        "不会跳到 999",
+        "未加载时不能误翻页",
+        "加载失败状态清晰"
+      ],
+      "priority": "P0"
+    },
+    {
+      "id": "S4-T36",
+      "objectiveId": "O8",
+      "objective": "Excel 作业双模式",
+      "title": "统一作业 row schema",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "定义 Excel 和手动表单共享 AssignmentRow schema",
+        "字段包括 zhText、pinyin、translationRu/translationKk、taskType、audioUrl 可选",
+        "后端 validator 返回行号和字段错误",
+        "前端复用同一校验提示",
+        "补 validator 单元测试"
+      ],
+      "acceptance": [
+        "Excel 和手动录入错误格式一致",
+        "错误能定位到行和字段",
+        "合法数据生成同一 learning_task"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T37",
+      "objectiveId": "O8",
+      "objective": "Excel 作业双模式",
+      "title": "Excel 导入预览",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "上传 Excel 后先解析为 draft import",
+        "返回 preview rows、validCount、errorRows",
+        "前端展示错误行和有效行摘要",
+        "教师确认发布后才生成正式 tasks",
+        "支持取消 draft"
+      ],
+      "acceptance": [
+        "错误行发布前可见",
+        "未确认不影响学生端",
+        "确认后学生端可见"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T38",
+      "objectiveId": "O8",
+      "objective": "Excel 作业双模式",
+      "title": "手动表单 UI",
+      "status": "todo",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "选择轻量表格或简化多行表单",
+        "支持新增/删除行、taskType 选择、必填校验",
+        "复用 AssignmentRow validator",
+        "提供保存草稿/发布按钮或最小发布按钮",
+        "移动端保持可用"
+      ],
+      "acceptance": [
+        "教师不用 Excel 也能创建作业",
+        "错误提示定位到行",
+        "表单不会挤压溢出"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T39",
+      "objectiveId": "O8",
+      "objective": "Excel 作业双模式",
+      "title": "手动创建接口",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "新增 POST /assignments/manual",
+        "请求体使用 AssignmentRow[] 和 lessonNodeId",
+        "后端创建 assignment_import source=manual + learning_tasks",
+        "返回 created task count 和 import id",
+        "前端发布后刷新作业列表"
+      ],
+      "acceptance": [
+        "手动作业和 Excel 作业数据结构一致",
+        "发布后学生端可见",
+        "非法行返回 400 和明细"
+      ],
+      "priority": "P2"
+    },
+    {
+      "id": "S4-T40",
+      "objectiveId": "O8",
+      "objective": "Excel 作业双模式",
+      "title": "学生作业创建验证",
+      "status": "todo",
+      "suggestedAgent": "testing",
+      "operations": [
+        "准备一份 Excel 导入作业和一份手动作业",
+        "教师分别发布到不同课时或同课时",
+        "学生端确认两种任务均可查看、完成、刷新保持",
+        "记录测试步骤和截图/报告",
+        "必要时补 Playwright 回归"
+      ],
+      "acceptance": [
+        "两种模式均可端到端完成",
+        "学习记录写入一致",
+        "报告说明通过/失败项"
+      ],
+      "priority": "P1"
+    },
+    {
+      "id": "S4-T41",
+      "objectiveId": "O9",
+      "objective": "Admin UI 和验收",
+      "title": "Admin 顶栏优化",
+      "status": "done_confirmed_by_user",
+      "suggestedAgent": "frontend",
+      "operations": [
+        "Admin 顶栏显示当前用户和角色",
+        "添加刷新按钮和 logout 按钮",
+        "模块导航更清晰并保留当前模块状态",
+        "logout 后清理 token 并回登录/首页",
+        "检查非 admin 入口守卫"
+      ],
+      "acceptance": [
+        "Admin 可直接退出",
+        "刷新不丢失权限状态",
+        "非 admin 不能访问后台"
+      ],
+      "priority": "done_confirmed"
+    },
+    {
+      "id": "S4-T42",
+      "objectiveId": "O9",
+      "objective": "Admin UI 和验收",
+      "title": "Admin 账号模块",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "账号列表接入真实 DB",
+        "支持搜索老师/学生/admin",
+        "实现新增账号最小表单",
+        "实现禁用/删除或软删除接口",
+        "避免展示 password_hash/token_hash"
+      ],
+      "acceptance": [
+        "Admin 能查真实用户",
+        "禁用用户不能继续登录或被标记不可用",
+        "敏感字段不返回前端"
+      ]
+    },
+    {
+      "id": "S4-T43",
+      "objectiveId": "O9",
+      "objective": "Admin UI 和验收",
+      "title": "Admin 资源模块",
+      "status": "todo",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "资源列表包含 PDF/PPTX/XLSX/录音/录播",
+        "显示文件名、类型、所属课程/课时、状态、创建时间",
+        "支持按类型/课程筛选",
+        "提供查看详情或下载链接",
+        "处理文件缺失/转换失败状态"
+      ],
+      "acceptance": [
+        "Admin 可核查上传资源",
+        "资源能追溯到课程/课时",
+        "失败状态可见"
+      ]
+    },
+    {
+      "id": "S4-T44",
+      "objectiveId": "O9",
+      "objective": "Admin UI 和验收",
+      "title": "Admin 学习进度模块",
+      "status": "in_progress_cleanup_endpoint_landed",
+      "suggestedAgent": "backend/frontend",
+      "operations": [
+        "提供 course/student/lesson 维度查询参数",
+        "聚合 assignment tasks 完成率、录音数、最近学习时间",
+        "前端表格支持筛选和空状态",
+        "保护查询权限 requireAdmin",
+        "补基础 API 测试"
+      ],
+      "acceptance": [
+        "Admin 能按课程看学习进度",
+        "能按学生看完成情况",
+        "无数据时不报错"
+      ],
+      "priority": "P1"
+    },
+    {
+      "id": "S4-T45",
+      "objectiveId": "O9",
+      "objective": "Admin UI 和验收",
+      "title": "E2E 三角色回归",
+      "status": "todo",
+      "suggestedAgent": "testing",
+      "operations": [
+        "启动后端、前端和必要数据库服务",
+        "跑 admin logout 验证",
+        "跑 teacher create course + add student + upload PDF/assignment 验证",
+        "跑 student see course + enter live/homework 验证",
+        "更新验收报告并标注未覆盖风险"
+      ],
+      "acceptance": [
+        "三角色主链路通过",
+        "失败项有明确复现步骤",
+        "报告引用 prd.json task id"
+      ],
+      "priority": "P1"
+    }
+  ],
+  "priorityPolicy": {
+    "updatedAt": "2026-05-22",
+    "method": "P0 演示阻断 > P1 数据一致性 > P1 可观测清理 > P2 体验增强 > P3 后置 Spike",
+    "notes": [
+      "admin logout 已由用户确认可用，从 P0 移出。",
+      "PDF 上传/渲染和 drawing 白屏归并为同一条课堂稳定性主线。",
+      "作业俄语 TTS 属于演示体验增强，但已作为低风险快速项前置完成。",
+      "僵尸学习记录清理用于保护验收数据可信度，优先级上调到 P1。"
+    ]
+  },
+  "okrtsMilestones": [
+    {
+      "id": "M1",
+      "objective": "课堂课件稳定",
+      "keyResult": "老师在 Live Class 上传 PDF 后，学生/老师均可看到第 1 页；渲染失败时能看到 URL 和错误阶段。",
+      "tasks": [
+        "S4-T13",
+        "S4-T22",
+        "S4-T35"
+      ],
+      "steps": [
+        "选择/创建 lessonNodeId",
+        "上传 PDF 并确认 courseware.lessonNodeId 写入",
+        "PdfViewer 加载本地 worker，不依赖外部 cMap",
+        "pageCount 未就绪时禁用翻页",
+        "失败时记录 load/render 阶段"
+      ]
+    },
+    {
+      "id": "M2",
+      "objective": "drawing 白屏清零",
+      "keyResult": "教师开关画笔、绘制、清除当前页、翻页返回后，PDF 背景不消失。",
+      "tasks": [
+        "S4-T23",
+        "S4-T27",
+        "S4-T32"
+      ],
+      "steps": [
+        "PDF canvas 与 annotation canvas 分层",
+        "画笔关闭只关输入不清空",
+        "清除只清当前页 strokes",
+        "用 Playwright 复现绘制后 canvas 非空",
+        "把复现步骤写入 E2E 或验收报告"
+      ]
+    },
+    {
+      "id": "M3",
+      "objective": "作业朗读体验",
+      "keyResult": "学生作业卡片同时支持中文原文 TTS 和俄语释义 TTS，云端失败时浏览器 fallback 可播放。",
+      "tasks": [
+        "S4-T21",
+        "S4-T40"
+      ],
+      "steps": [
+        "任务页中文按钮调用 zh-CN",
+        "俄语释义按钮调用 ru-RU",
+        "Live 作业面板同样接入俄语按钮",
+        "无 translationRu 时隐藏按钮",
+        "手动试听中文/俄语各 1 条"
+      ]
+    },
+    {
+      "id": "M4",
+      "objective": "学习记录可信",
+      "keyResult": "Admin 可预检/清理僵尸学习记录；清理后 progress 聚合不被孤儿记录污染。",
+      "tasks": [
+        "S4-T44",
+        "S4-T45"
+      ],
+      "steps": [
+        "定义 zombie 条件：缺 student/task/lessonNode/recording",
+        "提供 dryRun 接口",
+        "提供 write 清理接口",
+        "脚本输出 JSON 摘要",
+        "Admin progress 页提供预检和清理入口"
+      ]
+    },
+    {
+      "id": "M5",
+      "objective": "三角色验收",
+      "keyResult": "admin/teacher/student 三条路径每条至少 1 个端到端 smoke 通过。",
+      "tasks": [
+        "S4-T45"
+      ],
+      "steps": [
+        "admin login/logout",
+        "teacher create lesson + upload PDF",
+        "teacher draw + clear current page",
+        "student enter homework",
+        "student play Russian TTS and save record"
+      ]
+    }
+  ],
+  "phasePrompts": [
+    {
+      "phase": "Phase 1 - PDF/Drawing Stabilizer",
+      "prompt": "你是 LingoBridge 前端稳定性工程师。只处理 S4-T13/S4-T22/S4-T35/S4-T23/S4-T27。先复现 PDF 上传后无法查看和 drawing 后白屏，再修复。验收必须包含：上传绑定 lessonNodeId、PDF load/render 错误可定位、pageCount clamp、画笔绘制后 PDF 背景不消失。完成后运行 npm run lint、npm run build，并记录未覆盖风险。"
+    },
+    {
+      "phase": "Phase 2 - Homework Russian TTS",
+      "prompt": "你是 LingoBridge 作业体验工程师。只处理作业页和 Live 作业面板的 TTS 入口。中文原文使用 zh-CN，俄语释义使用 ru-RU；translationRu 为空时隐藏按钮；云 TTS 失败必须保留 browser fallback。验收试听 1 条中文和 1 条俄语，不改动作业保存协议。"
+    },
+    {
+      "phase": "Phase 3 - Learning Record Cleanup",
+      "prompt": "你是 LingoBridge 数据一致性工程师。只处理 S4-T44 的学习记录可信度。实现 dryRun 和 write 两种僵尸 learning_records 清理路径，僵尸定义为缺 student、缺 task、缺 lessonNode 或缺 lastRecording。输出 deleted/scanned/reasons，Admin 入口必须 requireAdmin。补 API 测试。"
+    },
+    {
+      "phase": "Phase 4 - Three-role Acceptance",
+      "prompt": "你是 LingoBridge 验收测试工程师。按 S4-T45 执行三角色 smoke：admin login/logout，teacher 创建课时并上传 PDF，teacher drawing 不白屏，student 进入作业播放俄语 TTS 并保存学习记录。失败时给出最短复现路径、截图位置和对应 task id。"
+    }
+  ]
+}

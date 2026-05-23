@@ -4,7 +4,7 @@ This file is the first stop for AI workers operating in this repository.
 
 ## Operating Principle
 
-Use [prds/prd.md](./prds/prd.md) and [prds/prd.json](./prds/prd.json) as the active execution contract. The approved source PRD is:
+Use [prds/prd.md](./prds/prd.md) as the navigation entry, then read the active sprint file under [prds/sprints](./prds/sprints/). Keep [prds/prd.json](./prds/prd.json) parseable for older agent prompts that still require it. The approved source PRD is:
 
 `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md`
 
@@ -23,7 +23,7 @@ The MVP is a single-tenant CZU demo, not a full LMS or SaaS platform.
 2. Do not broaden MVP scope into multi-tenant, payments, social features, or AI pronunciation scoring.
 3. Keep demo-critical work focused on teacher upload, student TTS/recording, teacher replay, and public test deployment.
 4. Preserve existing frontend visual style unless the task explicitly asks for redesign.
-5. Update `prds/prd.json` task status or acceptance notes when a task is completed.
+5. Update the matching `prds/sprints/sprint-NN-...` file when a task is completed; update `prds/prd.json` only when an older machine-readable workflow still depends on it.
 6. Add new docs to the correct folder instead of the repository root.
 
 ## Folder Rules
@@ -49,4 +49,3 @@ Before handoff, verify:
 - No `.env` or uploaded media files are committed.
 - Camera/mic/screen tracks stop on toggle off and exit.
 - The MVP core loop is no longer mock-only.
-
