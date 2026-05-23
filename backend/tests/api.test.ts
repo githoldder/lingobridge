@@ -661,3 +661,200 @@ test('admin can dry-run zombie learning record cleanup', async () => {
     assert.equal(json.data.reasons.missing_task, 1);
   });
 });
+
+// ─── S5-T02: Class CRUD & Members API ───
+
+test('teacher can create a class and list it', async () => {
+  await withServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: 'S5测试班', description: 'Test class for S5-T02' })
+    });
+    const json = await res.json();
+    assert.equal(json.code, 0);
+    assert.equal(json.data.name, 'S5测试班');
+    assert.equal(json.data.teacherId, 'teacher-1');
+    assert.ok(json.data.id);
+
+    const list = await fetch(`${baseUrl}/api/v1/classes`, {
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const listJson = await list.json();
+    assert.equal(listJson.code, 0);
+    assert.ok(listJson.data.some((c: any) => c.name === 'S5测试班'));
+  });
+});
+
+test('student cannot create a class', async () => {
+  await withServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer student-1' },
+      body: JSON.stringify({ name: '非法班级' })
+    });
+    const json = await res.json();
+    assert.equal(json.code, 403);
+  });
+});
+
+test('teacher can add/remove class members and student inherits courses', async () => {
+  await withServer(async (baseUrl) => {
+    // Create a class
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '成员测试班' })
+    });
+    const clsJson = await cls.json();
+    const classId = clsJson.data.id;
+
+    // Create a course bound to this class
+    const course = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: '班级绑定课程', classId })
+    });
+    const courseJson = await course.json();
+    assert.equal(courseJson.code, 0);
+
+    // Add student-2 to class
+    const addMember = await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ studentId: 'student-2' })
+    });
+    const addJson = await addMember.json();
+    assert.equal(addJson.code, 0);
+    assert.equal(addJson.data.studentId, 'student-2');
+
+    // Verify student-2 can see the course via class inheritance
+    const studentCourses = await fetch(`${baseUrl}/api/v1/courses`, {
+      headers: { Authorization: 'Bearer student-2' }
+    });
+    const scJson = await studentCourses.json();
+    assert.equal(scJson.code, 0);
+    assert.ok(scJson.data.some((c: any) => c.title === '班级绑定课程'), 'student-2 should see class-bound course');
+
+    // List class members
+    const members = await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const memJson = await members.json();
+    assert.equal(memJson.code, 0);
+    assert.ok(memJson.data.some((m: any) => m.studentId === 'student-2'));
+
+    // Remove student-2 from class
+    const removeMember = await fetch(`${baseUrl}/api/v1/classes/${classId}/members/student-2`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const rmJson = await removeMember.json();
+    assert.equal(rmJson.code, 0);
+    assert.equal(rmJson.data.removed, true);
+
+    // Verify class members no longer includes student-2
+    const membersAfter = await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const memAfterJson = await membersAfter.json();
+    assert.ok(!memAfterJson.data.some((m: any) => m.studentId === 'student-2'));
+  });
+});
+
+test('teacher can update and delete a class', async () => {
+  await withServer(async (baseUrl) => {
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '待删除班' })
+    });
+    const clsJson = await cls.json();
+    const classId = clsJson.data.id;
+
+    // Update
+    const updated = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '已改名班', description: 'Updated' })
+    });
+    const updJson = await updated.json();
+    assert.equal(updJson.code, 0);
+    assert.equal(updJson.data.name, '已改名班');
+
+    // Other teacher cannot update
+    const otherTeacher = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-2' },
+      body: JSON.stringify({ name: '非法修改' })
+    });
+    assert.equal((await otherTeacher.json()).code, 403);
+
+    // Delete
+    const del = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer teacher-1' }
+    });
+    const delJson = await del.json();
+    assert.equal(delJson.code, 0);
+    assert.equal(delJson.data.deleted, true);
+
+    // Verify gone
+    const get = await fetch(`${baseUrl}/api/v1/classes/${classId}`);
+    assert.equal((await get.json()).code, 404);
+  });
+});
+
+test('course with classId returns classId in API response', async () => {
+  await withServer(async (baseUrl) => {
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '课程绑定班' })
+    });
+    const classId = (await cls.json()).data.id;
+
+    const course = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ title: '绑定课程', classId })
+    });
+    const courseJson = await course.json();
+    assert.equal(courseJson.code, 0);
+    assert.equal(courseJson.data.classId, classId);
+
+    // Update course with defaultCoursewareFileId
+    const patch = await fetch(`${baseUrl}/api/v1/courses/${courseJson.data.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ defaultCoursewareFileId: 'file-001' })
+    });
+    const patchJson = await patch.json();
+    assert.equal(patchJson.code, 0);
+    assert.equal(patchJson.data.defaultCoursewareFileId, 'file-001');
+  });
+});
+
+test('student can list their classes', async () => {
+  await withServer(async (baseUrl) => {
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '学生可见班' })
+    });
+    const classId = (await cls.json()).data.id;
+
+    await fetch(`${baseUrl}/api/v1/classes/${classId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ studentId: 'student-1' })
+    });
+
+    const studentClasses = await fetch(`${baseUrl}/api/v1/classes`, {
+      headers: { Authorization: 'Bearer student-1' }
+    });
+    const scJson = await studentClasses.json();
+    assert.equal(scJson.code, 0);
+    assert.ok(scJson.data.some((c: any) => c.id === classId), 'student-1 should see their class');
+  });
+});

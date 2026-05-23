@@ -417,3 +417,5 @@ Action: Resolve manual testing PDF upload blockers via intelligent lessonNodeId 
 1. `src/components/TeacherClassroomView.tsx`: Added `lessonNodesApi` import and enhanced `handlePdfUpload` to automatically fetch first available lesson node or create a default new one when `lessonNodeId` is missing, resolving popup blockers completely.
 2. `src/components/TeacherCourseDetailView.tsx`: Refactored `handleUpload` in `CoursewareTab` to dynamically resolve or build a default lesson node context on PDF upload when no schedule is active, displaying progressive status messaging to the user.
 3. `src/components/TeacherCoursesView.tsx`: Added `lessonNodesApi` import and upgraded "Enter Classroom" action to pre-emptively load and write the first valid lesson node ID into `localStorage` during list entry.
+[Plan] | Created task.md and starting S5-T01 | Done
+[Execution] | S5-T01 Done. DB schema and cleanup script created | Done

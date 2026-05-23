@@ -177,7 +177,9 @@ const seed: Database = {
     }
   ],
   liveClassStudents: [],
-  homeworkImports: []
+  homeworkImports: [],
+  classes: [],
+  classMembers: []
 };
 
 let cached: Database | null = null;

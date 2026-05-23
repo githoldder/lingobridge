@@ -32,11 +32,13 @@ export interface UserDto {
 export interface CourseDto {
   id: string;
   teacherId: string;
+  classId?: string;
   title: string;
   description: string;
   status: string;
   startsAt?: string;
   endsAt?: string;
+  defaultCoursewareFileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +64,7 @@ export interface LessonNodeDto {
   shapeToken: string;
   status: string;
   assignmentNodeId?: string;
+  defaultCoursewareFileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -223,4 +226,22 @@ export interface ClassroomCommentDto {
   body: string;
   visibility: string;
   createdAt: string;
+}
+
+/** Class (班级) DTO */
+export interface ClassDto {
+  id: string;
+  teacherId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Class member DTO */
+export interface ClassMemberDto {
+  id: string;
+  classId: string;
+  studentId: string;
+  joinedAt: string;
 }

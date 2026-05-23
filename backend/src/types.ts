@@ -50,10 +50,13 @@ export interface HomeworkImport {
 export interface Course {
   id: string;
   teacherId: string;
+  classId?: string;
   title: string;
   description: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'published' | 'draft';
+  defaultCoursewareFileId?: string;
 }
 
 export interface CoursePage {
@@ -234,6 +237,22 @@ export interface CoursewareFile {
   createdAt: string;
 }
 
+export interface Class {
+  id: string;
+  teacherId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassMember {
+  id: string;
+  classId: string;
+  studentId: string;
+  joinedAt: string;
+}
+
 export interface Database {
   users: User[];
   courses: Course[];
@@ -254,4 +273,6 @@ export interface Database {
   teacherStudentLinks: TeacherStudentLink[];
   liveClassStudents: LiveClassStudent[];
   homeworkImports: HomeworkImport[];
+  classes: Class[];
+  classMembers: ClassMember[];
 }

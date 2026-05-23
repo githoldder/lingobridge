@@ -12,8 +12,9 @@ import * as coursesRepo from './repositories/courses.ts';
 import * as filesRepo from './repositories/files.ts';
 import * as assignmentsRepo from './repositories/assignments.ts';
 import * as liveRepo from './repositories/live.ts';
+import * as classesRepo from './repositories/classes.ts';
 import * as XLSX from 'xlsx';
-import { queryRow, queryRows, getDbMode } from './db/postgres.ts';
+import { query, queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -244,13 +245,24 @@ export function createApp() {
       teacherId,
       title,
       description: String(req.body?.description || ''),
-      status: 'published'
+      status: 'published',
+      classId: req.body?.classId || undefined,
+      defaultCoursewareFileId: req.body?.defaultCoursewareFileId || undefined,
     });
     await coursesRepo.addMember(course.id, teacherId, 'teacher');
 
-    const linkedStudentIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
-    for (const studentId of linkedStudentIds) {
-      await coursesRepo.addMember(course.id, studentId, 'student');
+    // If course is bound to a class, auto-add class members as course members
+    if (course.classId) {
+      const classMembers = await classesRepo.findMembers(course.classId);
+      for (const m of classMembers) {
+        await coursesRepo.addMember(course.id, m.studentId, 'student');
+      }
+    } else {
+      // Legacy: add linked students via teacher_student_links
+      const linkedStudentIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
+      for (const studentId of linkedStudentIds) {
+        await coursesRepo.addMember(course.id, studentId, 'student');
+      }
     }
 
     ok(res, course);
@@ -414,15 +426,157 @@ export function createApp() {
   });
 
   app.patch('/api/v1/courses/:id', async (req, res) => {
-    const { title, description, status } = req.body ?? {};
+    const { title, description, status, classId, defaultCoursewareFileId } = req.body ?? {};
     const updated = await coursesRepo.update(req.params.id, {
       title: title !== undefined ? String(title) : undefined,
       description: description !== undefined ? String(description) : undefined,
       status: status !== undefined && ['published', 'draft'].includes(status) ? status : undefined,
+      classId: classId !== undefined ? (classId || null) : undefined,
+      defaultCoursewareFileId: defaultCoursewareFileId !== undefined ? (defaultCoursewareFileId || null) : undefined,
     });
     if (!updated) return fail(res, 404, 'Course not found');
     ok(res, updated);
   });
+
+  // ─── Class CRUD API (S5-T02) ───
+
+  app.get('/api/v1/classes', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    let result;
+    if (user.role === 'admin') {
+      result = await classesRepo.findAll();
+    } else if (user.role === 'teacher') {
+      result = await classesRepo.findByTeacherId(userId);
+    } else {
+      // Student: return classes they belong to
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      result = await Promise.all(classIds.map((id) => classesRepo.findById(id)));
+      result = result.filter(Boolean);
+    }
+    ok(res, result);
+  });
+
+  app.post('/api/v1/classes', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user || user.role !== 'teacher') return fail(res, 403, 'Only teachers can create classes');
+
+    const name = String(req.body?.name || '').trim();
+    if (!name) return fail(res, 400, 'Class name is required');
+
+    const cls = await classesRepo.createClass({
+      teacherId: userId,
+      name,
+      description: String(req.body?.description || ''),
+    });
+    ok(res, cls);
+  });
+
+  app.get('/api/v1/classes/:id', async (req, res) => {
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    ok(res, cls);
+  });
+
+  app.patch('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can update');
+
+    const { name, description } = req.body ?? {};
+    const updated = await classesRepo.updateClass(req.params.id, {
+      name: name !== undefined ? String(name) : undefined,
+      description: description !== undefined ? String(description) : undefined,
+    });
+    ok(res, updated);
+  });
+
+  app.delete('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can delete');
+
+    await classesRepo.deleteClass(req.params.id);
+    ok(res, { deleted: true });
+  });
+
+  // ─── Class Members API (S5-T02) ───
+
+  app.get('/api/v1/classes/:id/members', async (req, res) => {
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    const members = await classesRepo.findMembers(req.params.id);
+    // Enrich with user info
+    const enriched = await Promise.all(members.map(async (m) => {
+      const user = await usersRepo.findById(m.studentId);
+      return { ...m, displayName: user?.displayName ?? '', languagePref: user?.languagePref ?? 'zh' };
+    }));
+    ok(res, enriched);
+  });
+
+  app.post('/api/v1/classes/:id/members', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can add members');
+
+    const studentId = String(req.body?.studentId || '');
+    if (!studentId) return fail(res, 400, 'studentId is required');
+    const student = await usersRepo.findById(studentId);
+    if (!student || student.role !== 'student') return fail(res, 400, 'User is not a student');
+
+    const member = await classesRepo.addMember(req.params.id, studentId);
+
+    // Auto-add student to all courses in this class
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const classCourses = db.courses.filter((c) => (c as any).classId === req.params.id);
+      for (const course of classCourses) {
+        const existing = db.courseMembers.find((m) => m.courseId === course.id && m.userId === studentId);
+        if (!existing) {
+          db.courseMembers.push({
+            id: crypto.randomUUID(),
+            courseId: course.id,
+            userId: studentId,
+            role: 'student',
+            joinedAt: new Date().toISOString(),
+          });
+        }
+      }
+      await writeDb(db);
+    } else {
+      const classCourseRows = await queryRows('SELECT id FROM courses WHERE class_id = $1', [req.params.id]);
+      for (const row of classCourseRows) {
+        await coursesRepo.addMember(row.id, studentId, 'student');
+      }
+    }
+
+    ok(res, member);
+  });
+
+  app.delete('/api/v1/classes/:id/members/:studentId', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can remove members');
+
+    const removed = await classesRepo.removeMember(req.params.id, req.params.studentId);
+    if (!removed) return fail(res, 404, 'Member not found');
+    ok(res, { removed: true });
+  });
+
+  // ─── Course Members (existing) ───
 
   app.get('/api/v1/courses/:id/members', async (req, res) => {
     const members = await coursesRepo.findMembers(req.params.id);
@@ -1038,11 +1192,12 @@ export function createApp() {
     const node = db.lessonNodes.find((n) => n.id === req.params.id);
     if (!node) return fail(res, 404, 'Lesson node not found');
 
-    const { title, startsAt, endsAt, status } = req.body ?? {};
+    const { title, startsAt, endsAt, status, defaultCoursewareFileId } = req.body ?? {};
     if (title !== undefined) node.title = String(title);
     if (startsAt !== undefined) node.startsAt = startsAt || undefined;
     if (endsAt !== undefined) node.endsAt = endsAt || undefined;
     if (status !== undefined) node.status = status as LessonNode['status'];
+    if (defaultCoursewareFileId !== undefined) (node as any).defaultCoursewareFileId = defaultCoursewareFileId || undefined;
     node.updatedAt = new Date().toISOString();
 
     await writeDb(db);
@@ -1276,6 +1431,48 @@ export function createApp() {
     const dryRun = req.body?.dryRun !== false;
     const result = await assignmentsRepo.cleanupZombieLearningRecords(dryRun);
     ok(res, result);
+  });
+
+  app.post('/api/v1/admin/cleanup', requireAdmin, async (req, res) => {
+    const dryRun = req.body?.dryRun !== false;
+    const SEED_COURSE_ID = 'b0000000-0000-0000-0000-000000000001';
+    const SEED_CLASS_ID = 'd0000000-0000-0000-0000-000000000001';
+
+    if (getDbMode() === 'json') {
+      return fail(res, 400, 'Cleanup API is only supported in postgres mode');
+    }
+
+    try {
+      const courseCountRes = await queryRow('SELECT COUNT(*) as count FROM courses WHERE id != $1', [SEED_COURSE_ID]);
+      const classCountRes = await queryRow('SELECT COUNT(*) as count FROM classes WHERE id != $1', [SEED_CLASS_ID]);
+      
+      const coursesToDelete = parseInt(courseCountRes?.count || '0', 10);
+      const classesToDelete = parseInt(classCountRes?.count || '0', 10);
+      
+      if (dryRun) {
+        return ok(res, { dryRun: true, coursesToDelete, classesToDelete });
+      }
+
+      await query('BEGIN');
+      const delCourses = await query('DELETE FROM courses WHERE id != $1', [SEED_COURSE_ID]);
+      const delClasses = await query('DELETE FROM classes WHERE id != $1', [SEED_CLASS_ID]);
+      const delFiles = await query(`
+        DELETE FROM files 
+        WHERE course_id IS NULL 
+        AND id NOT IN (SELECT default_courseware_file_id FROM courses WHERE default_courseware_file_id IS NOT NULL)
+      `);
+      await query('COMMIT');
+
+      ok(res, {
+        dryRun: false,
+        deletedCourses: delCourses.rowCount,
+        deletedClasses: delClasses.rowCount,
+        deletedOrphanFiles: delFiles.rowCount
+      });
+    } catch (err: any) {
+      await query('ROLLBACK');
+      fail(res, 500, 'Cleanup failed: ' + err.message);
+    }
   });
 
   // Admin middleware

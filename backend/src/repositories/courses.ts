@@ -10,11 +10,13 @@ function mapCourse(row: Record<string, any>): CourseDto {
   return {
     id: row.id,
     teacherId: row.teacher_id ?? row.teacherId,
+    classId: row.class_id ?? row.classId ?? undefined,
     title: row.title,
     description: row.description,
     status: row.status,
     startsAt: row.starts_at ?? row.startsAt,
     endsAt: row.ends_at ?? row.endsAt,
+    defaultCoursewareFileId: row.default_courseware_file_id ?? row.defaultCoursewareFileId ?? undefined,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,
   };
@@ -62,9 +64,19 @@ export async function findById(id: string): Promise<CourseDto | null> {
 export async function findByTeacherId(teacherId: string): Promise<CourseDto[]> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    return db.courses.filter((c) => c.teacherId === teacherId).map(mapCourse);
+    // Teacher's own courses + courses in classes they own
+    const classIds = db.classes.filter((c) => c.teacherId === teacherId).map((c) => c.id);
+    return db.courses
+      .filter((c) => c.teacherId === teacherId || classIds.includes(c.classId ?? ''))
+      .map(mapCourse);
   }
-  const rows = await queryRows('SELECT * FROM courses WHERE teacher_id = $1 ORDER BY created_at DESC', [teacherId]);
+  const rows = await queryRows(
+    `SELECT DISTINCT c.* FROM courses c
+     LEFT JOIN classes cl ON cl.id = c.class_id
+     WHERE c.teacher_id = $1 OR cl.teacher_id = $1
+     ORDER BY c.created_at DESC`,
+    [teacherId]
+  );
   return rows.map(mapCourse);
 }
 
@@ -72,12 +84,18 @@ export async function findByStudentId(studentId: string): Promise<CourseDto[]> {
   if (getDbMode() === 'json') {
     const db = await readDb();
     const memberOf = db.courseMembers.filter((m) => m.userId === studentId).map((m) => m.courseId);
-    return db.courses.filter((c) => memberOf.includes(c.id)).map(mapCourse);
+    // Also include courses from class membership
+    const classIds = db.classMembers.filter((m) => m.studentId === studentId).map((m) => m.classId);
+    const classCourseIds = db.courses.filter((c) => classIds.includes(c.classId ?? '')).map((c) => c.id);
+    const allIds = new Set([...memberOf, ...classCourseIds]);
+    return db.courses.filter((c) => allIds.has(c.id)).map(mapCourse);
   }
   const rows = await queryRows(
-    `SELECT c.* FROM courses c
-     JOIN course_members cm ON cm.course_id = c.id
-     WHERE cm.user_id = $1 AND cm.removed_at IS NULL
+    `SELECT DISTINCT c.* FROM courses c
+     LEFT JOIN course_members cm ON cm.course_id = c.id AND cm.user_id = $1 AND cm.removed_at IS NULL
+     LEFT JOIN class_members clm ON clm.student_id = $1 AND clm.removed_at IS NULL
+     LEFT JOIN classes cl ON cl.id = c.class_id AND cl.id = clm.class_id
+     WHERE cm.id IS NOT NULL OR cl.id IS NOT NULL
      ORDER BY c.created_at DESC`,
     [studentId]
   );
@@ -94,31 +112,35 @@ export async function findAll(): Promise<CourseDto[]> {
 }
 
 
-export async function create(data: { teacherId: string; title: string; description?: string; status?: string }): Promise<CourseDto> {
+export async function create(data: { teacherId: string; title: string; description?: string; status?: string; classId?: string; defaultCoursewareFileId?: string }): Promise<CourseDto> {
   if (getDbMode() === 'json') {
     const db = await readDb();
-    const course = {
+    const now = new Date().toISOString();
+    const course: any = {
       id: crypto.randomUUID(),
       teacherId: data.teacherId,
+      classId: data.classId ?? null,
       title: data.title,
       description: data.description ?? '',
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       status: data.status ?? 'published',
+      defaultCoursewareFileId: data.defaultCoursewareFileId ?? null,
     };
-    db.courses.push(course as any);
+    db.courses.push(course);
     await writeDb(db);
     return mapCourse(course);
   }
   const row = await queryRow(
-    `INSERT INTO courses (teacher_id, title, description, status)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO courses (teacher_id, class_id, title, description, status, default_courseware_file_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [data.teacherId, data.title, data.description ?? '', data.status ?? 'published']
+    [data.teacherId, data.classId ?? null, data.title, data.description ?? '', data.status ?? 'published', data.defaultCoursewareFileId ?? null]
   );
   return mapCourse(row!);
 }
 
-export async function update(id: string, data: Partial<{ title: string; description: string; status: string; startsAt: string; endsAt: string }>): Promise<CourseDto | null> {
+export async function update(id: string, data: Partial<{ title: string; description: string; status: string; startsAt: string; endsAt: string; classId: string | null; defaultCoursewareFileId: string | null }>): Promise<CourseDto | null> {
   if (getDbMode() === 'json') {
     const db = await readDb();
     const idx = db.courses.findIndex((c) => c.id === id);
@@ -135,6 +157,8 @@ export async function update(id: string, data: Partial<{ title: string; descript
   if (data.status !== undefined) { sets.push(`status = $${i++}`); vals.push(data.status); }
   if (data.startsAt !== undefined) { sets.push(`starts_at = $${i++}`); vals.push(data.startsAt); }
   if (data.endsAt !== undefined) { sets.push(`ends_at = $${i++}`); vals.push(data.endsAt); }
+  if (data.classId !== undefined) { sets.push(`class_id = $${i++}`); vals.push(data.classId ?? null); }
+  if (data.defaultCoursewareFileId !== undefined) { sets.push(`default_courseware_file_id = $${i++}`); vals.push(data.defaultCoursewareFileId ?? null); }
   sets.push(`updated_at = now()`);
   vals.push(id);
   const row = await queryRow(`UPDATE courses SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`, vals);
