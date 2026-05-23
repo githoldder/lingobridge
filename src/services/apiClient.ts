@@ -11,10 +11,13 @@ export interface ApiUser {
 export interface Course {
   id: string;
   teacherId: string;
+  classId?: string;
   title: string;
   description: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'published' | 'draft';
+  defaultCoursewareFileId?: string;
   pagesCount?: number;
   exercisesCount?: number;
   recordingsCount?: number;
@@ -261,6 +264,7 @@ export interface LessonNodeData {
   shapeToken: string;
   status: string;
   assignmentNodeId?: string;
+  defaultCoursewareFileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -272,7 +276,7 @@ export const lessonNodesApi = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-  update: (id: string, data: { title?: string; startsAt?: string; endsAt?: string; status?: string }) =>
+  update: (id: string, data: { title?: string; startsAt?: string; endsAt?: string; status?: string; defaultCoursewareFileId?: string }) =>
     request<LessonNodeData>(`/lesson-nodes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data)

@@ -127,6 +127,13 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
     }
   }, [onNavigate]);
 
+  const handleEnterClassroom = useCallback(async (item: AgendaItem) => {
+    // Enter classroom even without active live session (self-study mode)
+    localStorage.setItem('lingobridge_courseId', item.courseId);
+    localStorage.setItem('lingobridge_lessonNodeId', item.lessonNodeId);
+    onNavigate?.('student-classroom', { lessonNodeId: item.lessonNodeId, courseId: item.courseId });
+  }, [onNavigate]);
+
   const handleEnterHomework = useCallback(async (item: AgendaItem) => {
     onNavigate?.('homework', { lessonNodeId: item.lessonNodeId, courseId: item.courseId });
   }, [onNavigate]);
@@ -262,7 +269,15 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
                               <Video size={18} />
                               {t('schedule.join_class')}
                             </button>
-                          ) : null}
+                          ) : (
+                            <button 
+                              onClick={() => handleEnterClassroom(item)}
+                              className="flex-1 md:flex-none px-6 py-2.5 bg-blue-50 text-[#0056D2] rounded-xl text-sm font-bold border border-blue-100 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                            >
+                              <BookOpen size={18} />
+                              {t('schedule.enter_classroom') || 'Enter Classroom'}
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleEnterHomework(item)}
                             className="flex-1 md:flex-none px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-100 hover:bg-green-100 transition-all flex items-center justify-center gap-1.5"

@@ -230,26 +230,56 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   }, []);
 
   // Load existing courseware PDF on mount (both teacher & student)
+  // Priority: defaultCoursewareFileId (from lesson node or course) > latest PDF from coursewareFilesApi
   useEffect(() => {
     const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
     const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || '';
     if (!courseId) return;
 
-    coursewareFilesApi.list(courseId, activeLessonNodeId || undefined).then((files) => {
-      // Pick the most recent PDF
-      const pdfFile = files.find((f) =>
-        f.mimeType === 'application/pdf' || f.filename?.endsWith('.pdf')
-      );
-      if (pdfFile?.storageUrl) {
-        setPdfFile(mediaUrl(pdfFile.storageUrl));
-        setIsPdfType(true);
-        setPdfPage(1);
-        setCoursewareStatus('ready');
-        console.log('[Courseware] Loaded existing PDF:', pdfFile.filename);
+    (async () => {
+      try {
+        // Check for defaultCoursewareFileId from lesson node or course
+        let defaultFileId: string | undefined;
+        if (activeLessonNodeId) {
+          try {
+            const nodes = await lessonNodesApi.list(courseId);
+            const node = nodes.find((n) => n.id === activeLessonNodeId);
+            defaultFileId = node?.defaultCoursewareFileId;
+          } catch { /* ignore */ }
+        }
+        if (!defaultFileId) {
+          try {
+            const courses = await coursesApi.list();
+            const course = courses.find((c) => c.id === courseId);
+            defaultFileId = course?.defaultCoursewareFileId;
+          } catch { /* ignore */ }
+        }
+
+        const files = await coursewareFilesApi.list(courseId, activeLessonNodeId || undefined);
+
+        // If defaultCoursewareFileId is set, find that specific file
+        let targetFile;
+        if (defaultFileId) {
+          targetFile = files.find((f) => f.id === defaultFileId);
+        }
+        // Fallback: pick the most recent PDF
+        if (!targetFile) {
+          targetFile = files.find((f) =>
+            f.mimeType === 'application/pdf' || f.filename?.endsWith('.pdf')
+          );
+        }
+
+        if (targetFile?.storageUrl) {
+          setPdfFile(mediaUrl(targetFile.storageUrl));
+          setIsPdfType(true);
+          setPdfPage(1);
+          setCoursewareStatus('ready');
+          console.log('[Courseware] Loaded PDF:', targetFile.filename, defaultFileId ? '(default)' : '(latest)');
+        }
+      } catch {
+        // No courseware yet, that's fine
       }
-    }).catch(() => {
-      // No courseware yet, that's fine
-    });
+    })();
   }, [propCourseId, lessonNodeId]);
 
   useEffect(() => {
@@ -437,6 +467,32 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
           }
         })
         .catch(() => {});
+    }
+
+    // Student: poll for active live session if not yet joined (empty classroom / self-study)
+    if (!isTeacher) {
+      const pollInterval = setInterval(() => {
+        if (liveSessionRef.current?.id) { clearInterval(pollInterval); return; }
+        liveSessionsApi.getActive(courseId)
+          .then((session) => {
+            if (session && !ended) {
+              liveSessionsApi.join(session.id).catch(() => {});
+              setLiveSession(session);
+              liveSessionRef.current = session;
+              if (session.currentPage) {
+                if (isPdfType) {
+                  const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+                  setPdfPage(clamped);
+                } else {
+                  setCurrentPageIdx(Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0))));
+                }
+              }
+              clearInterval(pollInterval);
+            }
+          })
+          .catch(() => {});
+      }, 5000);
+      return () => { ended = true; clearInterval(pollInterval); };
     }
 
     return () => {
@@ -708,7 +764,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
       setCoursewareStatus('processing');
       const result = await coursesApi.uploadCourseware(courseId, file, activeLessonNodeId);
-      const fileMeta = result.file as { mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
+      const fileMeta = result.file as { id?: string; mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
       const isPdf = fileMeta?.mimeType === 'application/pdf' || file.name.endsWith('.pdf');
       const isPptx = fileMeta?.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.endsWith('.pptx');
       setIsPdfType(isPdf);
@@ -718,6 +774,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       setCoursePages(pages);
       setCurrentPageIdx(0);
       setLiveMode('multimedia');
+
+      // Auto-set defaultCoursewareFileId on the lesson node
+      if (fileMeta?.id && activeLessonNodeId) {
+        lessonNodesApi.update(activeLessonNodeId, { defaultCoursewareFileId: fileMeta.id }).catch(() => {});
+      }
       const status = fileMeta?.renderStatus as 'pending' | 'processing' | 'ready' | 'failed' | undefined;
       setCoursewareStatus(status || 'ready');
       if (isPptx) {
@@ -1470,7 +1531,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                    </div>
                 </div>
                 <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
-                  {isTeacher ? t('classroom.teacher_label') : t('classroom.waiting_teacher')}
+                  {isTeacher ? t('classroom.teacher_label') : liveSession ? t('classroom.waiting_teacher') : (t('classroom.self_study') || 'Self Study')}
                 </div>
               </motion.div>
             ) : (
