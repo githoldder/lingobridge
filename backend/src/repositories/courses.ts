@@ -3,8 +3,8 @@
  */
 
 import { readDb, writeDb } from '../db.ts';
-import { getDbMode, query, queryRow, queryRows } from '../db/postgres.ts';
-import type { CourseDto, CourseMemberDto, LessonNodeDto } from './types.ts';
+import { getDbMode, query, queryRow, queryRows, transaction } from '../db/postgres.ts';
+import type { AssignmentNodeDto, CourseDto, CourseMemberDto, LessonNodeDto } from './types.ts';
 
 function mapCourse(row: Record<string, any>): CourseDto {
   return {
@@ -48,6 +48,29 @@ function mapLessonNode(row: Record<string, any>): LessonNodeDto {
     assignmentNodeId: row.assignment_node_id ?? row.assignmentNodeId,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,
+  };
+}
+
+function mapAssignmentNode(row: Record<string, any>): AssignmentNodeDto {
+  return {
+    id: row.id,
+    courseId: row.course_id ?? row.courseId,
+    lessonNodeId: row.lesson_node_id ?? row.lessonNodeId,
+    title: row.title,
+    dueAt: row.due_at ?? row.dueAt ?? undefined,
+    status: row.status,
+    createdAt: row.created_at ?? row.createdAt,
+    updatedAt: row.updated_at ?? row.updatedAt,
+  };
+}
+
+function deriveStyleTokens(styleSeed: number): { colorToken: string; shapeToken: string } {
+  const colors = ['#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316', '#64748B'];
+  const shapes = ['circle', 'square', 'diamond', 'hexagon', 'star', 'triangle', 'pentagon', 'octagon'];
+  const hash = ((styleSeed * 2654435761) >>> 0) % 2147483647;
+  return {
+    colorToken: colors[hash % colors.length],
+    shapeToken: shapes[hash % shapes.length]
   };
 }
 
@@ -275,4 +298,149 @@ export async function findLessonNodes(courseId: string): Promise<LessonNodeDto[]
     [courseId]
   );
   return rows.map(mapLessonNode);
+}
+
+export async function findLessonNodeById(id: string): Promise<LessonNodeDto | null> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const node = db.lessonNodes.find((n) => n.id === id);
+    if (!node) return null;
+    const assignmentNode = db.assignmentNodes.find((a) => a.lessonNodeId === node.id);
+    return mapLessonNode({ ...node, assignmentNodeId: assignmentNode?.id });
+  }
+  const row = await queryRow(
+    `SELECT ln.*, an.id AS assignment_node_id
+     FROM lesson_nodes ln
+     LEFT JOIN assignment_nodes an ON an.lesson_node_id = ln.id
+     WHERE ln.id = $1`,
+    [id]
+  );
+  return row ? mapLessonNode(row) : null;
+}
+
+export async function createLessonNode(data: {
+  courseId: string;
+  title: string;
+  startsAt?: string;
+  endsAt?: string;
+  status?: string;
+  assignmentTitle?: string;
+  dueAt?: string;
+}): Promise<{ lessonNode: LessonNodeDto; assignmentNode: AssignmentNodeDto }> {
+  const now = new Date().toISOString();
+  const styleSeed = Math.floor(Math.random() * 1000000);
+  const { colorToken, shapeToken } = deriveStyleTokens(styleSeed);
+
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const lessonNode: any = {
+      id: crypto.randomUUID(),
+      courseId: data.courseId,
+      title: data.title,
+      startsAt: data.startsAt || undefined,
+      endsAt: data.endsAt || undefined,
+      styleSeed,
+      colorToken,
+      shapeToken,
+      status: data.status ?? 'draft',
+      createdAt: now,
+      updatedAt: now
+    };
+    const assignmentNode: any = {
+      id: crypto.randomUUID(),
+      courseId: data.courseId,
+      lessonNodeId: lessonNode.id,
+      title: data.assignmentTitle || `${lessonNode.title} - Homework`,
+      dueAt: data.dueAt || undefined,
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now
+    };
+    lessonNode.assignmentNodeId = assignmentNode.id;
+    db.lessonNodes.unshift(lessonNode);
+    db.assignmentNodes.unshift(assignmentNode);
+    await writeDb(db);
+    return {
+      lessonNode: mapLessonNode(lessonNode),
+      assignmentNode: mapAssignmentNode(assignmentNode)
+    };
+  }
+
+  return transaction(async (client) => {
+    const lessonResult = await client.query(
+      `INSERT INTO lesson_nodes (course_id, title, starts_at, ends_at, style_seed, color_token, shape_token, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        data.courseId,
+        data.title,
+        data.startsAt || null,
+        data.endsAt || null,
+        styleSeed,
+        colorToken,
+        shapeToken,
+        data.status ?? 'draft'
+      ]
+    );
+    const lessonNode = mapLessonNode(lessonResult.rows[0]);
+    const assignmentResult = await client.query(
+      `INSERT INTO assignment_nodes (course_id, lesson_node_id, title, due_at, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        data.courseId,
+        lessonNode.id,
+        data.assignmentTitle || `${lessonNode.title} - Homework`,
+        data.dueAt || null,
+        'draft'
+      ]
+    );
+    const assignmentNode = mapAssignmentNode(assignmentResult.rows[0]);
+    return {
+      lessonNode: { ...lessonNode, assignmentNodeId: assignmentNode.id },
+      assignmentNode
+    };
+  });
+}
+
+export async function updateLessonNode(id: string, data: Partial<{
+  title: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  status: string;
+  defaultCoursewareFileId: string | null;
+}>): Promise<LessonNodeDto | null> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const node = db.lessonNodes.find((n) => n.id === id);
+    if (!node) return null;
+    if (data.title !== undefined) node.title = data.title;
+    if (data.startsAt !== undefined) node.startsAt = data.startsAt || undefined;
+    if (data.endsAt !== undefined) node.endsAt = data.endsAt || undefined;
+    if (data.status !== undefined) node.status = data.status as any;
+    if (data.defaultCoursewareFileId !== undefined) (node as any).defaultCoursewareFileId = data.defaultCoursewareFileId || undefined;
+    node.updatedAt = new Date().toISOString();
+    await writeDb(db);
+    const assignmentNode = db.assignmentNodes.find((a) => a.lessonNodeId === node.id);
+    return mapLessonNode({ ...node, assignmentNodeId: assignmentNode?.id });
+  }
+
+  const sets: string[] = [];
+  const vals: any[] = [];
+  let i = 1;
+  if (data.title !== undefined) { sets.push(`title = $${i++}`); vals.push(data.title); }
+  if (data.startsAt !== undefined) { sets.push(`starts_at = $${i++}`); vals.push(data.startsAt || null); }
+  if (data.endsAt !== undefined) { sets.push(`ends_at = $${i++}`); vals.push(data.endsAt || null); }
+  if (data.status !== undefined) { sets.push(`status = $${i++}`); vals.push(data.status); }
+  if (data.defaultCoursewareFileId !== undefined) { sets.push(`default_courseware_file_id = $${i++}`); vals.push(data.defaultCoursewareFileId || null); }
+  if (sets.length === 0) return findLessonNodeById(id);
+  sets.push(`updated_at = now()`);
+  vals.push(id);
+  const row = await queryRow(
+    `UPDATE lesson_nodes SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`,
+    vals
+  );
+  if (!row) return null;
+  const assignmentNode = await queryRow('SELECT id FROM assignment_nodes WHERE lesson_node_id = $1', [id]);
+  return mapLessonNode({ ...row, assignment_node_id: assignmentNode?.id });
 }

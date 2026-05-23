@@ -36,16 +36,6 @@ function extensionOf(filename: string) {
   return path.extname(filename).slice(1).toLowerCase();
 }
 
-function deriveStyleTokens(styleSeed: number): { colorToken: string; shapeToken: string } {
-  const colors = ['#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316', '#64748B'];
-  const shapes = ['circle', 'square', 'diamond', 'hexagon', 'star', 'triangle', 'pentagon', 'octagon'];
-  const hash = ((styleSeed * 2654435761) >>> 0) % 2147483647;
-  return {
-    colorToken: colors[hash % colors.length],
-    shapeToken: shapes[hash % shapes.length]
-  };
-}
-
 function publicUser(user: import('./types.ts').User) {
   return {
     id: user.id,
@@ -1487,121 +1477,72 @@ export function createApp() {
 
   // Lesson node API (T02)
   app.get('/api/v1/courses/:id/lesson-nodes', async (req, res) => {
-    const db = await readDb();
-    const nodes = db.lessonNodes.filter((n) => n.courseId === req.params.id);
+    const nodes = await coursesRepo.findLessonNodes(req.params.id);
     ok(res, nodes);
   });
 
   app.post('/api/v1/courses/:id/lesson-nodes', async (req, res) => {
-    const db = await readDb();
     const courseId = req.params.id;
-    const course = db.courses.find((c) => c.id === courseId);
+    const course = await coursesRepo.findById(courseId);
     if (!course) return fail(res, 404, 'Course not found');
 
-    const now = new Date().toISOString();
-    const styleSeed = Math.floor(Math.random() * 1000000);
-    const { colorToken, shapeToken } = deriveStyleTokens(styleSeed);
-
-    const lessonNode: LessonNode = {
-      id: crypto.randomUUID(),
+    const { lessonNode, assignmentNode } = await coursesRepo.createLessonNode({
       courseId,
       title: String(req.body?.title || 'New Lesson'),
       startsAt: req.body?.startsAt || undefined,
       endsAt: req.body?.endsAt || undefined,
-      styleSeed,
-      colorToken,
-      shapeToken,
       status: (req.body?.status || 'draft') as LessonNode['status'],
-      createdAt: now,
-      updatedAt: now
-    };
-
-    const assignmentNode: AssignmentNode = {
-      id: crypto.randomUUID(),
-      courseId,
-      lessonNodeId: lessonNode.id,
-      title: String(req.body?.assignmentTitle || `${lessonNode.title} - Homework`),
+      assignmentTitle: String(req.body?.assignmentTitle || ''),
       dueAt: req.body?.dueAt || undefined,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now
-    };
+    });
 
-    lessonNode.assignmentNodeId = assignmentNode.id;
-
-    db.lessonNodes.unshift(lessonNode);
-    db.assignmentNodes.unshift(assignmentNode);
-    const courseStudentIds = db.courseMembers
-      .filter((m) => m.courseId === courseId && m.role === 'student')
+    const courseMembers = await coursesRepo.findMembers(courseId);
+    const courseStudentIds = courseMembers
+      .filter((m) => m.role === 'student')
       .map((m) => m.userId);
     for (const studentId of courseStudentIds) {
-      db.liveClassStudents.push({
-        id: crypto.randomUUID(),
-        lessonNodeId: lessonNode.id,
-        studentId,
-        source: 'course_member',
-        joinedAt: now
-      });
+      await liveRepo.addClassStudent(lessonNode.id, studentId, 'course_member');
     }
-    await writeDb(db);
     ok(res, { lessonNode, assignmentNode });
   });
 
   app.get('/api/v1/live-classes/:id/students', async (req, res) => {
-    const db = await readDb();
-    const node = db.lessonNodes.find((n) => n.id === req.params.id);
+    const node = await coursesRepo.findLessonNodeById(req.params.id);
     if (!node) return fail(res, 404, 'Live class not found');
-    const students = db.liveClassStudents
-      .filter((item) => item.lessonNodeId === node.id)
-      .map((item) => {
-        const user = db.users.find((u) => u.id === item.studentId);
-        return user ? { ...item, user: publicUser(user) } : null;
-      })
-      .filter(Boolean);
+    const liveClassStudents = await liveRepo.findClassStudents(node.id);
+    const students = [];
+    for (const item of liveClassStudents) {
+      const user = await usersRepo.findById(item.studentId);
+      if (user) students.push({ ...item, user });
+    }
     ok(res, students);
   });
 
   app.post('/api/v1/live-classes/:id/students/batch', async (req, res) => {
-    const db = await readDb();
-    const node = db.lessonNodes.find((n) => n.id === req.params.id);
+    const node = await coursesRepo.findLessonNodeById(req.params.id);
     if (!node) return fail(res, 404, 'Live class not found');
     const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds.map(String) : [];
     if (userIds.length === 0) return fail(res, 400, 'userIds is required');
-    const now = new Date().toISOString();
     const added = [];
     for (const userId of userIds) {
-      const user = db.users.find((u) => u.id === userId && u.role === 'student');
-      if (!user) continue;
-      const existing = db.liveClassStudents.find((item) => item.lessonNodeId === node.id && item.studentId === userId);
-      if (existing) continue;
-      const liveStudent: LiveClassStudent = {
-        id: crypto.randomUUID(),
-        lessonNodeId: node.id,
-        studentId: userId,
-        source: 'manual',
-        joinedAt: now
-      };
-      db.liveClassStudents.push(liveStudent);
-      added.push({ ...liveStudent, user: publicUser(user) });
+      const user = await usersRepo.findById(userId);
+      if (!user || user.role !== 'student') continue;
+      const liveStudent = await liveRepo.addClassStudent(node.id, userId, 'manual');
+      added.push({ ...liveStudent, user });
     }
-    await writeDb(db);
     ok(res, added);
   });
 
   app.patch('/api/v1/lesson-nodes/:id', async (req, res) => {
-    const db = await readDb();
-    const node = db.lessonNodes.find((n) => n.id === req.params.id);
-    if (!node) return fail(res, 404, 'Lesson node not found');
-
     const { title, startsAt, endsAt, status, defaultCoursewareFileId } = req.body ?? {};
-    if (title !== undefined) node.title = String(title);
-    if (startsAt !== undefined) node.startsAt = startsAt || undefined;
-    if (endsAt !== undefined) node.endsAt = endsAt || undefined;
-    if (status !== undefined) node.status = status as LessonNode['status'];
-    if (defaultCoursewareFileId !== undefined) (node as any).defaultCoursewareFileId = defaultCoursewareFileId || undefined;
-    node.updatedAt = new Date().toISOString();
-
-    await writeDb(db);
+    const node = await coursesRepo.updateLessonNode(req.params.id, {
+      title: title !== undefined ? String(title) : undefined,
+      startsAt: startsAt !== undefined ? startsAt || null : undefined,
+      endsAt: endsAt !== undefined ? endsAt || null : undefined,
+      status: status !== undefined ? String(status) : undefined,
+      defaultCoursewareFileId: defaultCoursewareFileId !== undefined ? defaultCoursewareFileId || null : undefined,
+    });
+    if (!node) return fail(res, 404, 'Lesson node not found');
     ok(res, node);
   });
 
@@ -1609,7 +1550,7 @@ export function createApp() {
     const db = await readDb();
     const lessonNodeId = String(req.query.lessonNodeId || '');
     if (lessonNodeId) {
-      const node = db.assignmentNodes.find((a) => a.lessonNodeId === lessonNodeId);
+      const node = await assignmentsRepo.findAssignmentNodeByLessonNodeId(lessonNodeId);
       return ok(res, node || null);
     }
     ok(res, db.assignmentNodes);
