@@ -241,6 +241,17 @@ export function createApp() {
   app.post('/api/v1/courses', async (req, res) => {
     const teacherId = currentUserId(req) || 'teacher-1';
     const title = String(req.body?.title || 'New Chinese Course');
+
+    // If classId provided, verify the class belongs to this teacher (or user is admin)
+    if (req.body?.classId) {
+      const cls = await classesRepo.findById(String(req.body.classId));
+      if (!cls) return fail(res, 404, 'Class not found');
+      const teacherUser = await usersRepo.findById(teacherId);
+      if (teacherUser?.role !== 'admin' && cls.teacherId !== teacherId) {
+        return fail(res, 403, 'Class does not belong to you');
+      }
+    }
+
     const course = await coursesRepo.create({
       teacherId,
       title,
@@ -426,6 +437,26 @@ export function createApp() {
   });
 
   app.patch('/api/v1/courses/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const course = await coursesRepo.findById(req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (user.role !== 'admin' && course.teacherId !== userId) {
+      return fail(res, 403, 'Forbidden');
+    }
+
+    // If setting classId, verify ownership
+    if (req.body?.classId !== undefined) {
+      const cls = await classesRepo.findById(String(req.body.classId));
+      if (!cls) return fail(res, 404, 'Class not found');
+      if (user.role !== 'admin' && cls.teacherId !== userId) {
+        return fail(res, 403, 'Class does not belong to you');
+      }
+    }
+
     const { title, description, status, classId, defaultCoursewareFileId } = req.body ?? {};
     const updated = await coursesRepo.update(req.params.id, {
       title: title !== undefined ? String(title) : undefined,
@@ -478,9 +509,22 @@ export function createApp() {
   });
 
   app.get('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
     const cls = await classesRepo.findById(req.params.id);
     if (!cls) return fail(res, 404, 'Class not found');
-    ok(res, cls);
+
+    // Admin can view any class; teacher only own; student only if member
+    if (user.role === 'admin') return ok(res, cls);
+    if (user.role === 'teacher' && cls.teacherId === userId) return ok(res, cls);
+    if (user.role === 'student') {
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      if (classIds.includes(cls.id)) return ok(res, cls);
+    }
+    return fail(res, 403, 'Forbidden');
   });
 
   app.patch('/api/v1/classes/:id', async (req, res) => {
@@ -512,13 +556,28 @@ export function createApp() {
   // ─── Class Members API (S5-T02) ───
 
   app.get('/api/v1/classes/:id/members', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
     const cls = await classesRepo.findById(req.params.id);
     if (!cls) return fail(res, 404, 'Class not found');
+
+    // Admin can view any class members; teacher only own; student only if member
+    if (user.role === 'admin') { /* allow */ }
+    else if (user.role === 'teacher' && cls.teacherId === userId) { /* allow */ }
+    else if (user.role === 'student') {
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      if (!classIds.includes(cls.id)) return fail(res, 403, 'Forbidden');
+    } else {
+      return fail(res, 403, 'Forbidden');
+    }
+
     const members = await classesRepo.findMembers(req.params.id);
-    // Enrich with user info
     const enriched = await Promise.all(members.map(async (m) => {
-      const user = await usersRepo.findById(m.studentId);
-      return { ...m, displayName: user?.displayName ?? '', languagePref: user?.languagePref ?? 'zh' };
+      const u = await usersRepo.findById(m.studentId);
+      return { ...m, displayName: u?.displayName ?? '', languagePref: u?.languagePref ?? 'zh' };
     }));
     ok(res, enriched);
   });
@@ -573,6 +632,26 @@ export function createApp() {
 
     const removed = await classesRepo.removeMember(req.params.id, req.params.studentId);
     if (!removed) return fail(res, 404, 'Member not found');
+
+    // Also clean up derived course_members for class-bound courses
+    const studentId = req.params.studentId;
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const classCourseIds = db.courses.filter((c) => (c as any).classId === req.params.id).map((c: any) => c.id);
+      db.courseMembers = db.courseMembers.filter(
+        (m) => !(classCourseIds.includes(m.courseId) && m.userId === studentId)
+      );
+      await writeDb(db);
+    } else {
+      const classCourseRows = await queryRows('SELECT id FROM courses WHERE class_id = $1', [req.params.id]);
+      for (const row of classCourseRows) {
+        await query(
+          `UPDATE course_members SET removed_at = now() WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL`,
+          [row.id, studentId]
+        );
+      }
+    }
+
     ok(res, { removed: true });
   });
 

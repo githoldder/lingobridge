@@ -8,11 +8,11 @@
     "不展开非关键内部实现细节"
   ],
   "implementationStatus": {
-    "summary": "Sprint 4 进入缺陷收敛：admin logout 已由用户确认可用；本轮补默认头像本地化、作业俄语 TTS、僵尸学习记录清理、PDF 渲染失败定位和 drawing 白屏高概率链路修复。后续按 OKRTS 最小可行步骤优先清零 PDF/Live/学习记录风险。",
+    "summary": "Sprint 4 进入缺陷收敛 + S5-T02 班级绑定完成。S5-T02 包含完整班级 CRUD API、班级成员管理、课程 classId 绑定及 defaultCoursewareFileId 支持。23/23 后端测试通过，lint/build 通过。下一步可继续 O1 余项 (S5-T03/T04) 或进入 O2 精细化作业。",
     "verification": {
       "lint": "passed: npm run lint",
       "build": "passed: npm run build",
-      "backendTests": "pending: must rerun after Sprint 3 fixes",
+      "backendTests": "passed: 23/23 (JSON mode, includes 7 S5-T02 tests)",
       "e2eTests": "pending: current defect list not covered",
       "prdJson": "passed: JSON parse after 2026-05-22 OKRTS update"
     },

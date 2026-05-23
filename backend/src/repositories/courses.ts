@@ -43,6 +43,7 @@ function mapLessonNode(row: Record<string, any>): LessonNodeDto {
     colorToken: row.color_token ?? row.colorToken ?? 'blue',
     shapeToken: row.shape_token ?? row.shapeToken ?? 'circle',
     status: row.status,
+    defaultCoursewareFileId: row.default_courseware_file_id ?? row.defaultCoursewareFileId ?? undefined,
     assignmentNodeId: row.assignment_node_id ?? row.assignmentNodeId,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt,

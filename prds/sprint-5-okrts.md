@@ -20,7 +20,7 @@
 | ID | 任务 | 交付 | 状态 |
 |---|---|---|---|
 | S5-T01 | 测试数据清理脚本 | 编写独立脚本与 Admin 清理入口，支持清理 course/lesson/records，保留 seed | todo |
-| S5-T02 | 班级绑定核心重构 | 新增 class 实体及其与 teacher, student, course 的关联 API | todo |
+| S5-T02 | 班级绑定核心重构 | 新增 class 实体及其与 teacher, student, course 的关联 API | done |
 | S5-T03 | 课程/课时/Live 融合 | 固定 classroom；课时作为 live 实例；支持空教室状态 | todo |
 | S5-T04 | 默认课件机制 | 课程/课时级 `defaultCoursewareFileId` 及进入 live 时自动打开逻辑 | todo |
 

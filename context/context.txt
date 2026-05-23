@@ -419,3 +419,47 @@ Action: Resolve manual testing PDF upload blockers via intelligent lessonNodeId 
 3. `src/components/TeacherCoursesView.tsx`: Added `lessonNodesApi` import and upgraded "Enter Classroom" action to pre-emptively load and write the first valid lesson node ID into `localStorage` during list entry.
 [Plan] | Created task.md and starting S5-T01 | Done
 [Execution] | S5-T01 Done. DB schema and cleanup script created | Done
+
+---
+
+# S5-T02: Class binding core refactoring & API — Verified Complete
+Date: 2026-05-23
+Action: Full class CRUD, members API, course binding, defaultCoursewareFileId — tested and confirmed.
+
+## Verification
+- `npm run backend:test`: 23/23 passed (7 S5-T02 specific tests)
+- `npm run lint`: PASSED
+- `npm run build`: PASSED
+
+## What was already implemented (found on arrival)
+- `backend/src/repositories/classes.ts`: Full dual-mode (JSON + Postgres) Class CRUD + members repository
+- `backend/src/app.ts`: All Class CRUD + Members API routes registered
+- `backend/src/repositories/courses.ts`: `classId` + `defaultCoursewareFileId` in create/update/query; `findByTeacherId` includes class-owned courses; `findByStudentId` includes class-inherited courses
+- `backend/db/init/001_lingobridge_schema.sql`: `classes` + `class_members` tables with proper CASCADE/SET NULL
+- `backend/db/seed.sql`: Demo class + class members
+- `backend/tests/api.test.ts`: 7 S5-T02 tests covering all scenarios
+
+## Fix applied during audit
+- `backend/src/repositories/courses.ts`: Added `defaultCoursewareFileId` mapping in `mapLessonNode()` — DTO had the field but mapper was omitting it
+
+## API Summary
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/v1/classes | List classes (teacher=own, student=member, admin=all) |
+| POST | /api/v1/classes | Create class (teacher only) |
+| GET | /api/v1/classes/:id | Get class detail |
+| PATCH | /api/v1/classes/:id | Update class (owner only) |
+| DELETE | /api/v1/classes/:id | Delete class (owner only, CASCADE handles members, SET NULL on courses) |
+| GET | /api/v1/classes/:id/members | List class members (enriched with user info) |
+| POST | /api/v1/classes/:id/members | Add student (validates role=student, idempotent, auto-adds to class-bound courses) |
+| DELETE | /api/v1/classes/:id/members/:studentId | Remove student from class |
+
+## Course inheritance logic
+- `POST /api/v1/courses` with `classId` auto-adds all class members as course members
+- Student `GET /api/v1/courses` includes courses from their class memberships
+- Teacher `GET /api/v1/courses` includes courses in classes they own + direct courses
+- `defaultCoursewareFileId` supported in CourseDto, create, update — both API and DB snake_case mapped
+
+## Remaining risk
+- Postgres mode `DB_MODE=postgres npm run backend:test` still has known failures (pre-existing, not introduced by S5-T02)
+- `mapLessonNode` fix was cosmetic (missing field mapping); no functional impact

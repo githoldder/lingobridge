@@ -799,9 +799,58 @@ test('teacher can update and delete a class', async () => {
     assert.equal(delJson.code, 0);
     assert.equal(delJson.data.deleted, true);
 
-    // Verify gone
-    const get = await fetch(`${baseUrl}/api/v1/classes/${classId}`);
+    // Verify gone (admin can see 404)
+    const get = await fetch(`${baseUrl}/api/v1/classes/${classId}`, {
+      headers: { Authorization: 'Bearer admin-1' }
+    });
     assert.equal((await get.json()).code, 404);
+  });
+});
+
+test('other teacher cannot bind course to another teacher\'s class', async () => {
+  await withServer(async (baseUrl) => {
+    // teacher-1 creates a class
+    const cls = await fetch(`${baseUrl}/api/v1/classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer teacher-1' },
+      body: JSON.stringify({ name: '王老师班' })
+    });
+    const classId = (await cls.json()).data.id;
+
+    // Register another teacher
+    const otherReg = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'other_teacher_classid@test.com',
+        password: 'Test@123456',
+        displayName: '李老师',
+        role: 'teacher'
+      })
+    });
+    const otherToken = (await otherReg.json()).data.token;
+
+    // Other teacher cannot create a course bound to teacher-1's class
+    const createRes = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({ title: '非法绑定', classId })
+    });
+    assert.equal(createRes.status, 403);
+
+    // Other teacher cannot PATCH a course to bind teacher-1's class
+    const ownCourse = await fetch(`${baseUrl}/api/v1/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({ title: '自己课程' })
+    });
+    const courseId = (await ownCourse.json()).data.id;
+    const patchRes = await fetch(`${baseUrl}/api/v1/courses/${courseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({ classId })
+    });
+    assert.equal(patchRes.status, 403);
   });
 });
 
