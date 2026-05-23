@@ -9,6 +9,7 @@ You are testing the LingoBridge MVP after the backend/frontend API integration.
 Read:
 
 - `prds/prd.md`
+- `prds/sprints/sprint-06-prelaunch-smoke-deploy.md`
 - `context/project-brief.md`
 - `.agent/rules/mvp-scope.md`
 

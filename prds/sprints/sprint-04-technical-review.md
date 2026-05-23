@@ -5,7 +5,7 @@
 
 ## 1. 当前 PRD 是否已覆盖这些技术
 
-`prds/prd.md` / `prds/prd.json` 已经提到：
+`prds/current/` baseline、`prds/sprints/sprint-04-data-pdf-course-okrts.md` 和兼容入口 `prds/prd.json` 已经提到：
 
 - PDF/PPTX 上传与课堂渲染解耦，PDF 使用缓存页，画笔需要与 PDF/canvas 分层。
 - `lesson_node`、`assignment_node`、`live_session.lessonNodeId` 的一对一规则。

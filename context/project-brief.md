@@ -20,9 +20,9 @@ Prepare the project for the first MVP demo/public test on 2026-05-15. The demo m
 ## Current Repo State
 
 - Vite/React frontend prototype lives at repository root.
-- No backend exists yet.
-- Several demo-critical paths are still mock-only.
-- `prds/prd.md` and `prds/prd.json` define the current execution contract.
+- Node/Express backend lives under `backend/`, with JSON fallback and Postgres deployment path.
+- Demo-critical paths now use split sprint PRDs under `prds/sprints/`.
+- `prds/prd.md` is the PRD navigation entry; `prds/prd.json` is retained for legacy machine-readable workflows.
 
 ## Critical Requirements
 
@@ -42,4 +42,3 @@ Prepare the project for the first MVP demo/public test on 2026-05-15. The demo m
 - Multi-tenant SaaS.
 - AI pronunciation scoring.
 - International payment.
-

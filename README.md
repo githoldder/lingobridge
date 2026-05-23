@@ -8,8 +8,10 @@ The current codebase is still a Vite/React prototype at the repository root. Thi
 
 | Document | Purpose |
 |---|---|
-| [PRD control plan](./prds/prd.md) | Human-readable MVP execution plan based on the approved PRD v2.0 |
-| [PRD task package](./prds/prd.json) | Machine-readable task package for AI delegation and audit |
+| [PRD index](./prds/prd.md) | Human-readable navigation entry for split PRD files |
+| [PRD maintenance guide](./prds/README.md) | Rules for reading, writing, and archiving PRD files |
+| [Sprint PRDs](./prds/sprints/) | Canonical sprint-numbered execution plans |
+| [PRD task package](./prds/prd.json) | Legacy machine-readable package for older AI delegation prompts |
 | [Project brief](./context/project-brief.md) | Short context for new contributors and AI workers |
 | [Agent guide](./Agent.md) | AI workflow, rules, and folder conventions |
 
