@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, 
   BookOpen, 
@@ -12,6 +12,7 @@ import {
 import { motion } from 'motion/react';
 
 import { useLanguage } from '../context/LanguageContext.tsx';
+import { coursesApi, courseMembersApi, homeworkApi, type Course } from '../services/apiClient.ts';
 
 interface TeacherDashboardViewProps {
   onNavigate?: (target: string) => void;
@@ -19,18 +20,41 @@ interface TeacherDashboardViewProps {
 
 const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [studentSeats, setStudentSeats] = useState(0);
+  const [taskCount, setTaskCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const data = await coursesApi.list().catch(() => []);
+      const [members, tasks] = await Promise.all([
+        Promise.all(data.map((course) => courseMembersApi.list(course.id).catch(() => []))),
+        Promise.all(data.map((course) => homeworkApi.tasks(course.id, { includeAll: true }).catch(() => []))),
+      ]);
+      if (!active) return;
+      setCourses(data);
+      setStudentSeats(members.flat().length);
+      setTaskCount(tasks.flat().length);
+    }
+    load();
+    return () => { active = false; };
+  }, []);
+
   const stats = [
-    { label: t('nav.students'), value: '124', icon: Users, color: 'bg-blue-50 text-blue-600', trend: '+12%' },
-    { label: t('nav.courses'), value: '12', icon: BookOpen, color: 'bg-red-50 text-red-600', trend: '+2' },
-    { label: t('classroom.recording'), value: '450', icon: Clock, color: 'bg-green-50 text-green-600', trend: '+85h' },
-    { label: t('nav.reports'), value: '78%', icon: TrendingUp, color: 'bg-purple-50 text-purple-600', trend: '+5%' },
+    { label: t('nav.students'), value: String(studentSeats), icon: Users, color: 'bg-blue-50 text-blue-600' },
+    { label: t('nav.courses'), value: String(courses.length), icon: BookOpen, color: 'bg-red-50 text-red-600' },
+    { label: t('course_homework.tasks_parsed'), value: String(taskCount), icon: Clock, color: 'bg-green-50 text-green-600' },
+    { label: t('nav.reports'), value: courses.length > 0 ? t('course.published') : t('course.draft'), icon: TrendingUp, color: 'bg-purple-50 text-purple-600' },
   ];
 
-  const upcomingClasses = [
-    { time: '10:00 AM', title: t('course.hsk1_unit4'), level: t('course.level1'), students: 12 },
-    { time: '02:30 PM', title: t('course.business_prep'), level: t('course.level4'), students: 8 },
-    { time: '04:00 PM', title: t('course.workshop'), level: t('course.mixed'), students: 25 },
-  ];
+  const upcomingClasses = useMemo(() => courses.slice(0, 3).map((course) => ({
+    id: course.id,
+    time: course.createdAt ? new Date(course.createdAt).toLocaleDateString() : '',
+    title: course.title,
+    level: course.status,
+    students: 0,
+  })), [courses]);
 
   return (
     <div id="teacher-dashboard" className="space-y-8 pb-12">
@@ -70,9 +94,6 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
               <div className={`p-3 rounded-2xl ${stat.color}`}>
                 <stat.icon size={24} />
               </div>
-              <span className="text-[10px] font-black text-green-500 bg-green-50 px-2 py-1 rounded-lg">
-                {stat.trend}
-              </span>
             </div>
             <div className="text-2xl font-black text-gray-900">{stat.value}</div>
             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">{stat.label}</div>
@@ -92,16 +113,20 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
           </div>
           
           <div className="space-y-4">
-            {upcomingClasses.map((item, i) => (
+            {upcomingClasses.length === 0 ? (
+              <div className="bg-white p-8 rounded-3xl border border-gray-100 text-center text-gray-400 font-bold">
+                {t('course.loading')}
+              </div>
+            ) : upcomingClasses.map((item) => (
               <button
-                key={i}
+                key={item.id}
                 onClick={() => onNavigate?.('teacher-courses')}
                 className="w-full text-left bg-white p-4 md:p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group hover:border-[#0056D2] transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-4 md:gap-6">
                   <div className="bg-gray-50 px-3 py-2 md:px-4 md:py-3 rounded-2xl text-center border border-gray-100 group-hover:bg-blue-50 transition-colors min-w-[60px]">
-                    <div className="text-[10px] md:text-xs font-black text-[#0056D2]">{item.time.split(' ')[1]}</div>
-                    <div className="text-base md:text-lg font-black text-gray-900 leading-none">{item.time.split(' ')[0]}</div>
+                    <div className="text-[10px] md:text-xs font-black text-[#0056D2]">{t('course.created')}</div>
+                    <div className="text-xs font-black text-gray-900 leading-none">{item.time}</div>
                   </div>
                   <div>
                     <h4 className="font-bold text-gray-800 text-sm md:text-base">{item.title}</h4>
@@ -129,19 +154,19 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
               <div>
                 <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
                    <span>{t('teacher.quiz_completion')}</span>
-                  <span className="text-gray-900">92%</span>
+                  <span className="text-gray-900">{taskCount}</span>
                 </div>
                 <div className="w-full bg-gray-50 h-3 rounded-full overflow-hidden border border-gray-100">
-                  <div className="bg-blue-500 h-full w-[92%]" />
+                  <div className="bg-blue-500 h-full" style={{ width: `${Math.min(100, taskCount * 10)}%` }} />
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
                   <span>{t('teacher.student_satisfaction')}</span>
-                  <span className="text-gray-900">4.9/5.0</span>
+                  <span className="text-gray-900">{studentSeats}</span>
                 </div>
                 <div className="w-full bg-gray-50 h-3 rounded-full overflow-hidden border border-gray-100">
-                  <div className="bg-green-500 h-full w-[98%]" />
+                  <div className="bg-green-500 h-full" style={{ width: `${Math.min(100, studentSeats * 20)}%` }} />
                 </div>
               </div>
             </div>
@@ -152,7 +177,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
                 <ArrowUpRight size={18} className="text-red-400" />
               </div>
               <p className="text-sm font-bold text-red-900 leading-snug font-noto">
-                {t('teacher.homework_reminder')}
+                {taskCount > 0 ? t('teacher.homework_reminder') : t('course_homework.no_tasks_download')}
               </p>
               <button className="mt-4 text-xs font-black text-red-600 hover:underline">
                 {t('teacher.remind_all')}
@@ -163,24 +188,18 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onNavigate 
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
             <h3 className="text-lg font-bold text-gray-900 mb-6">{t('teacher.recent_activity')}</h3>
             <div className="space-y-5">
-              {[
-                { type: 'submission', user: 'Anna Zhang', task: 'HSK 3 Quiz', time: '10 min ago' },
-                { type: 'enrollment', user: 'Mark Doe', task: 'Business Chinese', time: '1 hour ago' },
-                { type: 'message', user: 'Ivan Petrov', task: 'HSK 2 Question', time: '3 hours ago' },
-              ].map((activity, i) => (
+              {courses.slice(0, 3).map((course, i) => (
                 <div key={i} className="flex gap-4 items-start">
-                  <div className={`w-2 h-2 mt-2 rounded-full ${
-                    activity.type === 'submission' ? 'bg-green-400' : 
-                    activity.type === 'enrollment' ? 'bg-blue-400' : 'bg-red-400'
-                  }`} />
+                  <div className="w-2 h-2 mt-2 rounded-full bg-blue-400" />
                   <div>
                     <p className="text-sm text-gray-800">
-                      <span className="font-bold">{activity.user}</span> {activity.type === 'submission' ? t('teacher.activity_submitted') : activity.type === 'enrollment' ? t('teacher.activity_enrolled') : t('teacher.activity_messaged')} <span className="font-medium text-gray-500">{activity.task}</span>
+                      <span className="font-bold">{course.title}</span> <span className="font-medium text-gray-500">{course.status}</span>
                     </p>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">{activity.time}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(course.createdAt).toLocaleString()}</span>
                   </div>
                 </div>
               ))}
+              {courses.length === 0 && <div className="text-sm text-gray-400 font-bold">{t('course.loading')}</div>}
             </div>
             <button className="w-full mt-6 py-3 border border-gray-100 rounded-xl text-xs font-bold text-gray-400 hover:bg-gray-50 transition-colors uppercase tracking-widest">
               {t('teacher.view_audit')}

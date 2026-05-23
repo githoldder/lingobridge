@@ -13,6 +13,7 @@ function mapCourse(row: Record<string, any>): CourseDto {
     classId: row.class_id ?? row.classId ?? undefined,
     title: row.title,
     description: row.description,
+    coverImageUrl: row.cover_image_url ?? row.coverImageUrl ?? undefined,
     status: row.status,
     startsAt: row.starts_at ?? row.startsAt,
     endsAt: row.ends_at ?? row.endsAt,
@@ -66,7 +67,7 @@ export async function findByTeacherId(teacherId: string): Promise<CourseDto[]> {
   if (getDbMode() === 'json') {
     const db = await readDb();
     // Teacher's own courses + courses in classes they own
-    const classIds = db.classes.filter((c) => c.teacherId === teacherId).map((c) => c.id);
+    const classIds = (db.classes || []).filter((c) => c.teacherId === teacherId).map((c) => c.id);
     return db.courses
       .filter((c) => c.teacherId === teacherId || classIds.includes(c.classId ?? ''))
       .map(mapCourse);
@@ -86,7 +87,7 @@ export async function findByStudentId(studentId: string): Promise<CourseDto[]> {
     const db = await readDb();
     const memberOf = db.courseMembers.filter((m) => m.userId === studentId).map((m) => m.courseId);
     // Also include courses from class membership
-    const classIds = db.classMembers.filter((m) => m.studentId === studentId).map((m) => m.classId);
+    const classIds = (db.classMembers || []).filter((m) => m.studentId === studentId).map((m) => m.classId);
     const classCourseIds = db.courses.filter((c) => classIds.includes(c.classId ?? '')).map((c) => c.id);
     const allIds = new Set([...memberOf, ...classCourseIds]);
     return db.courses.filter((c) => allIds.has(c.id)).map(mapCourse);
@@ -123,6 +124,7 @@ export async function create(data: { teacherId: string; title: string; descripti
       classId: data.classId ?? null,
       title: data.title,
       description: data.description ?? '',
+      coverImageUrl: (data as any).coverImageUrl ?? null,
       createdAt: now,
       updatedAt: now,
       status: data.status ?? 'published',
@@ -141,7 +143,13 @@ export async function create(data: { teacherId: string; title: string; descripti
   return mapCourse(row!);
 }
 
-export async function update(id: string, data: Partial<{ title: string; description: string; status: string; startsAt: string; endsAt: string; classId: string | null; defaultCoursewareFileId: string | null }>): Promise<CourseDto | null> {
+async function ensureCourseCoverColumn() {
+  if (getDbMode() !== 'json') {
+    await query('ALTER TABLE courses ADD COLUMN IF NOT EXISTS cover_image_url text');
+  }
+}
+
+export async function update(id: string, data: Partial<{ title: string; description: string; coverImageUrl: string; status: string; startsAt: string; endsAt: string; classId: string | null; defaultCoursewareFileId: string | null }>): Promise<CourseDto | null> {
   if (getDbMode() === 'json') {
     const db = await readDb();
     const idx = db.courses.findIndex((c) => c.id === id);
@@ -155,6 +163,11 @@ export async function update(id: string, data: Partial<{ title: string; descript
   let i = 1;
   if (data.title !== undefined) { sets.push(`title = $${i++}`); vals.push(data.title); }
   if (data.description !== undefined) { sets.push(`description = $${i++}`); vals.push(data.description); }
+  if (data.coverImageUrl !== undefined) {
+    await ensureCourseCoverColumn();
+    sets.push(`cover_image_url = $${i++}`);
+    vals.push(data.coverImageUrl || null);
+  }
   if (data.status !== undefined) { sets.push(`status = $${i++}`); vals.push(data.status); }
   if (data.startsAt !== undefined) { sets.push(`starts_at = $${i++}`); vals.push(data.startsAt); }
   if (data.endsAt !== undefined) { sets.push(`ends_at = $${i++}`); vals.push(data.endsAt); }
@@ -213,6 +226,32 @@ export async function removeMember(courseId: string, userId: string): Promise<bo
     `UPDATE course_members SET removed_at = now() WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL`,
     [courseId, userId]
   );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function deleteById(id: string): Promise<boolean> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const idx = db.courses.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    db.courses.splice(idx, 1);
+    db.courseMembers = db.courseMembers.filter((m) => m.courseId !== id);
+    db.lessonNodes = db.lessonNodes.filter((n) => n.courseId !== id);
+    db.assignmentNodes = db.assignmentNodes.filter((n) => n.courseId !== id);
+    db.coursePages = db.coursePages.filter((p) => p.courseId !== id);
+    db.exercises = db.exercises.filter((e) => e.courseId !== id);
+    db.learningTasks = db.learningTasks.filter((t) => t.courseId !== id);
+    db.vocabularyItems = db.vocabularyItems.filter((v) => v.courseId !== id);
+    db.recordings = db.recordings.filter((r) => r.courseId !== id);
+    db.lectures = db.lectures.filter((l) => l.courseId !== id);
+    db.liveSessions = db.liveSessions.filter((s) => s.courseId !== id);
+    db.files = db.files.filter((f) => f.courseId !== id);
+    db.coursewareFiles = db.coursewareFiles.filter((f) => f.courseId !== id);
+    db.homeworkImports = db.homeworkImports.filter((h) => h.courseId !== id);
+    await writeDb(db);
+    return true;
+  }
+  const result = await query('DELETE FROM courses WHERE id = $1', [id]);
   return (result.rowCount ?? 0) > 0;
 }
 

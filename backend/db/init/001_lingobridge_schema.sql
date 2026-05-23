@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS courses (
   class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
   title text NOT NULL,
   description text NOT NULL DEFAULT '',
+  cover_image_url text,
   status course_status NOT NULL DEFAULT 'draft',
   starts_at timestamptz,
   ends_at timestamptz,

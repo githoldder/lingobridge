@@ -11,8 +11,6 @@ import {
   Plus,
   Trash2,
   Edit2,
-  CheckCircle,
-  X,
   Loader2,
   FileText,
   Play,
@@ -32,6 +30,7 @@ import {
   lessonNodesApi,
   fileToBase64,
   type Course,
+  type LiveSessionData,
 } from '../services/apiClient.ts';
 import { styleFromSeed } from '../utils/styleFromSeed.ts';
 
@@ -81,7 +80,7 @@ interface LiveSession {
   lessonNodeId?: string;
 }
 
-type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework' | 'live';
+type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework';
 
 interface TeacherCourseDetailViewProps {
   courseId: string;
@@ -96,7 +95,6 @@ const TABS: { key: TabKey; icon: React.ReactNode }[] = [
   { key: 'schedule', icon: <Clock size={16} /> },
   { key: 'courseware', icon: <UploadCloud size={16} /> },
   { key: 'homework', icon: <FileSpreadsheet size={16} /> },
-  { key: 'live', icon: <Video size={16} /> },
 ];
 
 const ShapeIcon: React.FC<{ shape: string; size?: number; color?: string }> = ({ shape, size = 20, color = 'currentColor' }) => {
@@ -230,9 +228,8 @@ export default function TeacherCourseDetailView({ courseId, onNavigate, onBack, 
         {activeTab === 'info' && <CourseInfoTab course={course} onSave={loadCourse} t={t} />}
         {activeTab === 'students' && <StudentsTab courseId={courseId} t={t} />}
         {activeTab === 'courseware' && <CoursewareTab courseId={courseId} t={t} />}
-        {activeTab === 'schedule' && <ScheduleTab courseId={courseId} t={t} />}
+        {activeTab === 'schedule' && <ScheduleTab courseId={courseId} t={t} onEnterLive={onEnterLive} />}
         {activeTab === 'homework' && <HomeworkTab courseId={courseId} t={t} />}
-        {activeTab === 'live' && <LiveTab courseId={courseId} t={t} onEnterLive={onEnterLive} />}
       </motion.div>
     </div>
   );
@@ -284,6 +281,7 @@ function LiveClassSelect({
 function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => void; t: (k: string) => string }) {
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description);
+  const [coverImageUrl, setCoverImageUrl] = useState(course.coverImageUrl || '');
   const [status, setStatus] = useState(course.status);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -293,6 +291,30 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
     setMessage('');
     try {
       await coursesApi.update(course.id, { title, description, status });
+      setMessage(t('course_info.saved'));
+      onSave();
+    } catch (e: any) {
+      setMessage(e.message || t('course_info.save_failed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCoverUpload = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage(t('course_info.cover_invalid'));
+      return;
+    }
+    const base64 = await fileToBase64(file);
+    setCoverImageUrl(`data:${file.type};base64,${base64}`);
+  };
+
+  const handleSaveWithCover = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await coursesApi.update(course.id, { title, description, status, coverImageUrl });
       setMessage(t('course_info.saved'));
       onSave();
     } catch (e: any) {
@@ -342,11 +364,15 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
           <label className="block text-sm font-bold text-gray-600 mb-1">{t('course_info.cover_image')}</label>
           <div className="flex items-center gap-4">
             <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-blue-50 to-slate-100 flex items-center justify-center border border-gray-200">
-              <BookOpen size={32} className="text-[#0056D2]" />
+              {coverImageUrl ? (
+                <img src={coverImageUrl} alt={title} className="w-full h-full rounded-xl object-cover" />
+              ) : (
+                <BookOpen size={32} className="text-[#0056D2]" />
+              )}
             </div>
             <label className="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors">
               {t('course_info.upload_cover')}
-              <input type="file" accept="image/*" className="hidden" />
+              <input type="file" accept="image/*" className="hidden" onChange={e => handleCoverUpload(e.target.files?.[0])} />
             </label>
           </div>
         </div>
@@ -361,7 +387,7 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
       )}
 
       <button
-        onClick={handleSave}
+        onClick={handleSaveWithCover}
         disabled={saving}
         className="flex items-center gap-2 px-6 py-2.5 bg-[#0056D2] text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all disabled:opacity-50"
       >
@@ -643,11 +669,13 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   );
 }
 
-function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => string }) {
+function ScheduleTab({ courseId, t, onEnterLive }: { courseId: string; t: (k: string) => string; onEnterLive?: (courseId: string, lessonNodeId: string) => void }) {
   const [nodes, setNodes] = useState<LessonNode[]>([]);
   const [members, setMembers] = useState<CourseMember[]>([]);
   const [files, setFiles] = useState<CoursewareFile[]>([]);
+  const [activeSession, setActiveSession] = useState<LiveSessionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingNodeId, setStartingNodeId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newStartsAt, setNewStartsAt] = useState('');
   const [newEndsAt, setNewEndsAt] = useState('');
@@ -661,12 +689,14 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
     try {
       const data = await lessonNodesApi.list(courseId);
       setNodes(data || []);
-      const [memberData, fileData] = await Promise.all([
+      const [memberData, fileData, sessionData] = await Promise.all([
         courseMembersApi.list(courseId).catch(() => []),
         coursewareFilesApi.list(courseId).catch(() => []),
+        liveSessionsApi.getActive(courseId).catch(() => null),
       ]);
       setMembers(memberData || []);
       setFiles(fileData || []);
+      setActiveSession(sessionData);
     } catch {
       setNodes([]);
     } finally {
@@ -703,6 +733,20 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       loadNodes();
     } catch {
       setMessage(t('course_schedule.update_failed'));
+    }
+  };
+
+  const startLiveClass = async (lessonNodeId: string) => {
+    setStartingNodeId(lessonNodeId);
+    setMessage('');
+    try {
+      const session = await liveSessionsApi.create(courseId, lessonNodeId, 'pdf');
+      setActiveSession(session);
+      onEnterLive?.(courseId, lessonNodeId);
+    } catch (e: any) {
+      setMessage(e.message || t('course_live.create_failed'));
+    } finally {
+      setStartingNodeId('');
     }
   };
 
@@ -836,6 +880,24 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                        node.status === 'completed' ? t('classroom.stopped') :
                        t('course_schedule.scheduled')}
                     </span>
+                    {activeSession?.lessonNodeId === node.id ? (
+                      <button
+                        onClick={() => onEnterLive?.(courseId, node.id)}
+                        className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-bold"
+                      >
+                        <Play size={12} />
+                        {t('course_live.enter')}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => startLiveClass(node.id)}
+                        disabled={!!startingNodeId}
+                        className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                      >
+                        {startingNodeId === node.id ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />}
+                        {t('course_live.create')}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1022,151 +1084,6 @@ CZU-CHN-001, 1, 1, CZU-CHN-001-L01-001, pronunciation, 大家好，我叫阿合�
               </ul>
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiveTab({ courseId, t, onEnterLive }: { courseId: string; t: (k: string) => string; onEnterLive?: (courseId: string, lessonNodeId: string) => void }) {
-  const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const [lessonNodes, setLessonNodes] = useState<LessonNode[]>([]);
-  const [selectedLessonNodeId, setSelectedLessonNodeId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [message, setMessage] = useState('');
-
-  const loadSessions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const active = await liveSessionsApi.getActive(courseId);
-      if (active) {
-        const sessionData = active as any;
-        setSessions([{
-          id: active.id,
-          title: '',
-          status: active.status,
-          startedAt: active.startedAt,
-          lessonNodeId: sessionData.lessonNodeId || '',
-        }]);
-      } else {
-        setSessions([]);
-      }
-    } catch {
-      setSessions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [courseId]);
-
-  const loadLessonNodes = useCallback(async () => {
-    try {
-      const data = await lessonNodesApi.list(courseId);
-      setLessonNodes(data || []);
-      if (data?.length > 0 && !selectedLessonNodeId) {
-        setSelectedLessonNodeId(data[0].id);
-      }
-    } catch {
-      setLessonNodes([]);
-    }
-  }, [courseId, selectedLessonNodeId]);
-
-  useEffect(() => { loadSessions(); loadLessonNodes(); }, [loadSessions, loadLessonNodes]);
-
-  const createLive = async () => {
-    if (!selectedLessonNodeId) {
-      setMessage(t('course_live.select_lesson'));
-      return;
-    }
-    setCreating(true);
-    setMessage('');
-    try {
-      const session = await liveSessionsApi.create(courseId, selectedLessonNodeId, 'screen');
-      setMessage(t('course_live.created'));
-      loadSessions();
-    } catch (e: any) {
-      setMessage(e.message || t('course_live.create_failed'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
-      <h2 className="text-lg font-extrabold text-gray-900">{t('course_live.title')}</h2>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-bold text-gray-600 mb-1">{t('course_live.select_lesson')}</label>
-          <select
-            value={selectedLessonNodeId}
-            onChange={e => setSelectedLessonNodeId(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
-          >
-            <option value="">{t('course_live.no_lessons')}</option>
-            {lessonNodes.map(n => (
-              <option key={n.id} value={n.id}>{n.title}</option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={createLive}
-          disabled={creating || !selectedLessonNodeId}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all disabled:opacity-50"
-        >
-          {creating ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
-          {t('course_live.create')}
-        </button>
-      </div>
-
-      {message && (
-        <div className={`text-sm font-bold px-4 py-2 rounded-xl ${
-          message.includes('failed') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
-        }`}>
-          {message}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="py-8 text-center text-gray-400 font-bold">{t('course.loading')}</div>
-      ) : sessions.length === 0 ? (
-        <div className="py-8 text-center text-gray-400 font-bold">{t('course_live.empty')}</div>
-      ) : (
-        <div className="space-y-3">
-          {sessions.map(s => (
-            <div key={s.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${s.status === 'active' ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{s.title || `Live ${s.id.slice(0, 8)}`}</p>
-                  <p className="text-xs text-gray-400">{new Date(s.startedAt).toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  s.status === 'active' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'
-                }`}>
-                  {s.status === 'active' ? t('classroom.live') : t('classroom.stopped')}
-                </span>
-                {s.recordingUrl && (
-                  <button className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500">
-                    <Download size={14} />
-                  </button>
-                )}
-                {s.status === 'active' && (
-                  <button
-                    onClick={() => s.lessonNodeId && onEnterLive?.(courseId, s.lessonNodeId)}
-                    disabled={!s.lessonNodeId}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                  >
-                    <Play size={12} />
-                    {t('course_live.enter')}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>

@@ -28,6 +28,7 @@ interface AgendaItem {
   title: string;
   startsAt?: string;
   endsAt?: string;
+  createdAt?: string;
   instructor: string;
   isLive: boolean;
 }
@@ -67,18 +68,17 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
 
           const courseTitle = course.title;
           for (const node of nodes) {
-            if (node.startsAt) {
-              items.push({
-                id: node.id,
-                courseId: course.id,
-                lessonNodeId: node.id,
-                title: node.title || courseTitle,
-                startsAt: node.startsAt,
-                endsAt: node.endsAt,
-                instructor: '',
-                isLive: active?.lessonNodeId === node.id && (active.status === 'active' || active.status === 'scheduled'),
-              });
-            }
+            items.push({
+              id: node.id,
+              courseId: course.id,
+              lessonNodeId: node.id,
+              title: node.title || courseTitle,
+              startsAt: node.startsAt,
+              endsAt: node.endsAt,
+              createdAt: (node as any).createdAt,
+              instructor: course.teacherId,
+              isLive: active?.lessonNodeId === node.id && (active.status === 'active' || active.status === 'scheduled'),
+            });
           }
 
           if (active) liveMap.set(course.id, active);
@@ -98,8 +98,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
 
         if (!cancelled) {
           items.sort((a, b) => {
-            if (!a.startsAt || !b.startsAt) return 0;
-            return a.startsAt.localeCompare(b.startsAt);
+            const aTime = a.startsAt || a.createdAt || '';
+            const bTime = b.startsAt || b.createdAt || '';
+            return aTime.localeCompare(bTime);
           });
           setAgenda(items);
           setLectures(allLectures);
@@ -139,7 +140,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
   }, [onNavigate]);
 
   const filteredAgenda = agenda.filter((item) => {
-    if (!item.startsAt) return false;
+    if (item.isLive || !item.startsAt) return true;
     const day = new Date(item.startsAt).getDate();
     return day === selectedDay;
   });
@@ -253,7 +254,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ onNavigate }) => {
                             <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
                               <span className="flex items-center gap-1.5">
                                 <Clock size={14} /> 
-                                {item.startsAt ? new Date(item.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                {item.startsAt ? new Date(item.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.isLive ? t('schedule.live_badge') : t('schedule.unscheduled') || 'Ready')}
                                 {item.endsAt ? ` - ${new Date(item.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                               </span>
                             </div>

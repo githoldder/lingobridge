@@ -35,6 +35,7 @@ export interface CourseDto {
   classId?: string;
   title: string;
   description: string;
+  coverImageUrl?: string;
   status: string;
   startsAt?: string;
   endsAt?: string;

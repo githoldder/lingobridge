@@ -175,3 +175,24 @@ export async function findClassStudents(lessonNodeId: string): Promise<LiveClass
   );
   return rows.map(mapClassStudent);
 }
+
+export async function addClassStudent(lessonNodeId: string, studentId: string, source = 'course_member'): Promise<LiveClassStudentDto> {
+  const now = new Date().toISOString();
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const existing = db.liveClassStudents.find((s) => s.lessonNodeId === lessonNodeId && s.studentId === studentId);
+    if (existing) return mapClassStudent(existing);
+    const row = { id: crypto.randomUUID(), lessonNodeId, studentId, source, joinedAt: now };
+    db.liveClassStudents.push(row as any);
+    await writeDb(db);
+    return mapClassStudent(row);
+  }
+  const row = await queryRow(
+    `INSERT INTO live_class_students (lesson_node_id, student_id, source)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (lesson_node_id, student_id) DO UPDATE SET removed_at = NULL
+     RETURNING *`,
+    [lessonNodeId, studentId, source]
+  );
+  return mapClassStudent(row!);
+}

@@ -477,6 +477,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Status',
     'course_info.cover_image': 'Cover Image',
     'course_info.upload_cover': 'Upload Cover',
+    'course_info.cover_invalid': 'Please upload an image file.',
     'course_info.save': 'Save Changes',
     'course_info.saved': 'Course information saved.',
     'course_info.save_failed': 'Failed to save course information.',
@@ -1076,6 +1077,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': '状态',
     'course_info.cover_image': '封面图片',
     'course_info.upload_cover': '上传封面',
+    'course_info.cover_invalid': '请上传图片文件。',
     'course_info.save': '保存修改',
     'course_info.saved': '课程信息已保存。',
     'course_info.save_failed': '保存课程信息失败。',
@@ -1674,6 +1676,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Статус',
     'course_info.cover_image': 'Обложка',
     'course_info.upload_cover': 'Загрузить обложку',
+    'course_info.cover_invalid': 'Загрузите файл изображения.',
     'course_info.save': 'Сохранить',
     'course_info.saved': 'Информация сохранена.',
     'course_info.save_failed': 'Не удалось сохранить информацию.',
@@ -2273,6 +2276,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Статус',
     'course_info.cover_image': 'Мұқаба',
     'course_info.upload_cover': 'Мұқаба жүктеу',
+    'course_info.cover_invalid': 'Сурет файлын жүктеңіз.',
     'course_info.save': 'Сақтау',
     'course_info.saved': 'Ақпарат сақталды.',
     'course_info.save_failed': 'Ақпаратты сақтау сәтсіз.',
@@ -2406,15 +2410,22 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
+const FALLBACK_ORDER: Language[] = ['zh', 'kk', 'ru', 'en'];
+
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>('zh');
 
   const t = (key: string, params?: Record<string, string>) => {
-    let translation = translations[language][key];
+    const langOrder = language === 'zh' ? FALLBACK_ORDER : [language, ...FALLBACK_ORDER.filter((l) => l !== language)];
+    let translation: string | undefined;
+    for (const lang of langOrder) {
+      translation = translations[lang][key];
+      if (translation) break;
+    }
     if (!translation) {
-      console.warn(`[i18n] Missing key: "${key}" for language: "${language}"`);
+      console.warn(`[i18n] Missing key: "${key}" for any language`);
       translation = key;
     }
     if (params) {

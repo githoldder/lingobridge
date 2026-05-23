@@ -19,10 +19,12 @@ import TeacherCourseDetailView from './TeacherCourseDetailView.tsx';
 import AdminDashboardView from './AdminDashboardView.tsx';
 import LoginView from './LoginView.tsx';
 import RegisterView from './RegisterView.tsx';
+import ASRDemoView from './ASRDemoView.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { LanguageProvider } from '../context/LanguageContext.tsx';
 import { AuthProvider, useAuth } from '../context/AuthContext.tsx';
+import { authApi } from '../services/apiClient.ts';
 import GuestGate from './GuestGate.tsx';
 
 export type UserRole = 'student' | 'teacher' | 'landing' | 'admin';
@@ -39,7 +41,8 @@ const PROTECTED_TABS = [
 ];
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('landing');
+  const [isDemoMode] = useState(() => new URLSearchParams(window.location.search).get('demo') === 'asr');
+  const [activeTab, setActiveTab] = useState(isDemoMode ? 'asr-demo' : 'landing');
   const [userRole, setUserRole] = useState<UserRole>('landing');
   const [prevTab, setPrevTab] = useState('dashboard');
   const [selectedCourseId, setSelectedCourseId] = useState('');
@@ -84,7 +87,8 @@ function AppContent() {
     if (target === 'dashboard' || target === 'schedule' || target === 'vocabulary' || target === 'homework' || target === 'student-classroom') setUserRole('student');
     if (target === 'teacher-dashboard' || target === 'teacher-courses' || target === 'students' || target === 'teacher-classroom' || target === 'reports' || target === 'teacher-course-detail') setUserRole('teacher');
     if (target === 'admin') {
-      if (user?.role !== 'admin') {
+      const currentUser = user ?? authApi.currentUser();
+      if (currentUser?.role !== 'admin') {
         console.warn('Non-admin user attempted to access admin panel');
         return;
       }
@@ -141,18 +145,22 @@ function AppContent() {
         return <TeacherReportsView />;
       case 'teacher-course-detail':
         return <TeacherCourseDetailView courseId={selectedCourseId} onNavigate={handleNavigate} onBack={() => handleNavigate('teacher-courses')} onEnterLive={(courseId, lessonNodeId) => { setNavContext({ courseId, lessonNodeId }); handleNavigate('teacher-classroom'); }} />;
-      case 'admin':
-        if (user?.role !== 'admin') {
+      case 'asr-demo':
+        return <ASRDemoView />;
+      case 'admin': {
+        const currentUser = user ?? authApi.currentUser();
+        if (currentUser?.role !== 'admin') {
           return <DashboardView onNavigate={handleNavigate} />;
         }
         return <AdminDashboardView onLogout={() => { logout(); handleNavigate('landing'); }} />;
+      }
       default:
         return userRole === 'teacher' ? <TeacherDashboardView /> : <DashboardView />;
     }
   };
 
   const isClassroom = activeTab === 'teacher-classroom' || activeTab === 'student-classroom';
-  const isFullScreen = activeTab === 'landing' || activeTab === 'login' || activeTab === 'register' || isClassroom || activeTab === 'admin';
+  const isFullScreen = activeTab === 'landing' || activeTab === 'login' || activeTab === 'register' || isClassroom || activeTab === 'admin' || activeTab === 'asr-demo';
 
   return (
     <>

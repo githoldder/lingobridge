@@ -39,6 +39,67 @@
       "15: Learning record persists after refresh"
     ]
   },
+  "closeoutExecutionList": {
+    "status": "final_pre_demo_closeout",
+    "objective": "不再扩大范围，只把老师端创建内容到学生端真实可见、作业俄语 TTS + 录音 + 提交、录制回放、演示材料这条链路收尾。",
+    "tasks": [
+      {
+        "id": "CLOSE-T01",
+        "title": "学生 Dashboard/Schedule 去 mock 化",
+        "status": "patched_verify_green",
+        "acceptance": "学生登录后 Dashboard/Schedule 基于真实 courses -> lesson_nodes -> live_sessions 渲染，未排期课时和正在直播的课时都可进入。"
+      },
+      {
+        "id": "CLOSE-T02",
+        "title": "Live 课堂默认课件同步",
+        "status": "patched_verify_green",
+        "acceptance": "老师上传或选择 PDF/PPTX 课件后，学生进入对应 live 能看到当前课时课件；无课件显示等待态。"
+      },
+      {
+        "id": "CLOSE-T03",
+        "title": "课堂录制与本地共享录屏",
+        "status": "patched_verify_green",
+        "acceptance": "点击录制时若没有摄像头/屏幕流，浏览器请求录屏；录制结束上传为 lecture 回放；本地共享时隐藏翻页栏。"
+      },
+      {
+        "id": "CLOSE-T04",
+        "title": "Drawing 设置抽屉化",
+        "status": "patched_verify_green",
+        "acceptance": "设置从左侧短抽屉弹出，默认隐藏；未全屏时不被底部控制栏遮挡。"
+      },
+      {
+        "id": "CLOSE-T05",
+        "title": "学生作业俄语 TTS + 录音 + 提交",
+        "status": "in_progress_next",
+        "acceptance": "学生从 Schedule/Homework 进入真实作业，播放俄语 TTS，录音，确认评分，最终提交为 homework_submission。"
+      },
+      {
+        "id": "CLOSE-T06",
+        "title": "演示数据清理与最小 seed",
+        "status": "todo_next",
+        "acceptance": "清理历史测试课程，只保留 1 老师、1 班级、2-3 学生、1 课程、1 课时、1 PDF、1 Excel 作业。"
+      },
+      {
+        "id": "CLOSE-T07",
+        "title": "三角色 E2E 最终脚本",
+        "status": "todo_next",
+        "acceptance": "覆盖老师创建课程/课时/上传课件/上传作业/开始 live，学生登录看到课程、进入 live、看到课件、进入作业并提交。"
+      },
+      {
+        "id": "CLOSE-T08",
+        "title": "演示视频与图文教程",
+        "status": "todo_after_green",
+        "acceptance": "端到端脚本跑通后，再录制演示视频并输出老师版/学生版图文教程。"
+      }
+    ],
+    "executionOrder": [
+      "先清理测试数据并固化最小 demo seed。",
+      "跑通老师创建课程 -> 上传课件/作业 -> 创建 live -> 学生 Schedule 看到入口 -> 学生进入 live 看到课件。",
+      "跑通学生作业 -> 俄语 TTS -> 录音 -> 确认 -> 提交。",
+      "补三角色 E2E，将上述两条主链路固定成回归脚本。",
+      "最后录演示视频和图文教程。"
+    ]
+  },
   "productBoundary": {
     "positioning": "LingoBridge 是面向哈萨克斯坦留学生的中文学习 MVP。",
     "coreLoop": [
@@ -1533,12 +1594,35 @@
           "文本输入不能用浏览器 prompt，必须在页面内出现动态输入框，像评论/标注一样直接落在 canvas 上。",
           "调色板支持取色和调色。"
         ]
+      },
+      {
+        "id": "LPR11",
+        "title": "全局 i18n 语言优先级",
+        "details": [
+          "系统全局默认语言第一顺位为中文 zh-CN。",
+          "面向哈萨克斯坦留学生的本地化第二顺位为哈萨克语 kk-KZ。",
+          "俄语 ru-RU 是第三顺位，用于教学辅助、TTS 和演示字幕补充。",
+          "英语 en-US 只作为最终 fallback 或开发兜底。",
+          "新增 i18n key、学习任务字段、翻译字段和演示脚本时，必须按 zh-CN -> kk-KZ -> ru-RU -> en-US 的顺序检查覆盖。"
+        ]
+      },
+      {
+        "id": "LPR12",
+        "title": "演示版 ASR 与双语翻译临时测试版",
+        "details": [
+          "为了演示完整版功能，允许加入免费方案 ASR 语音识别和双语翻译字幕临时测试版。",
+          "ASR/翻译只作为 demo/spike 能力，不进入正式课堂主链路的强依赖。",
+          "优先使用免费额度、免费试用或本地预生成 fallback，不承诺生产 SLA、无限额度或长期免费。",
+          "支持实时麦克风输入和预录音频 fallback；实时 API 失败时仍可展示预生成识别文本和双语字幕。",
+          "字幕语言遵循全局优先级：中文为主，哈萨克语优先于俄语，英语仅兜底。"
+        ]
       }
     ],
     "implementationNotes": [
       "Excel 上传本身暂不深究后续处理细节，重点是课程/课时/默认课件/学生同步和作业学习记录真实化。",
       "上述需求会影响 schema、API、教师课程详情页、学生 dashboard/schedule、live classroom、homework/vocabulary 两条学习链路。",
-      "实现时应先清理测试数据和固化班级/课程/课时模型，再改作业和单词缓存。"
+      "实现时应先清理测试数据和固化班级/课程/课时模型，再改作业和单词缓存。",
+      "上线前 sprint 允许用 feature flag 或 demo route 隔离 ASR/翻译临时测试版，用于演示完整能力，不阻塞主链路打包部署。"
     ]
   },
   "sprint4ExecutionPlan": {
@@ -2630,14 +2714,15 @@
   "speechDemoSprintPlan": {
     "id": "speech-demo-spike",
     "title": "候选 Sprint：语音演示与中俄双语字幕 Spike",
-    "status": "proposed_after_sprint4_core_green",
-    "updatedAt": "2026-05-21",
-    "objective": "在不打断 Sprint 4 课程/作业/Live/PDF/Admin 主链路的前提下，为上台演示提供高音质、低翻车风险的中俄语音播报和可选实时字幕验证。",
+    "status": "approved_for_demo_test_version_after_core_smoke",
+    "updatedAt": "2026-05-23",
+    "objective": "在不打断 Sprint 4 课程/作业/Live/PDF/Admin 主链路的前提下，为上台演示提供高音质、低翻车风险的中俄语音播报，并用免费方案做 ASR 语音识别和中/哈/俄双语字幕临时测试版，以体现完整版功能边界。",
     "nonGoals": [
       "不在 Sprint 4 内把实时 ASR/翻译字幕接入正式课堂主链路",
       "不承诺任何云厂商永久免费、不限流或无边界并发",
       "不使用 Edge TTS、浏览器 TTS 或本地开源 TTS 作为上台演示主音源",
-      "不把 Python 字幕 demo 当作正式产品功能交付"
+      "不把 Python 字幕 demo 当作正式产品功能交付",
+      "不承诺 ASR/翻译临时测试版具备生产 SLA、长期免费额度或课堂正式稳定性"
     ],
     "keyResults": [
       {
@@ -2657,8 +2742,13 @@
       },
       {
         "id": "KR-SD4",
-        "metric": "实时字幕 Spike 可回退",
-        "acceptance": "ASR/翻译字幕 demo 支持实时模式和预录音频 fallback；实时失败不影响主产品演示。"
+        "metric": "免费方案 ASR/翻译临时测试版可回退",
+        "acceptance": "ASR/翻译字幕 demo 优先使用免费额度或免费试用方案，支持实时模式和预录音频 fallback；实时失败不影响主产品演示。"
+      },
+      {
+        "id": "KR-SD4b",
+        "metric": "字幕语言顺序符合产品定位",
+        "acceptance": "字幕与翻译 fallback 顺序遵循 zh-CN -> kk-KZ -> ru-RU -> en-US；哈萨克语优先级高于俄语，英语仅兜底。"
       },
       {
         "id": "KR-SD5",
@@ -2696,7 +2786,7 @@
       "前置条件：先修复当前 TS errors、backend:test 失败和 dirty task 状态；Sprint 4 主链路至少达到 lint/build/backend:test green。",
       "先做离线 TTS 预生成和缓存播放，解决上台音质和断网风险。",
       "再做 provider adapter hardening，把火山/百度/Azure/ElevenLabs 放到同一 facade 后面。",
-      "最后做 ASR + 翻译 + 字幕独立 demo，不进入正式课堂主链路。"
+      "最后做免费方案 ASR + 翻译 + 字幕独立 demo，不进入正式课堂主链路；必须提供预录音频/预生成字幕 fallback。"
     ],
     "tasks": [
       {
@@ -2764,15 +2854,16 @@
         "status": "todo_after_sprint4_core_green",
         "suggestedAgent": "spike",
         "operations": [
-          "复核火山 ASR、Azure ASR、百度 ASR、火山翻译、DeepL 的官方额度、语种、认证和网络要求",
-          "实现 scripts/demo/realtime-subtitle-demo 或独立 demo 页面，接收麦克风或预录音频",
-          "输出中文/俄语识别文本和对应翻译字幕",
+          "复核火山 ASR、Azure ASR、百度 ASR、火山翻译、DeepL 以及可用免费方案的官方额度、语种、认证和网络要求",
+          "实现 scripts/demo/realtime-subtitle-demo 或独立 demo 页面，接收麦克风或预录音频，并通过 feature flag 或 demo route 与正式课堂隔离",
+          "输出中文识别文本和哈萨克语/俄语翻译字幕；英语仅作为兜底",
           "提供预录音频 fallback，实时 API 失败时仍可演示字幕效果"
         ],
         "acceptance": [
           "demo 与正式课堂代码隔离",
           "实时失败时可切到预录音频/预生成字幕",
-          "报告记录延迟、识别准确率、网络失败和额度消耗"
+          "报告记录延迟、识别准确率、网络失败和额度消耗",
+          "文案明确标注为临时测试版，不承诺生产 SLA 或长期免费"
         ]
       },
       {

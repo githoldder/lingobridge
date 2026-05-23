@@ -53,6 +53,7 @@ export interface Course {
   classId?: string;
   title: string;
   description: string;
+  coverImageUrl?: string;
   createdAt: string;
   updatedAt?: string;
   status: 'published' | 'draft';

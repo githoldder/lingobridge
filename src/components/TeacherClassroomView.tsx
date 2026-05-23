@@ -38,7 +38,9 @@ import {
   Square,
   Circle,
   Minus,
-  Pipette
+  Pipette,
+  Eraser,
+  ArrowUpRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
@@ -55,7 +57,7 @@ interface TeacherClassroomViewProps {
 }
 
 interface Stroke {
-  tool?: 'pen' | 'line' | 'rect' | 'ellipse' | 'text';
+  tool?: 'pen' | 'line' | 'rect' | 'ellipse' | 'text' | 'arrow';
   points: { x: number; y: number }[];
   color: string;
   width: number;
@@ -123,15 +125,18 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [isPdfType, setIsPdfType] = useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const recordingStartedAtRef = React.useRef<number>(0);
+  const recordingStreamRef = React.useRef<MediaStream | null>(null);
   const localStreamRef = React.useRef<MediaStream | null>(null);
   const screenStreamRef = React.useRef<MediaStream | null>(null);
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
+  const [controlsPosition, setControlsPosition] = useState({ x: 24, y: 80 });
+  const controlsDragRef = useRef<{ dragging: boolean; dx: number; dy: number }>({ dragging: false, dx: 0, dy: 0 });
 
   // Canvas/pen states
   const [isCanvasEnabled, setIsCanvasEnabled] = useState(false);
-  const [drawingTool, setDrawingTool] = useState<'pen' | 'line' | 'rect' | 'ellipse' | 'text'>('pen');
+  const [drawingTool, setDrawingTool] = useState<'pen' | 'line' | 'rect' | 'ellipse' | 'text' | 'arrow' | 'eraser'>('pen');
   const [brushColor, setBrushColor] = useState('#000000');
   const [brushWidth, setBrushWidth] = useState(4);
   const [pageStrokes, setPageStrokes] = useState<Map<number, Stroke[]>>(new Map());
@@ -169,6 +174,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   // Live session
   const [liveSession, setLiveSession] = useState<LiveSessionData | null>(null);
+  const [participants, setParticipants] = useState<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>([]);
   const liveSessionRef = useRef<LiveSessionData | null>(null);
   const handlePdfRenderError = useCallback((detail: string) => {
     console.error(`PdfViewer error [${detail}] for lessonNode:`, lessonNodeId || liveSession?.lessonNodeId);
@@ -190,6 +196,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
+    if (recordingStreamRef.current && recordingStreamRef.current !== screenStreamRef.current && recordingStreamRef.current !== localStreamRef.current) {
+      stopTracks(recordingStreamRef.current);
+    }
+    recordingStreamRef.current = null;
     stopTracks(localStreamRef.current);
     stopTracks(screenStreamRef.current);
     setLocalStream(null);
@@ -343,6 +353,15 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if ((stroke.tool || 'pen') === 'line') {
       ctx.moveTo(start.x, start.y);
       ctx.lineTo(end.x, end.y);
+    } else if (stroke.tool === 'arrow') {
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      const angle = Math.atan2(end.y - start.y, end.x - start.x);
+      const headLength = Math.max(12, stroke.width * 4);
+      ctx.moveTo(end.x, end.y);
+      ctx.lineTo(end.x - headLength * Math.cos(angle - Math.PI / 6), end.y - headLength * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(end.x, end.y);
+      ctx.lineTo(end.x - headLength * Math.cos(angle + Math.PI / 6), end.y - headLength * Math.sin(angle + Math.PI / 6));
     } else if (stroke.tool === 'rect') {
       ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
     } else if (stroke.tool === 'ellipse') {
@@ -376,6 +395,22 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     for (const stroke of strokes) drawStrokeOnCanvas(ctx, stroke);
     if (preview) drawStrokeOnCanvas(ctx, preview);
   }, [drawStrokeOnCanvas, getCurrentPageKey, pageStrokes]);
+
+  const strokeNearPoint = (stroke: Stroke, pos: { x: number; y: number }, radius: number) => {
+    const points = stroke.points || [];
+    return points.some((point) => Math.hypot(point.x - pos.x, point.y - pos.y) <= radius);
+  };
+
+  const eraseAt = (pos: { x: number; y: number }) => {
+    const pageKey = getCurrentPageKey();
+    const radius = Math.max(12, brushWidthRef.current * 4);
+    setPageStrokes(prev => {
+      const next = new Map<number, Stroke[]>(prev);
+      const strokes = next.get(pageKey) || [];
+      next.set(pageKey, strokes.filter((stroke) => !strokeNearPoint(stroke, pos, radius)));
+      return next;
+    });
+  };
 
   // Redraw strokes when page or strokes change — without touching canvas size
   useEffect(() => {
@@ -454,6 +489,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       liveSessionsApi.getActive(courseId)
         .then((session) => {
           if (session && !ended) {
+            liveSessionsApi.join(session.id).catch(() => {});
             setLiveSession(session);
             liveSessionRef.current = session;
             if (session.currentPage) {
@@ -503,6 +539,19 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       }
     };
   }, [role]);
+
+  useEffect(() => {
+    if (!liveSession?.id || !isTeacher) return;
+    let cancelled = false;
+    const load = () => {
+      liveSessionsApi.participants(liveSession.id)
+        .then((items) => { if (!cancelled) setParticipants(items); })
+        .catch(() => { if (!cancelled) setParticipants([]); });
+    };
+    load();
+    const interval = setInterval(load, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [liveSession?.id, isTeacher]);
 
   // Update live session page/source when changed
   useEffect(() => {
@@ -668,48 +717,65 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     }
   };
 
-  const toggleRecording = () => {
+  const toggleRecording = async () => {
     if (!isTeacher) return;
     if (!isRecording) {
-      // Start Recording
       try {
-        const stream = (liveMode === 'local' && screenStream) ? screenStream : localStream;
+        let stream = (liveMode === 'local' && screenStream) ? screenStream : localStream;
         if (!stream) {
-          alert(t('classroom.no_stream'));
-          return;
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
         }
+        recordingStreamRef.current = stream;
         const recorder = new MediaRecorder(stream);
         const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: 'video/webm' });
           try {
             await lecturesApi.upload({
-              courseId: localStorage.getItem('lingobridge_courseId') || '',
+              courseId: propCourseId || localStorage.getItem('lingobridge_courseId') || liveSessionRef.current?.courseId || '',
               title: t('course.basic') + ' - ' + new Date().toLocaleTimeString(),
               blob,
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
             });
+            if (liveSessionRef.current?.id) {
+              liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'saved' }).catch(() => {});
+            }
             alert(t('classroom.recording_uploaded'));
           } catch (error: any) {
             console.error("Failed to upload recording", error);
             alert(error.message || t('classroom.recording_upload_failed'));
+          } finally {
+            if (recordingStreamRef.current && recordingStreamRef.current !== screenStreamRef.current && recordingStreamRef.current !== localStreamRef.current) {
+              stopTracks(recordingStreamRef.current);
+            }
+            recordingStreamRef.current = null;
           }
         };
         recorder.start();
         recordingStartedAtRef.current = Date.now();
         setMediaRecorder(recorder);
         setIsRecording(true);
+        if (liveSessionRef.current?.id) {
+          liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'recording' }).catch(() => {});
+        }
       } catch (err) {
         console.error("Failed to start recording", err);
       }
     } else {
-      // Stop Recording
       if (mediaRecorder) {
         mediaRecorder.stop();
         setMediaRecorder(null);
       }
       setIsRecording(false);
+      if (liveSessionRef.current?.id) {
+        liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'idle' }).catch(() => {});
+      }
     }
   };
 
@@ -813,6 +879,13 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const pos = getPos(e);
     const tool = drawingToolRef.current;
 
+    if (tool === 'eraser') {
+      eraseAt(pos);
+      isDrawingRef.current = true;
+      setIsDrawing(true);
+      return;
+    }
+
     if (tool === 'text') {
       const text = window.prompt('输入文本');
       if (!text) return;
@@ -837,7 +910,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     setIsDrawing(true);
     lastPosRef.current = pos;
     currentStroke.current = {
-      tool,
+      tool: tool === 'eraser' ? 'pen' : tool,
       points: [pos],
       color: brushColorRef.current,
       width: brushWidthRef.current,
@@ -853,6 +926,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (!ctx) return;
 
     const pos = getPos(e);
+    if (drawingToolRef.current === 'eraser') {
+      eraseAt(pos);
+      return;
+    }
     const stroke = currentStroke.current;
     if (!stroke) return;
 
@@ -918,6 +995,28 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
         // User cancelled the picker.
       }
     }
+  };
+
+  const startControlsDrag = (event: React.PointerEvent) => {
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    controlsDragRef.current = {
+      dragging: true,
+      dx: event.clientX - controlsPosition.x,
+      dy: event.clientY - controlsPosition.y,
+    };
+  };
+
+  const dragControls = (event: React.PointerEvent) => {
+    if (!controlsDragRef.current.dragging) return;
+    setControlsPosition({
+      x: Math.max(8, Math.min(window.innerWidth - 80, event.clientX - controlsDragRef.current.dx)),
+      y: Math.max(72, Math.min(window.innerHeight - 180, event.clientY - controlsDragRef.current.dy)),
+    });
+  };
+
+  const stopControlsDrag = () => {
+    controlsDragRef.current.dragging = false;
   };
 
   return (
@@ -1032,10 +1131,23 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                <Users size={32} className="mb-3 opacity-30" />
-                <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
-              </div>
+              {participants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <Users size={32} className="mb-3 opacity-30" />
+                  <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
+                </div>
+              ) : participants.map((student) => (
+                <div key={student.id} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-black">
+                    {student.displayName.slice(0, 1)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{student.displayName}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{student.username}</p>
+                  </div>
+                  <span className="ml-auto w-2 h-2 rounded-full bg-green-400" />
+                </div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -1213,11 +1325,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
             {/* Control Sidebar (Left) */}
             {isTeacher && (
-            <div className="absolute top-24 left-6 z-[120] flex flex-col items-start gap-3 pointer-events-none">
+            <div className="absolute inset-y-0 left-0 z-[120] pointer-events-none">
               <button
                 data-testid="btn-settings"
                 onClick={() => setIsControlsExpanded(!isControlsExpanded)}
-                className="w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
+                className="absolute left-4 bottom-24 w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
               >
                 {isControlsExpanded ? <X size={20} className="text-gray-600" /> : <Settings size={20} className="text-gray-600 group-hover:rotate-90 transition-transform" />}
               </button>
@@ -1225,10 +1337,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <AnimatePresence>
                 {isControlsExpanded && (
                   <motion.div
-                    initial={{ opacity: 0, x: -20, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                    className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border border-gray-200 shadow-2xl flex flex-col gap-5 pointer-events-auto w-64"
+                    initial={{ opacity: 0, x: -280 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -280 }}
+                    transition={{ type: 'spring', damping: 24, stiffness: 220 }}
+                    className="absolute left-0 top-4 bottom-24 w-72 bg-white/95 backdrop-blur-md p-4 rounded-r-3xl border-y border-r border-gray-200 shadow-2xl flex flex-col gap-4 pointer-events-auto overflow-y-auto custom-scrollbar"
                   >
                     <div className="flex flex-col gap-2">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{t('classroom.content_mode')}</span>
@@ -1271,7 +1384,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       <label className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-all">
                          <Plus size={16} />
                          {t('classroom.upload_pdf')}
-                         <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
+                         <input type="file" accept=".pdf,.pptx" className="hidden" onChange={handlePdfUpload} />
                       </label>
 
                       {/* Canvas toggle button — teacher only */}
@@ -1292,13 +1405,15 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       {/* Brush controls — visible when canvas on */}
                       {isCanvasEnabled && (
                         <div className="flex flex-col gap-3 px-2">
-                          <div className="grid grid-cols-5 gap-1">
+                          <div className="grid grid-cols-7 gap-1">
                             {[
                               { id: 'pen' as const, icon: Pen, label: 'Pen' },
                               { id: 'line' as const, icon: Minus, label: 'Line' },
+                              { id: 'arrow' as const, icon: ArrowUpRight, label: 'Arrow' },
                               { id: 'rect' as const, icon: Square, label: 'Rect' },
                               { id: 'ellipse' as const, icon: Circle, label: 'Circle' },
                               { id: 'text' as const, icon: Type, label: 'Text' },
+                              { id: 'eraser' as const, icon: Eraser, label: 'Eraser' },
                             ].map(({ id, icon: Icon, label }) => (
                               <button
                                 key={id}
@@ -1408,18 +1523,17 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               </div>
 
               {/* Pagination controls — teacher navigates, student follows */}
+              {isTeacher && liveMode !== 'local' ? (
               <div className="flex items-center gap-8 mx-auto md:mx-0">
-                {isTeacher && (
-                  <button
-                    data-testid="btn-prev-page"
-                    onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
-                    title={t('homework.prev')}
-                    disabled={isPdfType ? pdfPage <= 1 : coursePages.length === 0 || currentPageIdx <= 0}
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                )}
+                <button
+                  data-testid="btn-prev-page"
+                  onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
+                  title={t('homework.prev')}
+                  disabled={isPdfType ? pdfPage <= 1 : coursePages.length === 0 || currentPageIdx <= 0}
+                >
+                  <ChevronLeft size={24} />
+                </button>
                 <div className="text-center min-w-[60px]" data-testid="page-indicator">
                   <div className="text-xs font-black">
                     {isPdfType
@@ -1428,7 +1542,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   </div>
                   <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">{t('classroom.slide')}</div>
                 </div>
-                {isTeacher && (
                   <button
                     data-testid="btn-next-page"
                     onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
@@ -1438,8 +1551,8 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   >
                     <ChevronRight size={24} />
                   </button>
-                )}
               </div>
+              ) : <div className="flex-1" />}
 
               <div className="flex items-center gap-4">
                 <button
@@ -1933,11 +2046,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
         <div className="flex gap-4 md:gap-8 items-center bg-white/5 px-4 md:px-8 py-2 rounded-3xl border border-white/5 shadow-inner">
           {isTeacher && (
-          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={liveMode === 'local' ? stopScreenShare : startScreenShare}>
-            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${liveMode === 'local' ? 'bg-orange-600/20 text-orange-400 border-orange-500/30' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600/30 border-blue-500/30'} border`}>
+          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={screenStream ? stopScreenShare : startScreenShare}>
+            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${screenStream ? 'bg-orange-600/20 text-orange-400 border-orange-500/30' : 'bg-white/5 text-gray-500 group-hover:bg-white/10 border-white/10'} border`}>
               <Monitor size={18} />
             </div>
-            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${liveMode === 'local' ? 'text-orange-400' : 'text-blue-400'}`}>{liveMode === 'local' ? t('classroom.stop_share') : t('classroom.screen')}</span>
+            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${screenStream ? 'text-orange-400' : 'text-gray-500'}`}>{screenStream ? t('classroom.stop_share') : t('classroom.screen')}</span>
           </div>
           )}
           <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowChat(!showChat)}>
@@ -1970,7 +2083,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             </>
           )}
           {isTeacher && (
-          <div className="flex flex-col items-center gap-1 group cursor-pointer">
+          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setIsControlsExpanded((value) => !value)}>
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center group-hover:bg-white/5 transition-all text-gray-400">
               <Settings size={18} />
             </div>

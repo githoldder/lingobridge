@@ -458,16 +458,31 @@ export function createApp() {
       }
     }
 
-    const { title, description, status, classId, defaultCoursewareFileId } = req.body ?? {};
+    const { title, description, status, classId, defaultCoursewareFileId, coverImageUrl } = req.body ?? {};
     const updated = await coursesRepo.update(req.params.id, {
       title: title !== undefined ? String(title) : undefined,
       description: description !== undefined ? String(description) : undefined,
+      coverImageUrl: coverImageUrl !== undefined ? String(coverImageUrl) : undefined,
       status: status !== undefined && ['published', 'draft'].includes(status) ? status : undefined,
       classId: classId !== undefined ? (classId || null) : undefined,
       defaultCoursewareFileId: defaultCoursewareFileId !== undefined ? (defaultCoursewareFileId || null) : undefined,
     });
     if (!updated) return fail(res, 404, 'Course not found');
     ok(res, updated);
+  });
+
+  app.delete('/api/v1/courses/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+    const course = await coursesRepo.findById(req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (user.role !== 'admin' && course.teacherId !== userId) {
+      return fail(res, 403, 'Only course owner can delete this course');
+    }
+    const deleted = await coursesRepo.deleteById(req.params.id);
+    ok(res, { deleted });
   });
 
   // ─── Class CRUD API (S5-T02) ───
@@ -1562,7 +1577,10 @@ export function createApp() {
     const isCourseMember = courseMembers.some(
       (m) => m.courseId === session.courseId && m.userId === studentId && m.role === 'student'
     );
-    if (isCourseMember) return ok(res, { allowed: true });
+    if (isCourseMember) {
+      await liveRepo.addClassStudent(session.lessonNodeId, studentId, 'course_member');
+      return ok(res, { allowed: true });
+    }
 
     const liveClassStudents = await liveRepo.findClassStudents(session.lessonNodeId);
     const isLiveClassStudent = liveClassStudents.some(
@@ -1571,6 +1589,25 @@ export function createApp() {
     if (isLiveClassStudent) return ok(res, { allowed: true });
 
     return fail(res, 403, 'You are not enrolled in this course');
+  });
+
+  app.get('/api/v1/live-sessions/:id/participants', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const rows = await liveRepo.findClassStudents(session.lessonNodeId);
+    const participants = [];
+    for (const row of rows) {
+      const user = await usersRepo.findById(row.studentId);
+      if (!user) continue;
+      participants.push({
+        id: row.id,
+        studentId: row.studentId,
+        displayName: user.displayName,
+        username: user.username,
+        joinedAt: row.joinedAt,
+      });
+    }
+    ok(res, participants);
   });
 
   app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {

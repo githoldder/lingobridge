@@ -14,6 +14,7 @@ export interface Course {
   classId?: string;
   title: string;
   description: string;
+  coverImageUrl?: string;
   createdAt: string;
   updatedAt?: string;
   status: 'published' | 'draft';
@@ -159,11 +160,12 @@ export const coursesApi = {
     method: 'POST',
     body: JSON.stringify({ title, description })
   }),
-  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft' }) =>
+  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft'; coverImageUrl?: string }) =>
     request<Course>(`/courses/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)
     }),
+  delete: (id: string) => request<{ deleted: boolean }>(`/courses/${id}`, { method: 'DELETE' }),
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
   async uploadCourseware(courseId: string, file: File, lessonNodeId?: string) {
@@ -205,6 +207,10 @@ export const courseMembersApi = {
   remove: (courseId: string, memberId: string) => request<{ deleted: boolean }>(`/courses/${courseId}/members/${memberId}`, {
     method: 'DELETE'
   })
+};
+
+export const teacherStudentsApi = {
+  search: (q = '') => request<Array<{ id: string; username: string; displayName: string; email?: string; languagePref?: string }>>(`/students/search?q=${encodeURIComponent(q)}`)
 };
 
 export interface CoursewareFileData {
@@ -496,7 +502,8 @@ export interface LiveSessionData {
   id: string;
   courseId: string;
   teacherId: string;
-  status: 'active' | 'ended';
+  lessonNodeId?: string;
+  status: 'scheduled' | 'active' | 'ended';
   sourceMode: 'screen' | 'pdf';
   currentPage: number;
   recordingStatus: 'idle' | 'recording' | 'saved';
@@ -535,6 +542,8 @@ export const liveSessionsApi = {
     request<LiveSessionData>(`/live-sessions/${sessionId}`),
   join: (sessionId: string) =>
     request<{ allowed: boolean }>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
+  participants: (sessionId: string) =>
+    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>(`/live-sessions/${sessionId}/participants`),
   patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
     request<LiveSessionData>(`/live-sessions/${id}`, {
       method: 'PATCH',
