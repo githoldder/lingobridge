@@ -48,6 +48,8 @@ import Logo from './Logo.tsx';
 import PdfViewer from './PdfViewer.tsx';
 import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, coursewareFilesApi, lessonNodesApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
 import { ttsService } from '../services/ttsService.ts';
+import { startAsr, stopAsr, isAsrSupported, isAsrListening, startDemoSubtitles, stopDemoSubtitles } from '../services/asrService.ts';
+import { translateText } from '../services/translationService.ts';
 
 interface TeacherClassroomViewProps {
   onExit: () => void;
@@ -82,6 +84,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [chatMessages, setChatMessages] = useState<{ id: number; user: string; text: string; isSelf?: boolean }[]>([]);
   const [danmaku, setDanmaku] = useState<{ id: number; text: string; top: number; duration: number; isSelf?: boolean }[]>([]);
   const [transcript, setTranscript] = useState<{ zh: string; ru: string }[]>([]);
+  const [asrInterim, setAsrInterim] = useState('');
+  const [asrActive, setAsrActive] = useState(false);
+  const [asrError, setAsrError] = useState('');
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   // Hardware states
   const [isMicOn, setIsMicOn] = useState(false);
@@ -191,6 +197,45 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   useEffect(() => { drawingToolRef.current = drawingTool; }, [drawingTool]);
   useEffect(() => { brushColorRef.current = brushColor; }, [brushColor]);
   useEffect(() => { brushWidthRef.current = brushWidth; }, [brushWidth]);
+
+  useEffect(() => {
+    if (!showTranscript) {
+      stopAsr();
+      stopDemoSubtitles();
+      setAsrActive(false);
+      setAsrInterim('');
+      setAsrError('');
+      return;
+    }
+    if (isAsrSupported()) {
+      const ok = startAsr(
+        'zh-CN',
+        (text, isFinal) => {
+          if (isFinal && text.length > 0) {
+            setAsrInterim('');
+            translateText(text, 'zh', 'ru').then(ru => {
+              setTranscript(prev => [...prev, { zh: text, ru: ru || `[翻译中] ${text}` }]);
+            });
+          } else {
+            setAsrInterim(text);
+          }
+        },
+        (err) => { setAsrError(err); }
+      );
+      setAsrActive(ok);
+    } else {
+      setAsrError('Web Speech API not supported – using demo subtitles');
+      startDemoSubtitles((line) => {
+        setTranscript(prev => [...prev, line]);
+      }, 4000);
+      setAsrActive(true);
+    }
+    return () => { stopAsr(); stopDemoSubtitles(); };
+  }, [showTranscript]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript, asrInterim]);
 
   const cleanupMedia = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -1590,31 +1635,47 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
           {/* Translation Tracker Section */}
           {showTranscript && (
-          <div className="h-40 bg-[#0F172A] border-t border-gray-800 flex flex-col z-20 relative">
+          <div className="h-48 bg-[#0F172A] border-t border-gray-800 flex flex-col z-20 relative">
              <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800 bg-white/5">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400 tracking-tighter uppercase whitespace-nowrap">
                    <Languages size={12} />
                    {t('classroom.transcript_title')}
+                   {asrActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
                 </div>
                 <div className="flex items-center gap-4">
-                   <span className="text-[10px] font-bold text-gray-500 uppercase">{t('classroom.cn_ru_active')}</span>
+                   {asrError && <span className="text-[9px] text-yellow-500 max-w-[200px] truncate">{asrError}</span>}
+                   <span className={`text-[10px] font-bold uppercase ${asrActive ? 'text-green-400' : 'text-gray-500'}`}>
+                     {asrActive ? (isAsrSupported() ? 'ASR LIVE' : 'DEMO MODE') : t('classroom.cn_ru_active')}
+                   </span>
                 </div>
              </div>
-             <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-4">
+             <div className="flex-1 overflow-y-auto px-6 py-3 custom-scrollbar space-y-3">
                 {transcript.map((line, i) => (
-                  <div key={i} className="flex gap-6 items-start">
-                       <div className="text-[10px] font-mono text-gray-700 mt-0.5 tracking-tighter">{t('classroom.rec')}</div>
-                     <div className="flex-1 grid grid-cols-2 gap-8 border-l border-white/5 pl-4">
-                        <p className="text-xs text-blue-100 font-medium border-l border-blue-500 pl-3">{line.zh}</p>
-                        <p className="text-xs text-gray-400 italic border-l border-white/10 pl-3">{line.ru}</p>
+                  <div key={i} className="flex gap-4 items-start animate-[fadeIn_0.3s_ease-out]">
+                       <div className="text-[10px] font-mono text-gray-600 mt-0.5 tracking-tighter shrink-0 w-6">{String(i + 1).padStart(2, '0')}</div>
+                     <div className="flex-1 grid grid-cols-2 gap-6 border-l border-white/5 pl-3">
+                        <p className="text-xs text-blue-100 font-medium border-l-2 border-blue-500 pl-3">{line.zh}</p>
+                        <p className="text-xs text-gray-400 italic border-l-2 border-purple-500/40 pl-3">{line.ru}</p>
                      </div>
                   </div>
                 ))}
-                {!transcript.length && (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-[10px] uppercase tracking-widest font-bold">
-                     {t('classroom.system_ready')}
+                {asrInterim && (
+                  <div className="flex gap-4 items-start opacity-60">
+                    <div className="text-[10px] font-mono text-blue-400 mt-0.5 tracking-tighter shrink-0 w-6 animate-pulse">··</div>
+                    <div className="flex-1 border-l border-blue-500/30 pl-3">
+                      <p className="text-xs text-blue-200/70 italic">{asrInterim}</p>
+                    </div>
                   </div>
                 )}
+                {!transcript.length && !asrInterim && (
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-600">
+                     <Mic size={16} className={asrActive ? 'animate-pulse text-green-500/50' : ''} />
+                     <span className="text-[10px] uppercase tracking-widest font-bold">
+                       {asrActive ? (isAsrSupported() ? '正在监听语音...' : '演示字幕加载中...') : t('classroom.system_ready')}
+                     </span>
+                  </div>
+                )}
+                <div ref={transcriptEndRef} />
              </div>
           </div>
           )}

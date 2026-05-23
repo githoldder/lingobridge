@@ -160,6 +160,127 @@ export function createApp() {
     ok(res, { status: 'ok', service: 'lingobridge-mvp-api', db: dbStatus });
   });
 
+  const DEEPL_KEY = process.env.DEEPL_API_KEY || '';
+  const DEEPL_URL = DEEPL_KEY.endsWith(':fx')
+    ? 'https://api-free.deepl.com/v2/translate'
+    : 'https://api.deepl.com/v2/translate';
+  const TRANSLATE_CACHE_TTL_MS = 10 * 60 * 1000;
+  const translateCache = new Map<string, { text: string; provider: string; expiresAt: number }>();
+
+  function translationCacheKey(text: string, from: string, to: string) {
+    return `${from}:${to}:${text.trim()}`;
+  }
+
+  function getCachedTranslation(text: string, from: string, to: string) {
+    const item = translateCache.get(translationCacheKey(text, from, to));
+    if (!item) return null;
+    if (item.expiresAt < Date.now()) {
+      translateCache.delete(translationCacheKey(text, from, to));
+      return null;
+    }
+    return item;
+  }
+
+  function setCachedTranslation(text: string, from: string, to: string, translatedText: string, provider: string) {
+    translateCache.set(translationCacheKey(text, from, to), {
+      text: translatedText,
+      provider,
+      expiresAt: Date.now() + TRANSLATE_CACHE_TTL_MS
+    });
+  }
+
+  const BUILTIN_DICT: Record<string, string> = {
+    '你好': 'Привет',
+    '谢谢': 'Спасибо',
+    '再见': 'До свидания',
+    '老师': 'Учитель',
+    '学生': 'Студент',
+    '中文': 'Китайский язык',
+    '俄语': 'Русский язык',
+    '课堂': 'Урок',
+    '作业': 'Домашнее задание',
+    '你好，欢迎来到中文课堂': 'Здравствуйте, добро пожаловать на урок китайского языка',
+    '今天我们学习基本的问候语': 'Сегодня мы изучим основные приветствия',
+    '请跟我读': 'Пожалуйста, повторяйте за мной',
+    '很好，你的发音非常准确': 'Отлично, ваше произношение очень точное',
+    '下面我们练习一下对话': 'Теперь давайте попрактикуем диалог',
+    '你叫什么名字': 'Как тебя зовут',
+    '我叫老师，很高兴认识你': 'Меня зовут учитель, рад познакомиться',
+    '今天的课就到这里': 'На сегодня урок окончен',
+    '请打开课本': 'Пожалуйста, откройте учебник',
+    '我们开始上课': 'Начинаем урок',
+    '请注意听': 'Пожалуйста, слушайте внимательно',
+    '这个词的意思是': 'Значение этого слова',
+    '非常好': 'Очень хорошо',
+    '请再说一遍': 'Пожалуйста, скажите ещё раз',
+    '大家好': 'Всем привет',
+    '同学们好': 'Здравствуйте, ученики',
+    '现在开始': 'Начинаем сейчас',
+  };
+
+  async function translateViaDeepL(text: string, from: string, to: string): Promise<string | null> {
+    if (!DEEPL_KEY) return null;
+    const langMap: Record<string, string> = { zh: 'ZH', ru: 'RU', en: 'EN', kk: 'EN' };
+    const targetLang = langMap[to] || to.toUpperCase();
+    const sourceLang = langMap[from] || from.toUpperCase();
+    try {
+      const resp = await fetch(DEEPL_URL, {
+        method: 'POST',
+        headers: { Authorization: `DeepL-Auth-Key ${DEEPL_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: [text], source_lang: sourceLang, target_lang: targetLang }),
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data?.translations?.[0]?.text || null;
+    } catch { return null; }
+  }
+
+  function translateViaDict(text: string): string {
+    if (BUILTIN_DICT[text]) return BUILTIN_DICT[text];
+    const trimmed = text.replace(/[？?！!。，,、\s]+$/g, '');
+    if (BUILTIN_DICT[trimmed]) return BUILTIN_DICT[trimmed];
+    for (const [k, v] of Object.entries(BUILTIN_DICT)) {
+      if (text.includes(k)) return v;
+    }
+    return `[翻译] ${text}`;
+  }
+
+  app.post('/api/v1/translate', async (req, res) => {
+    const { text, from = 'zh', to = 'ru' } = req.body ?? {};
+    if (!text) return fail(res, 400, 'text is required');
+    const sourceText = String(text).trim();
+    const sourceLang = String(from);
+    const targetLang = String(to);
+    const cached = getCachedTranslation(sourceText, sourceLang, targetLang);
+    if (cached) return ok(res, { translatedText: cached.text, provider: `${cached.provider}-cache`, from, to });
+
+    const deepLResult = await translateViaDeepL(sourceText, sourceLang, targetLang);
+    const provider = deepLResult ? 'deepl' : 'builtin-dict';
+    const translatedText = deepLResult || translateViaDict(sourceText);
+    setCachedTranslation(sourceText, sourceLang, targetLang, translatedText, provider);
+    ok(res, { translatedText, provider, from, to });
+  });
+
+  app.post('/api/v1/translate/batch', async (req, res) => {
+    const { texts, from = 'zh', to = 'ru' } = req.body ?? {};
+    if (!Array.isArray(texts) || !texts.length) return fail(res, 400, 'texts array is required');
+    const translations = await Promise.all(
+      texts.map(async (t: string) => {
+        const sourceText = String(t).trim();
+        const sourceLang = String(from);
+        const targetLang = String(to);
+        const cached = getCachedTranslation(sourceText, sourceLang, targetLang);
+        if (cached) return cached.text;
+        const deepLResult = await translateViaDeepL(sourceText, sourceLang, targetLang);
+        const provider = deepLResult ? 'deepl' : 'builtin-dict';
+        const translatedText = deepLResult || translateViaDict(sourceText);
+        setCachedTranslation(sourceText, sourceLang, targetLang, translatedText, provider);
+        return translatedText;
+      })
+    );
+    ok(res, { translations, provider: DEEPL_KEY ? 'deepl' : 'builtin-dict', from, to });
+  });
+
   app.post('/api/v1/auth/login', async (req, res) => {
     const { email, username, password, role } = req.body ?? {};
     const loginName = (email || username);
