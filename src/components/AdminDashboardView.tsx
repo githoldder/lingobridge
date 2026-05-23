@@ -17,7 +17,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  LogOut
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { adminApi, coursesApi } from '../services/apiClient.ts';
@@ -29,12 +30,17 @@ import type {
   AdminCourseware,
   AdminAssignmentImport,
   AdminLearningProgress,
+  CleanupLearningRecordsResult,
   Course
 } from '../services/apiClient.ts';
 
 type AdminTab = 'live' | 'recordings' | 'notes' | 'transcripts' | 'coursewares' | 'assignments' | 'progress';
 
-const AdminDashboardView: React.FC = () => {
+interface AdminDashboardViewProps {
+  onLogout?: () => void;
+}
+
+const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onLogout }) => {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<AdminTab>('live');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -45,6 +51,7 @@ const AdminDashboardView: React.FC = () => {
   const [coursewares, setCoursewares] = useState<AdminCourseware[]>([]);
   const [assignmentImports, setAssignmentImports] = useState<AdminAssignmentImport[]>([]);
   const [learningProgress, setLearningProgress] = useState<AdminLearningProgress | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<CleanupLearningRecordsResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [filterCourse, setFilterCourse] = useState('');
@@ -111,6 +118,16 @@ const AdminDashboardView: React.FC = () => {
       setRecordings((prev) => prev.filter((r) => r.id !== id));
     } catch (e) {
       console.error('Failed to delete recording:', e);
+    }
+  };
+
+  const handleCleanupLearningRecords = async (dryRun: boolean) => {
+    try {
+      const result = await adminApi.cleanupZombieLearningRecords(dryRun);
+      setCleanupResult(result);
+      if (!dryRun) await loadData();
+    } catch (e) {
+      console.error('Failed to clean zombie learning records:', e);
     }
   };
 
@@ -499,8 +516,41 @@ const AdminDashboardView: React.FC = () => {
   };
 
   const renderProgress = () => {
+    const cleanupPanel = (
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-amber-900">学习记录清理</p>
+          <p className="text-xs text-amber-700">
+            定位并清理缺学生、缺任务、缺课时或缺录音引用的僵尸学习记录。
+            {cleanupResult && ` 最近扫描 ${cleanupResult.scanned} 条，命中 ${cleanupResult.deleted} 条。`}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleCleanupLearningRecords(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100"
+          >
+            <Eye size={14} />
+            预检
+          </button>
+          <button
+            onClick={() => handleCleanupLearningRecords(false)}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700"
+          >
+            <Trash2 size={14} />
+            清理
+          </button>
+        </div>
+      </div>
+    );
+
     if (!learningProgress || learningProgress.students.length === 0) {
-      return renderEmpty(t('admin.progress.empty'));
+      return (
+        <div>
+          {cleanupPanel}
+          {renderEmpty(t('admin.progress.empty'))}
+        </div>
+      );
     }
 
     const totalStudents = learningProgress.students.length;
@@ -520,6 +570,7 @@ const AdminDashboardView: React.FC = () => {
 
     return (
       <div>
+        {cleanupPanel}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-100 p-5">
             <div className="flex items-center gap-3 mb-2">
@@ -665,6 +716,13 @@ const AdminDashboardView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">{t('admin.title')}</h1>
+        <button
+          onClick={onLogout}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+        >
+          <LogOut size={16} />
+          {t('nav.logout')}
+        </button>
       </div>
 
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">

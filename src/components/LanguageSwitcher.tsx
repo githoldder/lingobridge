@@ -8,10 +8,10 @@ const LanguageSwitcher = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const languages: { code: Language; label: string; flag: string }[] = [
-    { code: 'en', label: 'English', flag: 'https://flagicons.lipis.dev/flags/4x3/gb.svg' },
     { code: 'zh', label: '中文', flag: 'https://flagicons.lipis.dev/flags/4x3/cn.svg' },
-    { code: 'ru', label: 'Русский', flag: 'https://flagicons.lipis.dev/flags/4x3/ru.svg' },
     { code: 'kk', label: 'Қазақша', flag: 'https://flagicons.lipis.dev/flags/4x3/kz.svg' },
+    { code: 'ru', label: 'Русский', flag: 'https://flagicons.lipis.dev/flags/4x3/ru.svg' },
+    { code: 'en', label: 'English', flag: 'https://flagicons.lipis.dev/flags/4x3/gb.svg' },
   ];
 
   const currentLang = languages.find(l => l.code === language) || languages[0];

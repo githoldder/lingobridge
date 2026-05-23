@@ -33,14 +33,23 @@ import {
   BookOpen,
   Layers,
   Check,
-  Lock
+  Lock,
+  Type,
+  Square,
+  Circle,
+  Minus,
+  Pipette,
+  Eraser,
+  ArrowUpRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import Logo from './Logo.tsx';
 import PdfViewer from './PdfViewer.tsx';
-import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
+import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, coursewareFilesApi, lessonNodesApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
 import { ttsService } from '../services/ttsService.ts';
+import { startAsr, stopAsr, isAsrSupported, isAsrListening, startDemoSubtitles, stopDemoSubtitles } from '../services/asrService.ts';
+import { translateText } from '../services/translationService.ts';
 
 interface TeacherClassroomViewProps {
   onExit: () => void;
@@ -50,9 +59,11 @@ interface TeacherClassroomViewProps {
 }
 
 interface Stroke {
+  tool?: 'pen' | 'line' | 'rect' | 'ellipse' | 'text' | 'arrow';
   points: { x: number; y: number }[];
   color: string;
   width: number;
+  text?: string;
 }
 
 const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, role = 'teacher', lessonNodeId, courseId: propCourseId }) => {
@@ -66,12 +77,17 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isCameraWindowVisible, setIsCameraWindowVisible] = useState(true);
   const [camPosition, setCamPosition] = useState({ x: 32, y: 120 });
   const [isPPTLocked, setIsPPTLocked] = useState(true);
   const [inputText, setInputText] = useState('');
   const [chatMessages, setChatMessages] = useState<{ id: number; user: string; text: string; isSelf?: boolean }[]>([]);
   const [danmaku, setDanmaku] = useState<{ id: number; text: string; top: number; duration: number; isSelf?: boolean }[]>([]);
   const [transcript, setTranscript] = useState<{ zh: string; ru: string }[]>([]);
+  const [asrInterim, setAsrInterim] = useState('');
+  const [asrActive, setAsrActive] = useState(false);
+  const [asrError, setAsrError] = useState('');
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   // Hardware states
   const [isMicOn, setIsMicOn] = useState(false);
@@ -83,8 +99,30 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [pdfFile, setPdfFile] = useState<string | null>(null);
-  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPage, setPdfPageRaw] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(0);
+  const pdfPageCountRef = useRef(0);
+
+  const setPdfPage = useCallback((next: number | ((prev: number) => number)) => {
+    setPdfPageRaw(prev => {
+      const raw = typeof next === 'function' ? next(prev) : next;
+      const max = pdfPageCountRef.current;
+      return max > 0 ? Math.max(1, Math.min(raw, max)) : 1;
+    });
+  }, []);
+
+  // Keep ref in sync; when count arrives, clamp current page immediately
+  useEffect(() => {
+    pdfPageCountRef.current = pdfPageCount;
+    if (pdfPageCount > 0) {
+      setPdfPageRaw(prev => Math.max(1, Math.min(prev, pdfPageCount)));
+    }
+  }, [pdfPageCount]);
+
+  const handlePageCount = useCallback((count: number) => {
+    setPdfPageCount(count);
+    setPdfPageRaw(prev => Math.max(1, Math.min(prev, count)));
+  }, []);
   const [pdfRenderState, setPdfRenderState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [coursewareStatus, setCoursewareStatus] = useState<'pending' | 'processing' | 'ready' | 'failed' | null>(null);
   const [coursePages, setCoursePages] = useState<CoursePage[]>([]);
@@ -93,19 +131,27 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const [isPdfType, setIsPdfType] = useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const recordingStartedAtRef = React.useRef<number>(0);
+  const recordingStreamRef = React.useRef<MediaStream | null>(null);
   const localStreamRef = React.useRef<MediaStream | null>(null);
   const screenStreamRef = React.useRef<MediaStream | null>(null);
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [isControlsExpanded, setIsControlsExpanded] = useState(false);
+  const [controlsPosition, setControlsPosition] = useState({ x: 24, y: 80 });
+  const controlsDragRef = useRef<{ dragging: boolean; dx: number; dy: number }>({ dragging: false, dx: 0, dy: 0 });
 
   // Canvas/pen states
   const [isCanvasEnabled, setIsCanvasEnabled] = useState(false);
+  const [drawingTool, setDrawingTool] = useState<'pen' | 'line' | 'rect' | 'ellipse' | 'text' | 'arrow' | 'eraser'>('pen');
   const [brushColor, setBrushColor] = useState('#000000');
   const [brushWidth, setBrushWidth] = useState(4);
   const [pageStrokes, setPageStrokes] = useState<Map<number, Stroke[]>>(new Map());
   const currentStroke = useRef<Stroke | null>(null);
+  const isDrawingRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
+  const drawingToolRef = useRef(drawingTool);
+  const brushColorRef = useRef(brushColor);
+  const brushWidthRef = useRef(brushWidth);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -134,16 +180,71 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   // Live session
   const [liveSession, setLiveSession] = useState<LiveSessionData | null>(null);
+  const [participants, setParticipants] = useState<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>([]);
   const liveSessionRef = useRef<LiveSessionData | null>(null);
+  const handlePdfRenderError = useCallback((detail: string) => {
+    console.error(`PdfViewer error [${detail}] for lessonNode:`, lessonNodeId || liveSession?.lessonNodeId);
+  }, [lessonNodeId, liveSession?.lessonNodeId]);
+
+  const getCurrentPageKey = useCallback((): number => {
+    return isPdfType ? pdfPage : currentPageIdx + 1;
+  }, [isPdfType, pdfPage, currentPageIdx]);
 
   const stopTracks = (stream: MediaStream | null) => {
     stream?.getTracks().forEach((track) => track.stop());
   };
 
+  useEffect(() => { drawingToolRef.current = drawingTool; }, [drawingTool]);
+  useEffect(() => { brushColorRef.current = brushColor; }, [brushColor]);
+  useEffect(() => { brushWidthRef.current = brushWidth; }, [brushWidth]);
+
+  useEffect(() => {
+    if (!showTranscript) {
+      stopAsr();
+      stopDemoSubtitles();
+      setAsrActive(false);
+      setAsrInterim('');
+      setAsrError('');
+      return;
+    }
+    if (isAsrSupported()) {
+      const ok = startAsr(
+        'zh-CN',
+        (text, isFinal) => {
+          if (isFinal && text.length > 0) {
+            setAsrInterim('');
+            translateText(text, 'zh', 'ru').then(ru => {
+              setTranscript(prev => [...prev, { zh: text, ru: ru || `[翻译中] ${text}` }]);
+            });
+          } else {
+            setAsrInterim(text);
+          }
+        },
+        (err) => { setAsrError(err); }
+      );
+      setAsrActive(ok);
+    } else {
+      setAsrError('Web Speech API not supported – using demo subtitles');
+      startDemoSubtitles((line) => {
+        setTranscript(prev => [...prev, line]);
+      }, 4000);
+      setAsrActive(true);
+    }
+    return () => { stopAsr(); stopDemoSubtitles(); };
+  }, [showTranscript]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript, asrInterim]);
+
   const cleanupMedia = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
+    if (recordingStreamRef.current && recordingStreamRef.current !== screenStreamRef.current && recordingStreamRef.current !== localStreamRef.current) {
+      stopTracks(recordingStreamRef.current);
+    }
+    recordingStreamRef.current = null;
     stopTracks(localStreamRef.current);
     stopTracks(screenStreamRef.current);
     setLocalStream(null);
@@ -183,61 +284,88 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     loadPages();
   }, []);
 
+  // Load existing courseware PDF on mount (both teacher & student)
+  // Priority: defaultCoursewareFileId (from lesson node or course) > latest PDF from coursewareFilesApi
+  useEffect(() => {
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
+    const activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || '';
+    if (!courseId) return;
+
+    (async () => {
+      try {
+        // Check for defaultCoursewareFileId from lesson node or course
+        let defaultFileId: string | undefined;
+        if (activeLessonNodeId) {
+          try {
+            const nodes = await lessonNodesApi.list(courseId);
+            const node = nodes.find((n) => n.id === activeLessonNodeId);
+            defaultFileId = node?.defaultCoursewareFileId;
+          } catch { /* ignore */ }
+        }
+        if (!defaultFileId) {
+          try {
+            const courses = await coursesApi.list();
+            const course = courses.find((c) => c.id === courseId);
+            defaultFileId = course?.defaultCoursewareFileId;
+          } catch { /* ignore */ }
+        }
+
+        const files = await coursewareFilesApi.list(courseId, activeLessonNodeId || undefined);
+
+        // If defaultCoursewareFileId is set, find that specific file
+        let targetFile;
+        if (defaultFileId) {
+          targetFile = files.find((f) => f.id === defaultFileId);
+        }
+        // Fallback: pick the most recent PDF
+        if (!targetFile) {
+          targetFile = files.find((f) =>
+            f.mimeType === 'application/pdf' || f.filename?.endsWith('.pdf')
+          );
+        }
+
+        if (targetFile?.storageUrl) {
+          setPdfFile(mediaUrl(targetFile.storageUrl));
+          setIsPdfType(true);
+          setPdfPage(1);
+          setCoursewareStatus('ready');
+          console.log('[Courseware] Loaded PDF:', targetFile.filename, defaultFileId ? '(default)' : '(latest)');
+        }
+      } catch {
+        // No courseware yet, that's fine
+      }
+    })();
+  }, [propCourseId, lessonNodeId]);
+
   useEffect(() => {
     return () => {
       cleanupMedia();
     };
   }, []);
 
-  // Canvas dynamic resize to match container
+  // Canvas resize to match container — ONLY on container size changes
   useEffect(() => {
     const container = canvasContainerRef.current;
-    if (!container) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!container || !canvas) return;
 
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
+      if (canvas.width === rect.width && canvas.height === rect.height) return;
       
-      // Save current content before resize
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
       const tempCtx = tempCanvas.getContext('2d');
-      if (tempCtx) {
-        tempCtx.drawImage(canvas, 0, 0);
-      }
+      if (tempCtx) tempCtx.drawImage(canvas, 0, 0);
       
       canvas.width = rect.width;
       canvas.height = rect.height;
       
-      // Restore content after resize
       if (tempCtx) {
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
-        }
-      }
-      
-      // Redraw strokes after resize
-      const pageKey = isPdfType ? pdfPage : currentPageIdx + 1;
-      const strokes = pageStrokes.get(pageKey) || [];
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (const stroke of strokes) {
-        if (stroke.points.length < 2) continue;
-        ctx.beginPath();
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.width;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
+        if (ctx) ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
       }
     };
 
@@ -245,7 +373,94 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const ro = new ResizeObserver(resizeCanvas);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [isPdfType, pdfPage, currentPageIdx, pageStrokes]);
+  }, []);
+
+  const drawStrokeOnCanvas = useCallback((ctx: CanvasRenderingContext2D, stroke: Stroke) => {
+    if (!stroke || !stroke.points || stroke.points.length === 0) return;
+    const [start, end = start] = stroke.points;
+    ctx.save();
+    ctx.strokeStyle = stroke.color;
+    ctx.fillStyle = stroke.color;
+    ctx.lineWidth = stroke.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if ((stroke.tool || 'pen') === 'text') {
+      const fontSize = Math.max(14, stroke.width * 4);
+      ctx.font = `600 ${fontSize}px sans-serif`;
+      ctx.textBaseline = 'top';
+      ctx.fillText(stroke.text || '', start.x, start.y);
+      ctx.restore();
+      return;
+    }
+
+    ctx.beginPath();
+    if ((stroke.tool || 'pen') === 'line') {
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+    } else if (stroke.tool === 'arrow') {
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      const angle = Math.atan2(end.y - start.y, end.x - start.x);
+      const headLength = Math.max(12, stroke.width * 4);
+      ctx.moveTo(end.x, end.y);
+      ctx.lineTo(end.x - headLength * Math.cos(angle - Math.PI / 6), end.y - headLength * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(end.x, end.y);
+      ctx.lineTo(end.x - headLength * Math.cos(angle + Math.PI / 6), end.y - headLength * Math.sin(angle + Math.PI / 6));
+    } else if (stroke.tool === 'rect') {
+      ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+    } else if (stroke.tool === 'ellipse') {
+      ctx.ellipse(
+        (start.x + end.x) / 2,
+        (start.y + end.y) / 2,
+        Math.abs(end.x - start.x) / 2,
+        Math.abs(end.y - start.y) / 2,
+        0,
+        0,
+        Math.PI * 2
+      );
+    } else {
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }, []);
+
+  const redrawCurrentPageStrokes = useCallback((preview?: Stroke | null) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pageKey = getCurrentPageKey();
+    const strokes = pageStrokes.get(pageKey) || [];
+    for (const stroke of strokes) drawStrokeOnCanvas(ctx, stroke);
+    if (preview) drawStrokeOnCanvas(ctx, preview);
+  }, [drawStrokeOnCanvas, getCurrentPageKey, pageStrokes]);
+
+  const strokeNearPoint = (stroke: Stroke, pos: { x: number; y: number }, radius: number) => {
+    const points = stroke.points || [];
+    return points.some((point) => Math.hypot(point.x - pos.x, point.y - pos.y) <= radius);
+  };
+
+  const eraseAt = (pos: { x: number; y: number }) => {
+    const pageKey = getCurrentPageKey();
+    const radius = Math.max(12, brushWidthRef.current * 4);
+    setPageStrokes(prev => {
+      const next = new Map<number, Stroke[]>(prev);
+      const strokes = next.get(pageKey) || [];
+      next.set(pageKey, strokes.filter((stroke) => !strokeNearPoint(stroke, pos, radius)));
+      return next;
+    });
+  };
+
+  // Redraw strokes when page or strokes change — without touching canvas size
+  useEffect(() => {
+    redrawCurrentPageStrokes();
+  }, [isPdfType, pdfPage, currentPageIdx, pageStrokes, redrawCurrentPageStrokes]);
 
   // Raise-hand flow: listen for grants via localStorage events
   useEffect(() => {
@@ -292,10 +507,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   // Load homework/vocab for student
   useEffect(() => {
     if (role !== 'student') return;
-    const courseId = localStorage.getItem('lingobridge_courseId') || '';
-    homeworkApi.tasks(courseId).then(setHomeworkTasks).catch(() => {});
+    const courseId = propCourseId || localStorage.getItem('lingobridge_courseId') || '';
+    if (!courseId) return;
+    const tasksPromise = lessonNodeId
+      ? homeworkApi.tasks(courseId, { lessonNodeId })
+      : homeworkApi.tasks(courseId, { includeAll: true });
+    tasksPromise.then(setHomeworkTasks).catch(() => {});
     vocabularyApi.list(courseId).then(setVocabItems).catch(() => {});
-  }, [role]);
+  }, [role, propCourseId, lessonNodeId]);
 
   // Live session lifecycle
   useEffect(() => {
@@ -315,15 +534,46 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       liveSessionsApi.getActive(courseId)
         .then((session) => {
           if (session && !ended) {
+            liveSessionsApi.join(session.id).catch(() => {});
             setLiveSession(session);
             liveSessionRef.current = session;
             if (session.currentPage) {
-              if (isPdfType) setPdfPage(session.currentPage);
-              else setCurrentPageIdx(session.currentPage - 1);
+              if (isPdfType) {
+                const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+                setPdfPage(clamped);
+              } else {
+                setCurrentPageIdx(Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0))));
+              }
             }
           }
         })
         .catch(() => {});
+    }
+
+    // Student: poll for active live session if not yet joined (empty classroom / self-study)
+    if (!isTeacher) {
+      const pollInterval = setInterval(() => {
+        if (liveSessionRef.current?.id) { clearInterval(pollInterval); return; }
+        liveSessionsApi.getActive(courseId)
+          .then((session) => {
+            if (session && !ended) {
+              liveSessionsApi.join(session.id).catch(() => {});
+              setLiveSession(session);
+              liveSessionRef.current = session;
+              if (session.currentPage) {
+                if (isPdfType) {
+                  const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+                  setPdfPage(clamped);
+                } else {
+                  setCurrentPageIdx(Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0))));
+                }
+              }
+              clearInterval(pollInterval);
+            }
+          })
+          .catch(() => {});
+      }, 5000);
+      return () => { ended = true; clearInterval(pollInterval); };
     }
 
     return () => {
@@ -335,9 +585,23 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     };
   }, [role]);
 
+  useEffect(() => {
+    if (!liveSession?.id || !isTeacher) return;
+    let cancelled = false;
+    const load = () => {
+      liveSessionsApi.participants(liveSession.id)
+        .then((items) => { if (!cancelled) setParticipants(items); })
+        .catch(() => { if (!cancelled) setParticipants([]); });
+    };
+    load();
+    const interval = setInterval(load, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [liveSession?.id, isTeacher]);
+
   // Update live session page/source when changed
   useEffect(() => {
     if (!liveSession?.id || !isTeacher) return;
+    if (isPdfType && pdfPageCount === 0) return;
     const page = isPdfType ? pdfPage : currentPageIdx + 1;
     const timer = setTimeout(() => {
       liveSessionsApi.patch(liveSession.id, {
@@ -346,7 +610,25 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       }).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
-  }, [pdfPage, currentPageIdx, liveMode]);
+  }, [pdfPage, pdfPageCount, currentPageIdx, liveMode]);
+
+  // Student: poll live session currentPage every 3 seconds
+  useEffect(() => {
+    if (!liveSession?.id || isTeacher) return;
+    const interval = setInterval(() => {
+      liveSessionsApi.get(liveSession.id).then((session) => {
+        if (!session?.currentPage) return;
+        if (isPdfType) {
+          const clamped = Math.max(1, Math.min(session.currentPage, pdfPageCount || 999));
+          if (clamped !== pdfPage) setPdfPage(clamped);
+        } else {
+          const clamped = Math.max(0, Math.min(session.currentPage - 1, Math.max(coursePages.length - 1, 0)));
+          if (clamped !== currentPageIdx) setCurrentPageIdx(clamped);
+        }
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [liveSession?.id, isTeacher, isPdfType, pdfPage, currentPageIdx]);
 
   // Poll live session comments every 5 seconds
   useEffect(() => {
@@ -480,48 +762,88 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     }
   };
 
-  const toggleRecording = () => {
+  const toggleRecording = async () => {
     if (!isTeacher) return;
     if (!isRecording) {
-      // Start Recording
       try {
-        const stream = (liveMode === 'local' && screenStream) ? screenStream : localStream;
-        if (!stream) {
-          alert(t('classroom.no_stream'));
-          return;
+        let displayStream = screenStream || screenStreamRef.current;
+        if (!displayStream) {
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: "browser",
+            } as any,
+            audio: true,
+          });
         }
-        const recorder = new MediaRecorder(stream);
+        
+        let audioTrack = displayStream.getAudioTracks()[0] || localStream?.getAudioTracks()[0];
+        if (!audioTrack) {
+          try {
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioTrack = micStream.getAudioTracks()[0];
+          } catch (e) {
+            console.warn("Could not get microphone track for recording", e);
+          }
+        }
+        
+        const tracks = [];
+        const videoTrack = displayStream.getVideoTracks()[0];
+        if (videoTrack) tracks.push(videoTrack);
+        if (audioTrack) tracks.push(audioTrack);
+        
+        const combinedStream = new MediaStream(tracks);
+        recordingStreamRef.current = combinedStream;
+        
+        const recorder = new MediaRecorder(combinedStream);
         const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => chunks.push(e.data);
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: 'video/webm' });
           try {
             await lecturesApi.upload({
-              courseId: localStorage.getItem('lingobridge_courseId') || '',
+              courseId: propCourseId || localStorage.getItem('lingobridge_courseId') || liveSessionRef.current?.courseId || '',
               title: t('course.basic') + ' - ' + new Date().toLocaleTimeString(),
               blob,
               durationSec: Math.max(1, Math.round((Date.now() - recordingStartedAtRef.current) / 1000))
             });
+            if (liveSessionRef.current?.id) {
+               liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'saved' }).catch(() => {});
+            }
             alert(t('classroom.recording_uploaded'));
           } catch (error: any) {
             console.error("Failed to upload recording", error);
             alert(error.message || t('classroom.recording_upload_failed'));
+          } finally {
+            if (recordingStreamRef.current) {
+              stopTracks(recordingStreamRef.current);
+            }
+            if (displayStream && displayStream !== screenStream && displayStream !== screenStreamRef.current) {
+              stopTracks(displayStream);
+            }
+            recordingStreamRef.current = null;
           }
         };
         recorder.start();
         recordingStartedAtRef.current = Date.now();
         setMediaRecorder(recorder);
         setIsRecording(true);
+        if (liveSessionRef.current?.id) {
+          liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'recording' }).catch(() => {});
+        }
       } catch (err) {
         console.error("Failed to start recording", err);
       }
     } else {
-      // Stop Recording
       if (mediaRecorder) {
         mediaRecorder.stop();
         setMediaRecorder(null);
       }
       setIsRecording(false);
+      if (liveSessionRef.current?.id) {
+        liveSessionsApi.patch(liveSessionRef.current.id, { recordingStatus: 'idle' }).catch(() => {});
+      }
     }
   };
 
@@ -557,11 +879,26 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     const file = e.target.files?.[0];
     if (!file) return;
     const courseId = localStorage.getItem('lingobridge_courseId') || '';
+    let activeLessonNodeId = lessonNodeId || localStorage.getItem('lingobridge_lessonNodeId') || liveSession?.lessonNodeId || '';
+    
     try {
       setPagesLoading(true);
+      if (!activeLessonNodeId) {
+        const existingNodes = await lessonNodesApi.list(courseId);
+        if (existingNodes && existingNodes.length > 0) {
+          activeLessonNodeId = existingNodes[0].id;
+        } else {
+          const created = await lessonNodesApi.create(courseId, {
+            title: `Live Lesson ${new Date().toLocaleDateString()}`
+          });
+          activeLessonNodeId = created.lessonNode.id;
+        }
+        localStorage.setItem('lingobridge_lessonNodeId', activeLessonNodeId);
+      }
+
       setCoursewareStatus('processing');
-      const result = await coursesApi.uploadCourseware(courseId, file);
-      const fileMeta = result.file as { mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
+      const result = await coursesApi.uploadCourseware(courseId, file, activeLessonNodeId);
+      const fileMeta = result.file as { id?: string; mimeType?: string; storageUrl?: string; renderStatus?: string } | undefined;
       const isPdf = fileMeta?.mimeType === 'application/pdf' || file.name.endsWith('.pdf');
       const isPptx = fileMeta?.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' || file.name.endsWith('.pptx');
       setIsPdfType(isPdf);
@@ -571,6 +908,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       setCoursePages(pages);
       setCurrentPageIdx(0);
       setLiveMode('multimedia');
+
+      // Auto-set defaultCoursewareFileId on the lesson node
+      if (fileMeta?.id && activeLessonNodeId) {
+        lessonNodesApi.update(activeLessonNodeId, { defaultCoursewareFileId: fileMeta.id }).catch(() => {});
+      }
       const status = fileMeta?.renderStatus as 'pending' | 'processing' | 'ready' | 'failed' | undefined;
       setCoursewareStatus(status || 'ready');
       if (isPptx) {
@@ -585,36 +927,6 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   };
 
   // Canvas Drawing logic — stroke-based with per-page storage
-  const getCurrentPageKey = useCallback((): number => {
-    return isPdfType ? pdfPage : currentPageIdx + 1;
-  }, [isPdfType, pdfPage, currentPageIdx]);
-
-  const redrawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const pageKey = getCurrentPageKey();
-    const strokes = pageStrokes.get(pageKey) || [];
-
-    for (const stroke of strokes) {
-      if (stroke.points.length < 2) continue;
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      for (let i = 1; i < stroke.points.length; i++) {
-        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-      }
-      ctx.stroke();
-    }
-  }, [pageStrokes, getCurrentPageKey]);
-
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -633,17 +945,48 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (!isTeacher || !isCanvasEnabled) return;
     e.preventDefault();
     const pos = getPos(e);
+    const tool = drawingToolRef.current;
+
+    if (tool === 'eraser') {
+      eraseAt(pos);
+      isDrawingRef.current = true;
+      setIsDrawing(true);
+      return;
+    }
+
+    if (tool === 'text') {
+      const text = window.prompt('输入文本');
+      if (!text) return;
+      const textStroke: Stroke = {
+        tool: 'text',
+        points: [pos],
+        color: brushColorRef.current,
+        width: brushWidthRef.current,
+        text
+      };
+      const pageKey = getCurrentPageKey();
+      setPageStrokes(prev => {
+        const next = new Map<number, Stroke[]>(prev);
+        const strokes = next.get(pageKey);
+        next.set(pageKey, strokes ? [...strokes, textStroke] : [textStroke]);
+        return next;
+      });
+      return;
+    }
+
+    isDrawingRef.current = true;
     setIsDrawing(true);
-    setLastPos(pos);
+    lastPosRef.current = pos;
     currentStroke.current = {
+      tool: tool === 'eraser' ? 'pen' : tool,
       points: [pos],
-      color: brushColor,
-      width: brushWidth,
+      color: brushColorRef.current,
+      width: brushWidthRef.current,
     };
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isTeacher || !isCanvasEnabled || !isDrawing) return;
+    if (!isTeacher || !isCanvasEnabled || !isDrawingRef.current) return;
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -651,34 +994,47 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     if (!ctx) return;
 
     const pos = getPos(e);
-    currentStroke.current?.points.push(pos);
+    if (drawingToolRef.current === 'eraser') {
+      eraseAt(pos);
+      return;
+    }
+    const stroke = currentStroke.current;
+    if (!stroke) return;
 
-    ctx.beginPath();
-    ctx.strokeStyle = brushColor;
-    ctx.lineWidth = brushWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.moveTo(lastPos.x, lastPos.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    setLastPos(pos);
+    if ((stroke.tool || 'pen') === 'pen') {
+      stroke.points.push(pos);
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    } else {
+      stroke.points = [stroke.points[0], pos];
+      redrawCurrentPageStrokes(stroke);
+    }
+    lastPosRef.current = pos;
   };
 
   const stopDrawing = () => {
-    if (!isDrawing) {
+    if (!isDrawingRef.current) {
       setIsDrawing(false);
       return;
     }
-    if (currentStroke.current && currentStroke.current.points.length > 1) {
+    const strokeToSave = currentStroke.current;
+    if (strokeToSave && (strokeToSave.points.length > 1 || strokeToSave.tool === 'text')) {
       const pageKey = getCurrentPageKey();
       setPageStrokes(prev => {
         const next = new Map<number, Stroke[]>(prev);
         const strokes = next.get(pageKey);
-        next.set(pageKey, strokes ? [...strokes, currentStroke.current!] : [currentStroke.current!]);
+        next.set(pageKey, strokes ? [...strokes, strokeToSave] : [strokeToSave]);
         return next;
       });
     }
     currentStroke.current = null;
+    isDrawingRef.current = false;
     setIsDrawing(false);
   };
 
@@ -697,10 +1053,39 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     }
   };
 
-  // Redraw strokes when page changes
-  useEffect(() => {
-    redrawCanvas();
-  }, [pdfPage, currentPageIdx, redrawCanvas]);
+  const pickCanvasColor = async () => {
+    const EyeDropperCtor = (window as any).EyeDropper;
+    if (EyeDropperCtor) {
+      try {
+        const result = await new EyeDropperCtor().open();
+        if (result?.sRGBHex) setBrushColor(result.sRGBHex);
+      } catch {
+        // User cancelled the picker.
+      }
+    }
+  };
+
+  const startControlsDrag = (event: React.PointerEvent) => {
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    controlsDragRef.current = {
+      dragging: true,
+      dx: event.clientX - controlsPosition.x,
+      dy: event.clientY - controlsPosition.y,
+    };
+  };
+
+  const dragControls = (event: React.PointerEvent) => {
+    if (!controlsDragRef.current.dragging) return;
+    setControlsPosition({
+      x: Math.max(8, Math.min(window.innerWidth - 80, event.clientX - controlsDragRef.current.dx)),
+      y: Math.max(72, Math.min(window.innerHeight - 180, event.clientY - controlsDragRef.current.dy)),
+    });
+  };
+
+  const stopControlsDrag = () => {
+    controlsDragRef.current.dragging = false;
+  };
 
   return (
     <div id="classroom-view" className="fixed inset-0 bg-[#0F172A] text-white z-[60] flex flex-col font-sans">
@@ -814,10 +1199,23 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                <Users size={32} className="mb-3 opacity-30" />
-                <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
-              </div>
+              {participants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <Users size={32} className="mb-3 opacity-30" />
+                  <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
+                </div>
+              ) : participants.map((student) => (
+                <div key={student.id} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-black">
+                    {student.displayName.slice(0, 1)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{student.displayName}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{student.username}</p>
+                  </div>
+                  <span className="ml-auto w-2 h-2 rounded-full bg-green-400" />
+                </div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -881,7 +1279,9 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   <video
                     autoPlay
                     playsInline
-                    ref={(el) => { if (el) el.srcObject = screenStream; }}
+                    ref={(el) => {
+                      if (el && el.srcObject !== screenStream) el.srcObject = screenStream;
+                    }}
                     className="w-full h-full object-contain"
                   />
                 ) : (
@@ -920,8 +1320,10 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     <PdfViewer
                       url={pdfFile}
                       page={pdfPage}
-                      onPageCount={setPdfPageCount}
+                      lessonNodeId={lessonNodeId || liveSession?.lessonNodeId || undefined}
+                      onPageCount={handlePageCount}
                       onRenderState={setPdfRenderState}
+                      onRenderError={handlePdfRenderError}
                     />
                     {pdfRenderState === 'loading' && pdfPageCount > 0 && (
                       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-black/60 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm">
@@ -976,6 +1378,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             <div ref={canvasContainerRef} className="absolute inset-0 z-40 w-full h-full pointer-events-none">
               <canvas
                 ref={canvasRef}
+                data-testid="canvas-annotation"
                 onMouseDown={isCanvasEnabled && isTeacher ? startDrawing : undefined}
                 onMouseMove={isCanvasEnabled && isTeacher ? draw : undefined}
                 onMouseUp={isCanvasEnabled && isTeacher ? stopDrawing : undefined}
@@ -990,10 +1393,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
             {/* Control Sidebar (Left) */}
             {isTeacher && (
-            <div className="absolute top-24 left-6 z-[120] flex flex-col items-start gap-3 pointer-events-none">
+            <div className="absolute inset-y-0 left-0 z-[120] pointer-events-none">
               <button
+                data-testid="btn-settings"
                 onClick={() => setIsControlsExpanded(!isControlsExpanded)}
-                className="w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
+                className="absolute left-4 bottom-24 w-12 h-12 bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200 shadow-xl flex items-center justify-center pointer-events-auto hover:bg-gray-50 transition-all active:scale-95 group"
               >
                 {isControlsExpanded ? <X size={20} className="text-gray-600" /> : <Settings size={20} className="text-gray-600 group-hover:rotate-90 transition-transform" />}
               </button>
@@ -1001,10 +1405,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               <AnimatePresence>
                 {isControlsExpanded && (
                   <motion.div
-                    initial={{ opacity: 0, x: -20, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                    className="bg-white/95 backdrop-blur-md p-5 rounded-3xl border border-gray-200 shadow-2xl flex flex-col gap-5 pointer-events-auto w-64"
+                    initial={{ opacity: 0, x: -280 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -280 }}
+                    transition={{ type: 'spring', damping: 24, stiffness: 220 }}
+                    className="absolute left-0 top-4 bottom-24 w-72 bg-white/95 backdrop-blur-md p-4 rounded-r-3xl border-y border-r border-gray-200 shadow-2xl flex flex-col gap-4 pointer-events-auto overflow-y-auto custom-scrollbar"
                   >
                     <div className="flex flex-col gap-2">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{t('classroom.content_mode')}</span>
@@ -1047,11 +1452,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       <label className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-all">
                          <Plus size={16} />
                          {t('classroom.upload_pdf')}
-                         <input type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
+                         <input type="file" accept=".pdf,.pptx" className="hidden" onChange={handlePdfUpload} />
                       </label>
 
                       {/* Canvas toggle button — teacher only */}
                       <button
+                        data-testid="btn-pen-toggle"
                         onClick={() => setIsCanvasEnabled(!isCanvasEnabled)}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-bold border transition-all ${
                           isCanvasEnabled ? 'bg-green-50 border-green-200 text-green-600' : 'bg-gray-50 border-gray-200 text-gray-400'
@@ -1067,6 +1473,29 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       {/* Brush controls — visible when canvas on */}
                       {isCanvasEnabled && (
                         <div className="flex flex-col gap-3 px-2">
+                          <div className="grid grid-cols-7 gap-1">
+                            {[
+                              { id: 'pen' as const, icon: Pen, label: 'Pen' },
+                              { id: 'line' as const, icon: Minus, label: 'Line' },
+                              { id: 'arrow' as const, icon: ArrowUpRight, label: 'Arrow' },
+                              { id: 'rect' as const, icon: Square, label: 'Rect' },
+                              { id: 'ellipse' as const, icon: Circle, label: 'Circle' },
+                              { id: 'text' as const, icon: Type, label: 'Text' },
+                              { id: 'eraser' as const, icon: Eraser, label: 'Eraser' },
+                            ].map(({ id, icon: Icon, label }) => (
+                              <button
+                                key={id}
+                                type="button"
+                                title={label}
+                                onClick={() => setDrawingTool(id)}
+                                className={`h-8 rounded-lg border flex items-center justify-center transition-all ${
+                                  drawingTool === id ? 'bg-gray-900 border-gray-900 text-white' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                                }`}
+                              >
+                                <Icon size={14} />
+                              </button>
+                            ))}
+                          </div>
                           <div className="flex items-center gap-2">
                             <Palette size={12} className="text-gray-400" />
                             {['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#000000'].map(c => (
@@ -1077,6 +1506,27 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                                 style={{ backgroundColor: c, borderColor: brushColor === c ? '#333' : '#e5e7eb' }}
                               />
                             ))}
+                            <label
+                              title="Color"
+                              className="w-6 h-6 rounded-lg border border-gray-200 overflow-hidden bg-white flex items-center justify-center cursor-pointer"
+                            >
+                              <input
+                                type="color"
+                                value={brushColor}
+                                onChange={(e) => setBrushColor(e.target.value)}
+                                className="w-8 h-8 cursor-pointer"
+                              />
+                            </label>
+                            {'EyeDropper' in window && (
+                              <button
+                                type="button"
+                                title="Pick color"
+                                onClick={pickCanvasColor}
+                                className="w-6 h-6 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100"
+                              >
+                                <Pipette size={12} />
+                              </button>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-gray-500">
                             <span>{t('classroom.brush_size')}:</span>
@@ -1093,33 +1543,13 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                         </div>
                       )}
 
-                      {/* Teacher-only PG paginator */}
-                       {(pdfFile || coursePages.length > 0) && liveMode === 'multimedia' && (
-                         <div className="flex items-center justify-between bg-gray-50 rounded-xl border border-gray-200 p-2">
-                            <button
-                             onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                             className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                            >
-                             <ChevronLeft size={16} />
-                            </button>
-                            <span className="text-[11px] font-black text-gray-700 min-w-[60px] text-center">
-                              {isPdfType
-                                ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
-                                : `${t('classroom.pg')} ${currentPageIdx + 1}`}
-                            </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
-                              className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors"
-                             >
-                             <ChevronRight size={16} />
-                            </button>
-                         </div>
-                       )}
+
                     </div>
 
                     <div className="h-[1px] w-full bg-gray-100" />
 
                     <button
+                      data-testid="btn-clear-ink"
                       onClick={clearInk}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xl"
                     >
@@ -1160,31 +1590,37 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                     : t('classroom.presentation_active')}
               </div>
 
-              {/* Pagination controls — visible to both but label differs */}
+              {/* Pagination controls — teacher navigates, student follows */}
+              {isTeacher && liveMode !== 'local' ? (
               <div className="flex items-center gap-8 mx-auto md:mx-0">
                 <button
+                  data-testid="btn-prev-page"
                   onClick={() => { if (isPdfType) { setPdfPage(p => Math.max(1, p - 1)); } else { setCurrentPageIdx(i => Math.max(0, i - 1)); } }}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
                   title={t('homework.prev')}
+                  disabled={isPdfType ? pdfPage <= 1 : coursePages.length === 0 || currentPageIdx <= 0}
                 >
                   <ChevronLeft size={24} />
                 </button>
-                <div className="text-center min-w-[60px]">
+                <div className="text-center min-w-[60px]" data-testid="page-indicator">
                   <div className="text-xs font-black">
                     {isPdfType
-                      ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount || '…'))
+                      ? t('classroom.pdf_page').replace('{page}', String(pdfPage)).replace('{total}', String(pdfPageCount))
                       : (coursePages.length > 0 ? currentPageIdx + 1 : 1)}
                   </div>
                   <div className="text-[8px] font-bold text-white/40 uppercase tracking-tighter">{t('classroom.slide')}</div>
                 </div>
-                <button
-                  onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount || 999, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                  title={t('homework.next')}
-                >
-                  <ChevronRight size={24} />
-                </button>
+                  <button
+                    data-testid="btn-next-page"
+                    onClick={() => { if (isPdfType) { setPdfPage(p => Math.min(pdfPageCount, p + 1)); } else { setCurrentPageIdx(i => Math.min(coursePages.length - 1, i + 1)); } }}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-30"
+                    title={t('homework.next')}
+                    disabled={isPdfType ? pdfPage >= pdfPageCount : coursePages.length === 0 || currentPageIdx >= coursePages.length - 1}
+                  >
+                    <ChevronRight size={24} />
+                  </button>
               </div>
+              ) : <div className="flex-1" />}
 
               <div className="flex items-center gap-4">
                 <button
@@ -1199,72 +1635,118 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
           {/* Translation Tracker Section */}
           {showTranscript && (
-          <div className="h-40 bg-[#0F172A] border-t border-gray-800 flex flex-col z-20 relative">
+          <div className="h-48 bg-[#0F172A] border-t border-gray-800 flex flex-col z-20 relative">
              <div className="flex items-center justify-between px-6 py-2 border-b border-gray-800 bg-white/5">
                 <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400 tracking-tighter uppercase whitespace-nowrap">
                    <Languages size={12} />
                    {t('classroom.transcript_title')}
+                   {asrActive && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
                 </div>
                 <div className="flex items-center gap-4">
-                   <span className="text-[10px] font-bold text-gray-500 uppercase">{t('classroom.cn_ru_active')}</span>
+                   {asrError && <span className="text-[9px] text-yellow-500 max-w-[200px] truncate">{asrError}</span>}
+                   <span className={`text-[10px] font-bold uppercase ${asrActive ? 'text-green-400' : 'text-gray-500'}`}>
+                     {asrActive ? (isAsrSupported() ? 'ASR LIVE' : 'DEMO MODE') : t('classroom.cn_ru_active')}
+                   </span>
                 </div>
              </div>
-             <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-4">
+             <div className="flex-1 overflow-y-auto px-6 py-3 custom-scrollbar space-y-3">
                 {transcript.map((line, i) => (
-                  <div key={i} className="flex gap-6 items-start">
-                       <div className="text-[10px] font-mono text-gray-700 mt-0.5 tracking-tighter">{t('classroom.rec')}</div>
-                     <div className="flex-1 grid grid-cols-2 gap-8 border-l border-white/5 pl-4">
-                        <p className="text-xs text-blue-100 font-medium border-l border-blue-500 pl-3">{line.zh}</p>
-                        <p className="text-xs text-gray-400 italic border-l border-white/10 pl-3">{line.ru}</p>
+                  <div key={i} className="flex gap-4 items-start animate-[fadeIn_0.3s_ease-out]">
+                       <div className="text-[10px] font-mono text-gray-600 mt-0.5 tracking-tighter shrink-0 w-6">{String(i + 1).padStart(2, '0')}</div>
+                     <div className="flex-1 grid grid-cols-2 gap-6 border-l border-white/5 pl-3">
+                        <p className="text-xs text-blue-100 font-medium border-l-2 border-blue-500 pl-3">{line.zh}</p>
+                        <p className="text-xs text-gray-400 italic border-l-2 border-purple-500/40 pl-3">{line.ru}</p>
                      </div>
                   </div>
                 ))}
-                {!transcript.length && (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-[10px] uppercase tracking-widest font-bold">
-                     {t('classroom.system_ready')}
+                {asrInterim && (
+                  <div className="flex gap-4 items-start opacity-60">
+                    <div className="text-[10px] font-mono text-blue-400 mt-0.5 tracking-tighter shrink-0 w-6 animate-pulse">··</div>
+                    <div className="flex-1 border-l border-blue-500/30 pl-3">
+                      <p className="text-xs text-blue-200/70 italic">{asrInterim}</p>
+                    </div>
                   </div>
                 )}
+                {!transcript.length && !asrInterim && (
+                  <div className="h-full flex flex-col items-center justify-center gap-2 text-gray-600">
+                     <Mic size={16} className={asrActive ? 'animate-pulse text-green-500/50' : ''} />
+                     <span className="text-[10px] uppercase tracking-widest font-bold">
+                       {asrActive ? (isAsrSupported() ? '正在监听语音...' : '演示字幕加载中...') : t('classroom.system_ready')}
+                     </span>
+                  </div>
+                )}
+                <div ref={transcriptEndRef} />
              </div>
           </div>
           )}
 
           {/* Draggable Teacher Camera Window - Floating Overlay */}
-          <motion.div
-            drag
-            dragMomentum={false}
-            initial={{ left: 'auto', right: 32, bottom: 200 }}
-            className="absolute w-56 h-40 bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/50 z-[110] cursor-move active:scale-95 transition-transform"
-          >
-            {isCamOn ? (
-              <video
-                autoPlay
-                playsInline
-                muted
-                ref={(el) => {
-                  if (el && localStream) el.srcObject = localStream;
-                }}
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
+          <AnimatePresence>
+            {isCameraWindowVisible ? (
+              <motion.div
+                drag
+                dragMomentum={false}
+                initial={{ left: 'auto', right: 32, bottom: 200, opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                className="absolute w-56 h-40 bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/50 z-[110] cursor-move active:scale-95 transition-transform"
+              >
+                {isCamOn ? (
+                  <video
+                    autoPlay
+                    playsInline
+                    muted
+                    ref={(el) => {
+                      if (el && localStream && el.srcObject !== localStream) el.srcObject = localStream;
+                    }}
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                    <Video size={32} className="text-gray-600 mb-2" />
+                    <img
+                      src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=600&auto=format&fit=crop"
+                      className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-20 grayscale"
+                      alt="Teacher sitting at computer"
+                    />
+                  </div>
+                )}
+                {!isTeacher && (
+                  <button
+                    type="button"
+                    aria-label="Hide teacher video"
+                    onClick={() => setIsCameraWindowVisible(false)}
+                    className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center border border-white/10 hover:bg-black/80 transition-colors cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <div className="absolute top-2 right-2 flex gap-1">
+                   <div className={`${isMicOn ? 'bg-blue-600' : 'bg-gray-700'} rounded px-2 py-0.5 text-[8px] font-bold flex items-center gap-1 shadow-lg transition-colors`}>
+                      <Mic size={8} className={isMicOn ? 'animate-pulse' : ''} />
+                       {isMicOn ? t('classroom.on') : t('classroom.off')}
+                   </div>
+                </div>
+                <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
+                  {isTeacher ? t('classroom.teacher_label') : liveSession ? t('classroom.waiting_teacher') : (t('classroom.self_study') || 'Self Study')}
+                </div>
+              </motion.div>
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                <Video size={32} className="text-gray-600 mb-2" />
-                <img
-                  src="https://images.unsplash.com/photo-1544717305-27a734ef1904?q=80&w=600&auto=format&fit=crop"
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-20 grayscale"
-                  alt="Teacher sitting at computer"
-                />
-              </div>
+              !isTeacher && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  onClick={() => setIsCameraWindowVisible(true)}
+                  className="absolute right-8 bottom-48 z-[110] h-10 px-4 rounded-full bg-gray-900/85 backdrop-blur-md text-white text-xs font-bold border border-white/10 shadow-xl flex items-center gap-2 hover:bg-gray-800 transition-colors"
+                >
+                  <Video size={15} />
+                  {t('classroom.teacher_label')}
+                </motion.button>
+              )
             )}
-            <div className="absolute top-2 right-2 flex gap-1">
-               <div className={`${isMicOn ? 'bg-blue-600' : 'bg-gray-700'} rounded px-2 py-0.5 text-[8px] font-bold flex items-center gap-1 shadow-lg transition-colors`}>
-                  <Mic size={8} className={isMicOn ? 'animate-pulse' : ''} />
-                   {isMicOn ? t('classroom.on') : t('classroom.off')}
-               </div>
-            </div>
-            <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
-              {isTeacher ? t('classroom.teacher_label') : t('classroom.waiting_teacher')}
-            </div>
-          </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Chat Sidebar */}
@@ -1351,15 +1833,27 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                         {task.taskType} · {task.lessonTitle || `L${task.lesson}`}
                       </span>
                       <button
-                        onClick={() => ttsService.speak(task.zhText)}
+                        onClick={() => ttsService.speak(task.zhText, 'zh-CN')}
                         className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-400 transition-colors"
+                        title="播放中文"
                       >
                         <Volume2 size={14} />
                       </button>
                     </div>
                     <p className="text-lg font-bold text-white font-noto mb-1">{task.zhText}</p>
                     <p className="text-xs text-gray-400 italic mb-2">{task.pinyin}</p>
-                    <p className="text-xs text-gray-500 mb-3">{task.translationRu}</p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <p className="text-xs text-gray-500">{task.translationRu}</p>
+                      {task.translationRu && (
+                        <button
+                          onClick={() => ttsService.speak(task.translationRu, 'ru-RU')}
+                          className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-blue-300 transition-colors"
+                          title="播放俄语"
+                        >
+                          <Volume2 size={14} />
+                        </button>
+                      )}
+                    </div>
 
                     {idx === hwCurrentIdx && (
                       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/10">
@@ -1503,7 +1997,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                       <div className="text-center py-8">
                         <p className="text-3xl font-bold text-white mb-4 font-noto">{questionText}</p>
                         <button
-                          onClick={() => ttsService.speak(word.zhText)}
+                          onClick={() => ttsService.speak(vocabQuizMode === 'zh2ru' ? word.zhText : word.translationRu, vocabQuizMode === 'zh2ru' ? 'zh-CN' : 'ru-RU')}
                           className="w-12 h-12 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-all flex items-center justify-center mx-auto"
                         >
                           <Volume2 size={22} />
@@ -1636,11 +2130,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
         <div className="flex gap-4 md:gap-8 items-center bg-white/5 px-4 md:px-8 py-2 rounded-3xl border border-white/5 shadow-inner">
           {isTeacher && (
-          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={liveMode === 'local' ? stopScreenShare : startScreenShare}>
-            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${liveMode === 'local' ? 'bg-orange-600/20 text-orange-400 border-orange-500/30' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600/30 border-blue-500/30'} border`}>
+          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={screenStream ? stopScreenShare : startScreenShare}>
+            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${screenStream ? 'bg-orange-600/20 text-orange-400 border-orange-500/30' : 'bg-white/5 text-gray-500 group-hover:bg-white/10 border-white/10'} border`}>
               <Monitor size={18} />
             </div>
-            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${liveMode === 'local' ? 'text-orange-400' : 'text-blue-400'}`}>{liveMode === 'local' ? t('classroom.stop_share') : t('classroom.screen')}</span>
+            <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${screenStream ? 'text-orange-400' : 'text-gray-500'}`}>{screenStream ? t('classroom.stop_share') : t('classroom.screen')}</span>
           </div>
           )}
           <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowChat(!showChat)}>
@@ -1655,25 +2149,9 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             </div>
             <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('classroom.translate')}</span>
           </div>
-          {/* Student: homework and vocabulary panel buttons */}
-          {!isTeacher && (
-            <>
-              <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowHomeworkPanel(!showHomeworkPanel)}>
-                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showHomeworkPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
-                  <BookOpen size={18} />
-                </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('homework.title')}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setShowVocabPanel(!showVocabPanel)}>
-                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-all ${showVocabPanel ? 'bg-white/10 text-white' : 'text-gray-500'}`}>
-                  <Layers size={18} />
-                </div>
-                <span className="text-[8px] md:text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('nav.vocabulary')}</span>
-              </div>
-            </>
-          )}
+          {/* Student: homework and vocabulary panel buttons deleted to avoid bloat */}
           {isTeacher && (
-          <div className="flex flex-col items-center gap-1 group cursor-pointer">
+          <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setIsControlsExpanded((value) => !value)}>
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center group-hover:bg-white/5 transition-all text-gray-400">
               <Settings size={18} />
             </div>

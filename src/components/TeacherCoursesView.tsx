@@ -6,9 +6,10 @@ import {
   CheckCircle,
   BarChart2,
   BookOpen,
+  Trash2,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { coursesApi, type Course } from '../services/apiClient.ts';
+import { coursesApi, lessonNodesApi, type Course } from '../services/apiClient.ts';
 import { useLanguage } from '../context/LanguageContext.tsx';
 
 interface TeacherCoursesViewProps {
@@ -50,6 +51,20 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
       setMessage(t('course.created'));
     } catch (error: any) {
       setMessage(error.message || t('course.create_failed'));
+    }
+  };
+
+  const deleteCourse = async (course: Course) => {
+    const confirmed = window.confirm(`删除课程「${course.title}」？`);
+    if (!confirmed) return;
+    setMessage('');
+    try {
+      await coursesApi.delete(course.id);
+      setCourses((prev) => prev.filter((item) => item.id !== course.id));
+      if (selectedCourseId === course.id) setSelectedCourseId('');
+      setMessage('课程已删除');
+    } catch (error: any) {
+      setMessage(error.message || '删除课程失败');
     }
   };
 
@@ -97,7 +112,12 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
               }`}
             >
               <div className="h-40 relative bg-gradient-to-br from-blue-50 to-slate-100 flex items-center justify-center">
-                <BookOpen size={48} className="text-[#0056D2]" />
+                {course.coverImageUrl ? (
+                  <img src={course.coverImageUrl} alt={course.title} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <BookOpen size={48} className="text-[#0056D2]" />
+                )}
+                {course.coverImageUrl && <div className="absolute inset-0 bg-black/10" />}
                 <div className="absolute top-3 left-3 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm bg-green-100 text-green-700">
                   <CheckCircle size={10} />
                   {course.status}
@@ -130,9 +150,19 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
                     {course.exercisesCount || 0} {t('course.exercises')}
                   </button>
                   <button
-                    onClick={(event) => {
+                    onClick={async (event) => {
                       event.stopPropagation();
                       localStorage.setItem('lingobridge_courseId', course.id);
+                      try {
+                        const nodes = await lessonNodesApi.list(course.id);
+                        if (nodes && nodes.length > 0) {
+                          localStorage.setItem('lingobridge_lessonNodeId', nodes[0].id);
+                        } else {
+                          localStorage.removeItem('lingobridge_lessonNodeId');
+                        }
+                      } catch {
+                        localStorage.removeItem('lingobridge_lessonNodeId');
+                      }
                       onNavigate?.('teacher-classroom');
                     }}
                     className="flex-1 py-2 bg-blue-50 text-[#0056D2] rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
@@ -144,6 +174,16 @@ const TeacherCoursesView: React.FC<TeacherCoursesViewProps> = ({ onNavigate, onO
                 <button className="w-full mt-3 flex items-center justify-center gap-2 py-2 text-xs font-bold text-gray-400 hover:text-[#0056D2] transition-colors">
                   <BarChart2 size={14} />
                   {t('course.reports')}
+                </button>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    deleteCourse(course);
+                  }}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 size={14} />
+                  删除课程
                 </button>
               </div>
             </motion.div>

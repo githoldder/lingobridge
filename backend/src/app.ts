@@ -11,8 +11,11 @@ import * as usersRepo from './repositories/users.ts';
 import * as coursesRepo from './repositories/courses.ts';
 import * as filesRepo from './repositories/files.ts';
 import * as assignmentsRepo from './repositories/assignments.ts';
+import * as liveRepo from './repositories/live.ts';
+import * as classesRepo from './repositories/classes.ts';
+import * as homeworkSubmissionsRepo from './repositories/homework-submissions.ts';
 import * as XLSX from 'xlsx';
-import { queryRow, queryRows, getDbMode } from './db/postgres.ts';
+import { query, queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
 
@@ -137,23 +140,145 @@ export function createApp() {
   const app = express();
 
   app.use(express.json({ limit: '90mb' }));
+
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
   app.use('/uploads', express.static(storageRoot));
 
   const ttsCacheDir = path.resolve(process.cwd(), 'backend/data/tts-cache');
   if (!fs.existsSync(ttsCacheDir)) fs.mkdirSync(ttsCacheDir, { recursive: true });
   app.use('/uploads/tts-cache', express.static(ttsCacheDir));
 
-  app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', req.header('origin') || '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-  });
-
   app.get('/api/v1/health', async (_req, res) => {
     const dbStatus = await pgHealthCheck();
     ok(res, { status: 'ok', service: 'lingobridge-mvp-api', db: dbStatus });
+  });
+
+  const DEEPL_KEY = process.env.DEEPL_API_KEY || '';
+  const DEEPL_URL = DEEPL_KEY.endsWith(':fx')
+    ? 'https://api-free.deepl.com/v2/translate'
+    : 'https://api.deepl.com/v2/translate';
+  const TRANSLATE_CACHE_TTL_MS = 10 * 60 * 1000;
+  const translateCache = new Map<string, { text: string; provider: string; expiresAt: number }>();
+
+  function translationCacheKey(text: string, from: string, to: string) {
+    return `${from}:${to}:${text.trim()}`;
+  }
+
+  function getCachedTranslation(text: string, from: string, to: string) {
+    const item = translateCache.get(translationCacheKey(text, from, to));
+    if (!item) return null;
+    if (item.expiresAt < Date.now()) {
+      translateCache.delete(translationCacheKey(text, from, to));
+      return null;
+    }
+    return item;
+  }
+
+  function setCachedTranslation(text: string, from: string, to: string, translatedText: string, provider: string) {
+    translateCache.set(translationCacheKey(text, from, to), {
+      text: translatedText,
+      provider,
+      expiresAt: Date.now() + TRANSLATE_CACHE_TTL_MS
+    });
+  }
+
+  const BUILTIN_DICT: Record<string, string> = {
+    '你好': 'Привет',
+    '谢谢': 'Спасибо',
+    '再见': 'До свидания',
+    '老师': 'Учитель',
+    '学生': 'Студент',
+    '中文': 'Китайский язык',
+    '俄语': 'Русский язык',
+    '课堂': 'Урок',
+    '作业': 'Домашнее задание',
+    '你好，欢迎来到中文课堂': 'Здравствуйте, добро пожаловать на урок китайского языка',
+    '今天我们学习基本的问候语': 'Сегодня мы изучим основные приветствия',
+    '请跟我读': 'Пожалуйста, повторяйте за мной',
+    '很好，你的发音非常准确': 'Отлично, ваше произношение очень точное',
+    '下面我们练习一下对话': 'Теперь давайте попрактикуем диалог',
+    '你叫什么名字': 'Как тебя зовут',
+    '我叫老师，很高兴认识你': 'Меня зовут учитель, рад познакомиться',
+    '今天的课就到这里': 'На сегодня урок окончен',
+    '请打开课本': 'Пожалуйста, откройте учебник',
+    '我们开始上课': 'Начинаем урок',
+    '请注意听': 'Пожалуйста, слушайте внимательно',
+    '这个词的意思是': 'Значение этого слова',
+    '非常好': 'Очень хорошо',
+    '请再说一遍': 'Пожалуйста, скажите ещё раз',
+    '大家好': 'Всем привет',
+    '同学们好': 'Здравствуйте, ученики',
+    '现在开始': 'Начинаем сейчас',
+  };
+
+  async function translateViaDeepL(text: string, from: string, to: string): Promise<string | null> {
+    if (!DEEPL_KEY) return null;
+    const langMap: Record<string, string> = { zh: 'ZH', ru: 'RU', en: 'EN', kk: 'EN' };
+    const targetLang = langMap[to] || to.toUpperCase();
+    const sourceLang = langMap[from] || from.toUpperCase();
+    try {
+      const resp = await fetch(DEEPL_URL, {
+        method: 'POST',
+        headers: { Authorization: `DeepL-Auth-Key ${DEEPL_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: [text], source_lang: sourceLang, target_lang: targetLang }),
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data?.translations?.[0]?.text || null;
+    } catch { return null; }
+  }
+
+  function translateViaDict(text: string): string {
+    if (BUILTIN_DICT[text]) return BUILTIN_DICT[text];
+    const trimmed = text.replace(/[？?！!。，,、\s]+$/g, '');
+    if (BUILTIN_DICT[trimmed]) return BUILTIN_DICT[trimmed];
+    for (const [k, v] of Object.entries(BUILTIN_DICT)) {
+      if (text.includes(k)) return v;
+    }
+    return `[翻译] ${text}`;
+  }
+
+  app.post('/api/v1/translate', async (req, res) => {
+    const { text, from = 'zh', to = 'ru' } = req.body ?? {};
+    if (!text) return fail(res, 400, 'text is required');
+    const sourceText = String(text).trim();
+    const sourceLang = String(from);
+    const targetLang = String(to);
+    const cached = getCachedTranslation(sourceText, sourceLang, targetLang);
+    if (cached) return ok(res, { translatedText: cached.text, provider: `${cached.provider}-cache`, from, to });
+
+    const deepLResult = await translateViaDeepL(sourceText, sourceLang, targetLang);
+    const provider = deepLResult ? 'deepl' : 'builtin-dict';
+    const translatedText = deepLResult || translateViaDict(sourceText);
+    setCachedTranslation(sourceText, sourceLang, targetLang, translatedText, provider);
+    ok(res, { translatedText, provider, from, to });
+  });
+
+  app.post('/api/v1/translate/batch', async (req, res) => {
+    const { texts, from = 'zh', to = 'ru' } = req.body ?? {};
+    if (!Array.isArray(texts) || !texts.length) return fail(res, 400, 'texts array is required');
+    const translations = await Promise.all(
+      texts.map(async (t: string) => {
+        const sourceText = String(t).trim();
+        const sourceLang = String(from);
+        const targetLang = String(to);
+        const cached = getCachedTranslation(sourceText, sourceLang, targetLang);
+        if (cached) return cached.text;
+        const deepLResult = await translateViaDeepL(sourceText, sourceLang, targetLang);
+        const provider = deepLResult ? 'deepl' : 'builtin-dict';
+        const translatedText = deepLResult || translateViaDict(sourceText);
+        setCachedTranslation(sourceText, sourceLang, targetLang, translatedText, provider);
+        return translatedText;
+      })
+    );
+    ok(res, { translations, provider: DEEPL_KEY ? 'deepl' : 'builtin-dict', from, to });
   });
 
   app.post('/api/v1/auth/login', async (req, res) => {
@@ -238,17 +363,39 @@ export function createApp() {
   app.post('/api/v1/courses', async (req, res) => {
     const teacherId = currentUserId(req) || 'teacher-1';
     const title = String(req.body?.title || 'New Chinese Course');
+
+    // If classId provided, verify the class belongs to this teacher (or user is admin)
+    if (req.body?.classId) {
+      const cls = await classesRepo.findById(String(req.body.classId));
+      if (!cls) return fail(res, 404, 'Class not found');
+      const teacherUser = await usersRepo.findById(teacherId);
+      if (teacherUser?.role !== 'admin' && cls.teacherId !== teacherId) {
+        return fail(res, 403, 'Class does not belong to you');
+      }
+    }
+
     const course = await coursesRepo.create({
       teacherId,
       title,
       description: String(req.body?.description || ''),
-      status: 'published'
+      status: 'published',
+      classId: req.body?.classId || undefined,
+      defaultCoursewareFileId: req.body?.defaultCoursewareFileId || undefined,
     });
     await coursesRepo.addMember(course.id, teacherId, 'teacher');
 
-    const linkedStudentIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
-    for (const studentId of linkedStudentIds) {
-      await coursesRepo.addMember(course.id, studentId, 'student');
+    // If course is bound to a class, auto-add class members as course members
+    if (course.classId) {
+      const classMembers = await classesRepo.findMembers(course.classId);
+      for (const m of classMembers) {
+        await coursesRepo.addMember(course.id, m.studentId, 'student');
+      }
+    } else {
+      // Legacy: add linked students via teacher_student_links
+      const linkedStudentIds = await usersRepo.findStudentIdsByTeacherId(teacherId);
+      for (const studentId of linkedStudentIds) {
+        await coursesRepo.addMember(course.id, studentId, 'student');
+      }
     }
 
     ok(res, course);
@@ -412,15 +559,399 @@ export function createApp() {
   });
 
   app.patch('/api/v1/courses/:id', async (req, res) => {
-    const { title, description, status } = req.body ?? {};
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const course = await coursesRepo.findById(req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (user.role !== 'admin' && course.teacherId !== userId) {
+      return fail(res, 403, 'Forbidden');
+    }
+
+    // If setting classId, verify ownership
+    if (req.body?.classId !== undefined) {
+      const cls = await classesRepo.findById(String(req.body.classId));
+      if (!cls) return fail(res, 404, 'Class not found');
+      if (user.role !== 'admin' && cls.teacherId !== userId) {
+        return fail(res, 403, 'Class does not belong to you');
+      }
+    }
+
+    const { title, description, status, classId, defaultCoursewareFileId, coverImageUrl } = req.body ?? {};
     const updated = await coursesRepo.update(req.params.id, {
       title: title !== undefined ? String(title) : undefined,
       description: description !== undefined ? String(description) : undefined,
+      coverImageUrl: coverImageUrl !== undefined ? String(coverImageUrl) : undefined,
       status: status !== undefined && ['published', 'draft'].includes(status) ? status : undefined,
+      classId: classId !== undefined ? (classId || null) : undefined,
+      defaultCoursewareFileId: defaultCoursewareFileId !== undefined ? (defaultCoursewareFileId || null) : undefined,
     });
     if (!updated) return fail(res, 404, 'Course not found');
     ok(res, updated);
   });
+
+  app.delete('/api/v1/courses/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+    const course = await coursesRepo.findById(req.params.id);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (user.role !== 'admin' && course.teacherId !== userId) {
+      return fail(res, 403, 'Only course owner can delete this course');
+    }
+    const deleted = await coursesRepo.deleteById(req.params.id);
+    ok(res, { deleted });
+  });
+
+  // ─── Class CRUD API (S5-T02) ───
+
+  app.get('/api/v1/classes', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    let result: any[];
+    if (user.role === 'admin') {
+      result = await classesRepo.findAll();
+    } else if (user.role === 'teacher') {
+      result = await classesRepo.findByTeacherId(userId);
+    } else {
+      // Student: return classes they belong to
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      const fetched = await Promise.all(classIds.map((id) => classesRepo.findById(id)));
+      result = fetched.filter(Boolean);
+    }
+
+    const withCounts = await Promise.all(result.map(async (c: any) => {
+      const members = await classesRepo.findMembers(c.id);
+      return { ...c, studentCount: members.length };
+    }));
+    ok(res, withCounts);
+  });
+
+  app.post('/api/v1/classes', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user || user.role !== 'teacher') return fail(res, 403, 'Only teachers can create classes');
+
+    const name = String(req.body?.name || '').trim();
+    if (!name) return fail(res, 400, 'Class name is required');
+
+    const cls = await classesRepo.createClass({
+      teacherId: userId,
+      name,
+      description: String(req.body?.description || ''),
+    });
+    ok(res, cls);
+  });
+
+  app.get('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+
+    // Admin can view any class; teacher only own; student only if member
+    if (user.role === 'admin') return ok(res, cls);
+    if (user.role === 'teacher' && cls.teacherId === userId) return ok(res, cls);
+    if (user.role === 'student') {
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      if (classIds.includes(cls.id)) return ok(res, cls);
+    }
+    return fail(res, 403, 'Forbidden');
+  });
+
+  app.patch('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can update');
+
+    const { name, description } = req.body ?? {};
+    const updated = await classesRepo.updateClass(req.params.id, {
+      name: name !== undefined ? String(name) : undefined,
+      description: description !== undefined ? String(description) : undefined,
+    });
+    ok(res, updated);
+  });
+
+  app.delete('/api/v1/classes/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can delete');
+
+    await classesRepo.deleteClass(req.params.id);
+    ok(res, { deleted: true });
+  });
+
+  // ─── Class Members API (S5-T02) ───
+
+  app.get('/api/v1/classes/:id/members', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+
+    // Admin can view any class members; teacher only own; student only if member
+    if (user.role === 'admin') { /* allow */ }
+    else if (user.role === 'teacher' && cls.teacherId === userId) { /* allow */ }
+    else if (user.role === 'student') {
+      const classIds = await classesRepo.findClassIdsByStudentId(userId);
+      if (!classIds.includes(cls.id)) return fail(res, 403, 'Forbidden');
+    } else {
+      return fail(res, 403, 'Forbidden');
+    }
+
+    const members = await classesRepo.findMembers(req.params.id);
+    const enriched = await Promise.all(members.map(async (m) => {
+      const u = await usersRepo.findById(m.studentId);
+      return { ...m, displayName: u?.displayName ?? '', languagePref: u?.languagePref ?? 'zh' };
+    }));
+    ok(res, enriched);
+  });
+
+  app.post('/api/v1/classes/:id/members', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can add members');
+
+    const studentId = String(req.body?.studentId || '');
+    if (!studentId) return fail(res, 400, 'studentId is required');
+    const student = await usersRepo.findById(studentId);
+    if (!student || student.role !== 'student') return fail(res, 400, 'User is not a student');
+
+    const member = await classesRepo.addMember(req.params.id, studentId);
+
+    // Auto-add student to all courses in this class
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const classCourses = db.courses.filter((c) => (c as any).classId === req.params.id);
+      for (const course of classCourses) {
+        const existing = db.courseMembers.find((m) => m.courseId === course.id && m.userId === studentId);
+        if (!existing) {
+          db.courseMembers.push({
+            id: crypto.randomUUID(),
+            courseId: course.id,
+            userId: studentId,
+            role: 'student',
+            joinedAt: new Date().toISOString(),
+          });
+        }
+      }
+      await writeDb(db);
+    } else {
+      const classCourseRows = await queryRows('SELECT id FROM courses WHERE class_id = $1', [req.params.id]);
+      for (const row of classCourseRows) {
+        await coursesRepo.addMember(row.id, studentId, 'student');
+      }
+    }
+
+    ok(res, member);
+  });
+
+  app.delete('/api/v1/classes/:id/members/:studentId', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const cls = await classesRepo.findById(req.params.id);
+    if (!cls) return fail(res, 404, 'Class not found');
+    if (cls.teacherId !== userId) return fail(res, 403, 'Only class owner can remove members');
+
+    const removed = await classesRepo.removeMember(req.params.id, req.params.studentId);
+    if (!removed) return fail(res, 404, 'Member not found');
+
+    // Also clean up derived course_members for class-bound courses
+    const studentId = req.params.studentId;
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const classCourseIds = db.courses.filter((c) => (c as any).classId === req.params.id).map((c: any) => c.id);
+      db.courseMembers = db.courseMembers.filter(
+        (m) => !(classCourseIds.includes(m.courseId) && m.userId === studentId)
+      );
+      await writeDb(db);
+    } else {
+      const classCourseRows = await queryRows('SELECT id FROM courses WHERE class_id = $1', [req.params.id]);
+      for (const row of classCourseRows) {
+        await query(
+          `UPDATE course_members SET removed_at = now() WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL`,
+          [row.id, studentId]
+        );
+      }
+    }
+
+    ok(res, { removed: true });
+  });
+
+  // ─── Homework Submissions (S5-T06: 三级缓存 L3) ───
+
+  async function assertHomeworkAccess(res: Response, userId: string | undefined, targetStudentId: string): Promise<{ ok: boolean; user?: import('./repositories/types.ts').UserDto }> {
+    if (!userId) { fail(res, 401, 'Unauthorized'); return { ok: false }; }
+    const user = await usersRepo.findById(userId);
+    if (!user) { fail(res, 401, 'Unauthorized'); return { ok: false }; }
+    if (user.role === 'admin') return { ok: true, user };
+    if (user.role === 'student' && userId === targetStudentId) return { ok: true, user };
+    if (user.role === 'teacher') {
+      const linked = await usersRepo.findStudentIdsByTeacherId(userId);
+      if (linked.includes(targetStudentId)) return { ok: true, user };
+      const classIds = await classesRepo.findClassIdsByTeacherId(userId);
+      const allMembers = await Promise.all(classIds.map((id) => classesRepo.findMembers(id)));
+      if (allMembers.flat().some((m) => m.studentId === targetStudentId)) return { ok: true, user };
+    }
+    fail(res, 403, 'Forbidden');
+    return { ok: false };
+  }
+
+  // Get submissions for a student in a lesson
+  app.get('/api/v1/homework-submissions', async (req, res) => {
+    const userId = currentUserId(req);
+    const { studentId: rawStudentId, lessonNodeId, courseId, assignmentNodeId } = req.query as Record<string, string>;
+    const studentId = rawStudentId || userId;
+    if (!studentId) { res.status(400).json({ error: 'studentId is required' }); return; }
+    const access = await assertHomeworkAccess(res, userId, studentId);
+    if (!access.ok) return;
+
+    if (assignmentNodeId) {
+      const sub = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
+      ok(res, sub || null);
+    } else if (lessonNodeId) {
+      const subs = await homeworkSubmissionsRepo.findByStudentAndLesson(studentId, lessonNodeId);
+      ok(res, subs);
+    } else if (courseId) {
+      const subs = await homeworkSubmissionsRepo.findByStudentAndCourse(studentId, courseId);
+      ok(res, subs);
+    } else {
+      fail(res, 400, 'lessonNodeId, courseId, or assignmentNodeId is required');
+    }
+  });
+
+  // Save draft (create or update)
+  app.put('/api/v1/homework-submissions/draft', async (req, res) => {
+    const userId = currentUserId(req);
+    const { studentId: rawStudentId, courseId, lessonNodeId, assignmentNodeId, draftData } = req.body as {
+      studentId: string; courseId: string; lessonNodeId: string; assignmentNodeId: string; draftData?: Record<string, any>;
+    };
+    const studentId = rawStudentId || userId;
+    if (!studentId || !courseId || !lessonNodeId || !assignmentNodeId) {
+      fail(res, 400, 'studentId, courseId, lessonNodeId, assignmentNodeId are required'); return;
+    }
+    const access = await assertHomeworkAccess(res, userId, studentId);
+    if (!access.ok) return;
+
+    // Validate assignment/lesson/course consistency and student course access
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const assignment = db.assignmentNodes.find((a: any) => a.id === assignmentNodeId);
+      if (!assignment) return fail(res, 404, 'Assignment node not found');
+      if (assignment.lessonNodeId !== lessonNodeId || assignment.courseId !== courseId) {
+        return fail(res, 400, 'Assignment/lesson/course mismatch');
+      }
+      const lesson = db.lessonNodes.find((n: any) => n.id === lessonNodeId);
+      if (!lesson || lesson.courseId !== courseId) {
+        return fail(res, 400, 'Lesson node not found or course mismatch');
+      }
+      const hasCourseAccess = db.courseMembers.some((m: any) => m.courseId === courseId && m.userId === studentId)
+        || db.classMembers.filter((m: any) => m.studentId === studentId).some((cm: any) =>
+          db.courses.some((c: any) => c.id === courseId && c.classId === cm.classId));
+      if (!hasCourseAccess) return fail(res, 403, 'Student does not have access to this course');
+    } else {
+      const assignment = await queryRow('SELECT * FROM assignment_nodes WHERE id = $1', [assignmentNodeId]);
+      if (!assignment) return fail(res, 404, 'Assignment node not found');
+      if (assignment.lesson_node_id !== lessonNodeId || assignment.course_id !== courseId) {
+        return fail(res, 400, 'Assignment/lesson/course mismatch');
+      }
+      const lesson = await queryRow('SELECT * FROM lesson_nodes WHERE id = $1 AND course_id = $2', [lessonNodeId, courseId]);
+      if (!lesson) return fail(res, 400, 'Lesson node not found or course mismatch');
+      const memberRow = await queryRow(
+        'SELECT id FROM course_members WHERE course_id = $1 AND user_id = $2 AND removed_at IS NULL',
+        [courseId, studentId]
+      );
+      let hasAccess = !!memberRow;
+      if (!hasAccess) {
+        const inheritedRow = await queryRow(
+          `SELECT c.id FROM courses c
+           JOIN class_members clm ON clm.class_id = c.class_id AND clm.student_id = $1 AND clm.removed_at IS NULL
+           WHERE c.id = $2`,
+          [studentId, courseId]
+        );
+        hasAccess = !!inheritedRow;
+      }
+      if (!hasAccess) return fail(res, 403, 'Student does not have access to this course');
+    }
+
+    const existing = await homeworkSubmissionsRepo.findByStudentAndAssignment(studentId, assignmentNodeId);
+    if (existing) {
+      const updated = await homeworkSubmissionsRepo.updateDraft(existing.id, draftData || {});
+      ok(res, updated);
+    } else {
+      const created = await homeworkSubmissionsRepo.create({ studentId, courseId, lessonNodeId, assignmentNodeId, draftData });
+      res.status(201).json({ code: 0, data: created, message: 'success' });
+    }
+  });
+
+  // Submit homework (draft → submitted)
+  app.post('/api/v1/homework-submissions/:id/submit', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    // Look up submission to verify ownership
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const sub = (db.homeworkSubmissions || []).find((s: any) => s.id === req.params.id);
+      if (!sub) return fail(res, 404, 'Draft not found or already submitted');
+      if (user.role !== 'admin' && sub.studentId !== userId) return fail(res, 403, 'Forbidden');
+    } else {
+      const row = await queryRow('SELECT * FROM homework_submissions WHERE id = $1', [req.params.id]);
+      if (!row) return fail(res, 404, 'Draft not found or already submitted');
+      if (user.role !== 'admin' && row.student_id !== userId) return fail(res, 403, 'Forbidden');
+    }
+
+    const submitted = await homeworkSubmissionsRepo.submit(req.params.id);
+    if (!submitted) return fail(res, 404, 'Draft not found or already submitted');
+    ok(res, submitted);
+  });
+
+  // Delete a submission
+  app.delete('/api/v1/homework-submissions/:id', async (req, res) => {
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    // Look up submission to verify ownership
+    if (getDbMode() === 'json') {
+      const db = await readDb();
+      const sub = (db.homeworkSubmissions || []).find((s: any) => s.id === req.params.id);
+      if (!sub) return fail(res, 404, 'Not found');
+      if (user.role !== 'admin' && sub.studentId !== userId) return fail(res, 403, 'Forbidden');
+    } else {
+      const row = await queryRow('SELECT * FROM homework_submissions WHERE id = $1', [req.params.id]);
+      if (!row) return fail(res, 404, 'Not found');
+      if (user.role !== 'admin' && row.student_id !== userId) return fail(res, 403, 'Forbidden');
+    }
+
+    const ok = await homeworkSubmissionsRepo.deleteById(req.params.id);
+    if (!ok) return fail(res, 404, 'Not found');
+    res.json({ code: 0, data: { ok: true }, message: 'success' });
+  });
+
+// ─── Course Members (existing) ───
 
   app.get('/api/v1/courses/:id/members', async (req, res) => {
     const members = await coursesRepo.findMembers(req.params.id);
@@ -538,15 +1069,17 @@ export function createApp() {
     const items = files.map((f) => {
       const pages = db.coursePages.filter((p) => p.courseId === f.courseId && p.fileUrl === f.storageUrl);
       const lesson = f.lessonNodeId ? db.lessonNodes.find((n) => n.id === f.lessonNodeId) : undefined;
+      const fileType = f.type || (f as any).kind || '';
       return {
         id: f.id,
         filename: f.filename,
         mimeType: f.mimeType,
-        type: f.type,
+        type: fileType,
         lessonNodeId: f.lessonNodeId || '',
+        storageUrl: f.storageUrl || '',
         liveClassTitle: lesson?.title || '',
         pageCount: pages.length,
-        status: ['pdf', 'pptx'].includes(f.type) ? 'ready' : 'ready' as const,
+        status: ['pdf', 'pptx'].includes(fileType) ? 'ready' : 'ready' as const,
         createdAt: f.createdAt
       };
     });
@@ -796,8 +1329,16 @@ export function createApp() {
   });
 
   app.get('/api/v1/learning-records', async (req, res) => {
+    const userId = currentUserId(req);
+    const queryStudentId = req.query.studentId ? String(req.query.studentId) : undefined;
+    const studentId = queryStudentId || userId || 'student-1';
+
+    if (queryStudentId && queryStudentId !== userId) {
+      const access = await assertHomeworkAccess(res, userId, queryStudentId);
+      if (!access.ok) return;
+    }
+
     const db = await readDb();
-    const studentId = currentUserId(req) || 'student-1';
     const courseId = String(req.query.courseId || '');
     const context = String(req.query.context || '');
     const lessonNodeId = String(req.query.lessonNodeId || '');
@@ -850,7 +1391,8 @@ export function createApp() {
   });
 
   app.post('/api/v1/recordings', async (req, res) => {
-    const { courseId = 'course-1', pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId, lessonNodeId, pageNumber = 1, taskId, filename = 'recording.webm', base64, durationSec = 0 } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!base64) return fail(res, 400, 'base64 audio is required');
     const db = await readDb();
     const saved = await saveBase64File({ base64, filename, folder: 'recordings' });
@@ -858,6 +1400,7 @@ export function createApp() {
       id: saved.id,
       studentId: currentUserId(req) || 'student-1',
       courseId,
+      lessonNodeId: lessonNodeId || undefined,
       pageNumber: Number(pageNumber),
       taskId: taskId || undefined,
       audioUrl: saved.url,
@@ -871,10 +1414,27 @@ export function createApp() {
   });
 
   app.get('/api/v1/recordings', async (req, res) => {
+    const userId = currentUserId(req);
+    const queryStudentId = req.query.studentId ? String(req.query.studentId) : undefined;
+    const studentId = queryStudentId || userId;
+
+    if (studentId && studentId !== userId) {
+      const access = await assertHomeworkAccess(res, userId, studentId);
+      if (!access.ok) return;
+    }
+
     const db = await readDb();
     const courseId = req.query.courseId ? String(req.query.courseId) : undefined;
     const page = req.query.page ? Number(req.query.page) : undefined;
-    ok(res, db.recordings.filter((item) => (!courseId || item.courseId === courseId) && (!page || item.pageNumber === page)));
+    const taskId = req.query.taskId ? String(req.query.taskId) : undefined;
+    const lessonNodeId = req.query.lessonNodeId ? String(req.query.lessonNodeId) : undefined;
+    ok(res, db.recordings.filter((item) =>
+      (!studentId || item.studentId === studentId)
+      && (!courseId || item.courseId === courseId)
+      && (!page || item.pageNumber === page)
+      && (!taskId || item.taskId === taskId)
+      && (!lessonNodeId || item.lessonNodeId === lessonNodeId)
+    ));
   });
 
   app.delete('/api/v1/recordings/:id', async (req, res) => {
@@ -886,7 +1446,8 @@ export function createApp() {
   });
 
   app.post('/api/v1/lectures', async (req, res) => {
-    const { courseId = 'course-1', title = 'Class Replay', filename = 'lecture.webm', base64, durationSec = 0 } = req.body ?? {};
+    const { courseId, title = 'Class Replay', filename = 'lecture.webm', base64, durationSec = 0 } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!base64) return fail(res, 400, 'base64 video is required');
     const db = await readDb();
     const saved = await saveBase64File({ base64, filename, folder: 'lectures' });
@@ -1032,11 +1593,12 @@ export function createApp() {
     const node = db.lessonNodes.find((n) => n.id === req.params.id);
     if (!node) return fail(res, 404, 'Lesson node not found');
 
-    const { title, startsAt, endsAt, status } = req.body ?? {};
+    const { title, startsAt, endsAt, status, defaultCoursewareFileId } = req.body ?? {};
     if (title !== undefined) node.title = String(title);
     if (startsAt !== undefined) node.startsAt = startsAt || undefined;
     if (endsAt !== undefined) node.endsAt = endsAt || undefined;
     if (status !== undefined) node.status = status as LessonNode['status'];
+    if (defaultCoursewareFileId !== undefined) (node as any).defaultCoursewareFileId = defaultCoursewareFileId || undefined;
     node.updatedAt = new Date().toISOString();
 
     await writeDb(db);
@@ -1055,71 +1617,149 @@ export function createApp() {
 
   // Live session API (T27)
   app.post('/api/v1/live-sessions', async (req, res) => {
-    const db = await readDb();
-    const teacherId = currentUserId(req) || 'teacher-1';
-    const { courseId = 'course-1', sourceMode = 'pdf', lessonNodeId } = req.body ?? {};
+    const teacherId = currentUserId(req);
+    if (!teacherId) return fail(res, 401, 'Unauthorized');
+    const teacher = await usersRepo.findById(teacherId);
+    if (!teacher || (teacher.role !== 'teacher' && teacher.role !== 'admin')) {
+      return fail(res, 403, 'Only teachers can create live sessions');
+    }
 
+    const { courseId, sourceMode = 'pdf', lessonNodeId } = req.body ?? {};
+    if (!courseId) return fail(res, 400, 'courseId is required');
     if (!lessonNodeId) return fail(res, 400, 'lessonNodeId is required');
 
-    const lessonNode = db.lessonNodes.find((n) => n.id === lessonNodeId);
+    const course = await coursesRepo.findById(courseId);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (teacher.role !== 'admin' && course.teacherId !== teacherId) {
+      return fail(res, 403, 'You cannot create live sessions for this course');
+    }
+
+    const lessonNodes = await coursesRepo.findLessonNodes(courseId);
+    const lessonNode = lessonNodes.find((n) => n.id === lessonNodeId);
     if (!lessonNode) return fail(res, 404, 'Lesson node not found');
 
-    const existingActive = db.liveSessions.find(
-      (s) => s.lessonNodeId === lessonNodeId && s.status === 'active'
-    );
+    const existingActive = await liveRepo.findActiveByLessonNodeId(lessonNodeId);
     if (existingActive) return fail(res, 409, 'An active live session already exists for this lesson node');
 
-    db.liveSessions.forEach((s) => {
-      if (s.courseId === courseId && s.teacherId === teacherId && s.status === 'active') {
-        s.status = 'ended';
-        s.endedAt = new Date().toISOString();
-      }
-    });
-
-    const session: LiveSession = {
-      id: crypto.randomUUID(),
+    await liveRepo.endActiveByCourseAndTeacher(courseId, teacherId);
+    const session = await liveRepo.createSession({
       courseId,
       teacherId,
       lessonNodeId,
-      status: 'active',
       sourceMode: sourceMode as LiveSession['sourceMode'],
-      currentPage: 1,
-      recordingStatus: 'idle',
-      startedAt: new Date().toISOString(),
-      endedAt: ''
-    };
-    db.liveSessions.push(session);
-    await writeDb(db);
+      status: 'active'
+    });
     ok(res, session);
   });
 
   app.get('/api/v1/live-sessions/active', async (req, res) => {
-    const db = await readDb();
     const courseId = String(req.query.courseId || '');
-    const active = db.liveSessions.find(
-      (s) => s.courseId === courseId && s.status === 'active'
-    );
+    const active = courseId ? await liveRepo.findActiveByCourseId(courseId) : null;
     if (!active) return ok(res, null);
     ok(res, active);
   });
 
   app.patch('/api/v1/live-sessions/:id', async (req, res) => {
-    const db = await readDb();
-    const session = db.liveSessions.find((s) => s.id === req.params.id);
+    const session = await liveRepo.findById(req.params.id);
     if (!session) return fail(res, 404, 'Live session not found');
 
-    const { sourceMode, currentPage, recordingStatus, status, endedAt } = req.body ?? {};
-    if (sourceMode) session.sourceMode = sourceMode as LiveSession['sourceMode'];
-    if (currentPage !== undefined) session.currentPage = Number(currentPage);
-    if (recordingStatus) session.recordingStatus = recordingStatus as LiveSession['recordingStatus'];
-    if (status) {
-      session.status = status as LiveSession['status'];
-      if (status === 'ended' && !session.endedAt) {
-        session.endedAt = endedAt || new Date().toISOString();
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    if (user.role !== 'admin') {
+      const course = await coursesRepo.findById(session.courseId);
+      if (!course) return fail(res, 404, 'Course not found');
+      if (course.teacherId !== userId && session.teacherId !== userId) {
+        return fail(res, 403, 'Forbidden');
       }
     }
-    await writeDb(db);
-    ok(res, session);
+
+    const { sourceMode, currentPage, recordingStatus, status, endedAt } = req.body ?? {};
+    const pageNum = currentPage !== undefined ? Number(currentPage) : undefined;
+    if (pageNum !== undefined && (!Number.isInteger(pageNum) || pageNum < 1)) {
+      return fail(res, 400, 'currentPage must be a positive integer');
+    }
+    const updated = await liveRepo.updateSession(req.params.id, {
+      sourceMode: sourceMode as LiveSession['sourceMode'] | undefined,
+      currentPage: pageNum,
+      recordingStatus: recordingStatus as LiveSession['recordingStatus'] | undefined,
+      status: status as LiveSession['status'] | undefined,
+      endedAt: status === 'ended' && !session.endedAt ? (endedAt || new Date().toISOString()) : endedAt
+    });
+    ok(res, updated);
+  });
+
+  app.get('/api/v1/live-sessions/:id', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    if (user.role === 'admin') return ok(res, session);
+
+    const course = await coursesRepo.findById(session.courseId);
+    if (!course) return fail(res, 404, 'Course not found');
+    if (course.teacherId === userId || session.teacherId === userId) return ok(res, session);
+
+    const courseMembers = await coursesRepo.findMembers(session.courseId);
+    const isMember = courseMembers.some((m) => m.userId === userId);
+    if (isMember) return ok(res, session);
+
+    const liveClassStudents = await liveRepo.findClassStudents(session.lessonNodeId);
+    const isLiveStudent = liveClassStudents.some((s) => s.studentId === userId);
+    if (isLiveStudent) return ok(res, session);
+
+    return fail(res, 403, 'Forbidden');
+  });
+
+  app.post('/api/v1/live-sessions/:id/join', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    if (session.status !== 'active' && session.status !== 'scheduled') return fail(res, 403, 'Session is not active');
+
+    const studentId = currentUserId(req);
+    if (!studentId) return fail(res, 401, 'Unauthorized');
+
+    const courseMembers = await coursesRepo.findMembers(session.courseId);
+    const isCourseMember = courseMembers.some(
+      (m) => m.courseId === session.courseId && m.userId === studentId && m.role === 'student'
+    );
+    if (isCourseMember) {
+      await liveRepo.addClassStudent(session.lessonNodeId, studentId, 'course_member');
+      return ok(res, { allowed: true });
+    }
+
+    const liveClassStudents = await liveRepo.findClassStudents(session.lessonNodeId);
+    const isLiveClassStudent = liveClassStudents.some(
+      (s) => s.lessonNodeId === session.lessonNodeId && s.studentId === studentId
+    );
+    if (isLiveClassStudent) return ok(res, { allowed: true });
+
+    return fail(res, 403, 'You are not enrolled in this course');
+  });
+
+  app.get('/api/v1/live-sessions/:id/participants', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const rows = await liveRepo.findClassStudents(session.lessonNodeId);
+    const participants = [];
+    for (const row of rows) {
+      const user = await usersRepo.findById(row.studentId);
+      if (!user) continue;
+      participants.push({
+        id: row.id,
+        studentId: row.studentId,
+        displayName: user.displayName,
+        username: user.username,
+        joinedAt: row.joinedAt,
+      });
+    }
+    ok(res, participants);
   });
 
   app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {
@@ -1208,6 +1848,54 @@ export function createApp() {
     const db = await readDb();
     const records = db.learningRecords.filter(r => r.studentId === req.params.id);
     ok(res, records);
+  });
+
+  app.post('/api/v1/admin/learning-records/cleanup-zombies', requireAdmin, async (req, res) => {
+    const dryRun = req.body?.dryRun !== false;
+    const result = await assignmentsRepo.cleanupZombieLearningRecords(dryRun);
+    ok(res, result);
+  });
+
+  app.post('/api/v1/admin/cleanup', requireAdmin, async (req, res) => {
+    const dryRun = req.body?.dryRun !== false;
+    const SEED_COURSE_ID = 'b0000000-0000-0000-0000-000000000001';
+    const SEED_CLASS_ID = 'd0000000-0000-0000-0000-000000000001';
+
+    if (getDbMode() === 'json') {
+      return fail(res, 400, 'Cleanup API is only supported in postgres mode');
+    }
+
+    try {
+      const courseCountRes = await queryRow('SELECT COUNT(*) as count FROM courses WHERE id != $1', [SEED_COURSE_ID]);
+      const classCountRes = await queryRow('SELECT COUNT(*) as count FROM classes WHERE id != $1', [SEED_CLASS_ID]);
+      
+      const coursesToDelete = parseInt(courseCountRes?.count || '0', 10);
+      const classesToDelete = parseInt(classCountRes?.count || '0', 10);
+      
+      if (dryRun) {
+        return ok(res, { dryRun: true, coursesToDelete, classesToDelete });
+      }
+
+      await query('BEGIN');
+      const delCourses = await query('DELETE FROM courses WHERE id != $1', [SEED_COURSE_ID]);
+      const delClasses = await query('DELETE FROM classes WHERE id != $1', [SEED_CLASS_ID]);
+      const delFiles = await query(`
+        DELETE FROM files 
+        WHERE course_id IS NULL 
+        AND id NOT IN (SELECT default_courseware_file_id FROM courses WHERE default_courseware_file_id IS NOT NULL)
+      `);
+      await query('COMMIT');
+
+      ok(res, {
+        dryRun: false,
+        deletedCourses: delCourses.rowCount,
+        deletedClasses: delClasses.rowCount,
+        deletedOrphanFiles: delFiles.rowCount
+      });
+    } catch (err: any) {
+      await query('ROLLBACK');
+      fail(res, 500, 'Cleanup failed: ' + err.message);
+    }
   });
 
   // Admin middleware

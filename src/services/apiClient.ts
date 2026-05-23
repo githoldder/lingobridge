@@ -11,10 +11,14 @@ export interface ApiUser {
 export interface Course {
   id: string;
   teacherId: string;
+  classId?: string;
   title: string;
   description: string;
+  coverImageUrl?: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'published' | 'draft';
+  defaultCoursewareFileId?: string;
   pagesCount?: number;
   exercisesCount?: number;
   recordingsCount?: number;
@@ -23,6 +27,7 @@ export interface Course {
 export interface CoursePage {
   id: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   contentHtml: string;
   audioText: string;
@@ -41,6 +46,7 @@ export interface Recording {
   id: string;
   studentId: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   taskId?: string;
   audioUrl: string;
@@ -155,11 +161,12 @@ export const coursesApi = {
     method: 'POST',
     body: JSON.stringify({ title, description })
   }),
-  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft' }) =>
+  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft'; coverImageUrl?: string }) =>
     request<Course>(`/courses/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)
     }),
+  delete: (id: string) => request<{ deleted: boolean }>(`/courses/${id}`, { method: 'DELETE' }),
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
   async uploadCourseware(courseId: string, file: File, lessonNodeId?: string) {
@@ -203,12 +210,17 @@ export const courseMembersApi = {
   })
 };
 
+export const teacherStudentsApi = {
+  search: (q = '') => request<Array<{ id: string; username: string; displayName: string; email?: string; languagePref?: string }>>(`/students/search?q=${encodeURIComponent(q)}`)
+};
+
 export interface CoursewareFileData {
   id: string;
   filename: string;
   mimeType: string;
   type?: string;
   lessonNodeId?: string;
+  storageUrl?: string;
   liveClassTitle?: string;
   pageCount: number;
   status: 'processing' | 'ready' | 'error';
@@ -259,6 +271,7 @@ export interface LessonNodeData {
   shapeToken: string;
   status: string;
   assignmentNodeId?: string;
+  defaultCoursewareFileId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -270,7 +283,7 @@ export const lessonNodesApi = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-  update: (id: string, data: { title?: string; startsAt?: string; endsAt?: string; status?: string }) =>
+  update: (id: string, data: { title?: string; startsAt?: string; endsAt?: string; status?: string; defaultCoursewareFileId?: string }) =>
     request<LessonNodeData>(`/lesson-nodes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data)
@@ -278,14 +291,22 @@ export const lessonNodesApi = {
 };
 
 export const recordingsApi = {
-  list: (courseId: string, page = 1) => request<Recording[]>(`/recordings?courseId=${courseId}&page=${page}`),
-  async upload(params: { courseId: string; pageNumber: number; taskId?: string; blob: Blob; durationSec: number; filename?: string }) {
+  list: (courseId: string, params?: { page?: number; taskId?: string; lessonNodeId?: string; studentId?: string }) => {
+    let path = `/recordings?courseId=${courseId}`;
+    if (params?.page) path += `&page=${params.page}`;
+    if (params?.taskId) path += `&taskId=${params.taskId}`;
+    if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.studentId) path += `&studentId=${params.studentId}`;
+    return request<Recording[]>(path);
+  },
+  async upload(params: { courseId: string; pageNumber: number; taskId?: string; lessonNodeId?: string; blob: Blob; durationSec: number; filename?: string }) {
     return request<Recording>('/recordings', {
       method: 'POST',
       body: JSON.stringify({
         courseId: params.courseId,
         pageNumber: params.pageNumber,
         taskId: params.taskId,
+        lessonNodeId: params.lessonNodeId,
         filename: params.filename || `recording-${Date.now()}.webm`,
         durationSec: params.durationSec,
         base64: await fileToBase64(params.blob)
@@ -315,6 +336,7 @@ export interface LearningTask {
   id: string;
   courseId: string;
   lessonNodeId?: string;
+  assignmentNodeId?: string;
   sourceFileId: string;
   taskId: string;
   taskType: 'pronunciation' | 'vocabulary' | 'sentence_reading' | 'dialogue' | 'listening';
@@ -371,13 +393,46 @@ export interface LearningRecord {
 }
 
 export const homeworkApi = {
-  tasks: (courseId: string, unit?: number, lesson?: number, lessonNodeId?: string) => {
+  tasks: (courseId: string, params?: { unit?: number; lesson?: number; lessonNodeId?: string; includeAll?: boolean }) => {
     let path = `/homework/tasks?courseId=${courseId}`;
-    if (unit !== undefined) path += `&unit=${unit}`;
-    if (lesson !== undefined) path += `&lesson=${lesson}`;
-    if (lessonNodeId) path += `&lessonNodeId=${lessonNodeId}`;
+    if (params?.unit !== undefined) path += `&unit=${params.unit}`;
+    if (params?.lesson !== undefined) path += `&lesson=${params.lesson}`;
+    if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.includeAll) path += `&includeAll=true`;
     return request<LearningTask[]>(path);
   }
+};
+
+export interface HomeworkSubmission {
+  id: string;
+  studentId: string;
+  courseId: string;
+  lessonNodeId: string;
+  assignmentNodeId: string;
+  status: 'draft' | 'submitted' | 'graded';
+  draftData: Record<string, any>;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const homeworkSubmissionsApi = {
+  get: (params: { studentId: string; assignmentNodeId?: string; lessonNodeId?: string; courseId?: string }) => {
+    let path = `/homework-submissions?studentId=${params.studentId}`;
+    if (params.assignmentNodeId) path += `&assignmentNodeId=${params.assignmentNodeId}`;
+    if (params.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params.courseId) path += `&courseId=${params.courseId}`;
+    return request<HomeworkSubmission | HomeworkSubmission[]>(path);
+  },
+  saveDraft: (data: { studentId: string; courseId: string; lessonNodeId: string; assignmentNodeId: string; draftData: Record<string, any> }) =>
+    request<HomeworkSubmission>('/homework-submissions/draft', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  submit: (id: string) =>
+    request<HomeworkSubmission>(`/homework-submissions/${id}/submit`, { method: 'POST' }),
+  delete: (id: string) =>
+    request<{ ok: boolean }>(`/homework-submissions/${id}`, { method: 'DELETE' }),
 };
 
 export const vocabularyApi = {
@@ -397,10 +452,11 @@ export const learningRecordsApi = {
       method: 'POST',
       body: JSON.stringify({ taskId, ...params })
     }),
-  list: (courseId: string, params?: { context?: string; lessonNodeId?: string }) => {
+  list: (courseId: string, params?: { context?: string; lessonNodeId?: string; studentId?: string }) => {
     let path = `/learning-records?courseId=${courseId}`;
     if (params?.context) path += `&context=${params.context}`;
     if (params?.lessonNodeId) path += `&lessonNodeId=${params.lessonNodeId}`;
+    if (params?.studentId) path += `&studentId=${params.studentId}`;
     return request<LearningRecord[]>(path);
   }
 };
@@ -457,7 +513,8 @@ export interface LiveSessionData {
   id: string;
   courseId: string;
   teacherId: string;
-  status: 'active' | 'ended';
+  lessonNodeId?: string;
+  status: 'scheduled' | 'active' | 'ended';
   sourceMode: 'screen' | 'pdf';
   currentPage: number;
   recordingStatus: 'idle' | 'recording' | 'saved';
@@ -492,6 +549,12 @@ export const liveSessionsApi = {
     }),
   getActive: (courseId: string) =>
     request<LiveSessionData | null>(`/live-sessions/active?courseId=${courseId}`),
+  get: (sessionId: string) =>
+    request<LiveSessionData>(`/live-sessions/${sessionId}`),
+  join: (sessionId: string) =>
+    request<{ allowed: boolean }>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
+  participants: (sessionId: string) =>
+    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>(`/live-sessions/${sessionId}/participants`),
   patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
     request<LiveSessionData>(`/live-sessions/${id}`, {
       method: 'PATCH',
@@ -618,6 +681,13 @@ export interface AdminLearningProgress {
   students: StudentProgress[];
 }
 
+export interface CleanupLearningRecordsResult {
+  deleted: number;
+  scanned: number;
+  dryRun: boolean;
+  reasons: Record<string, number>;
+}
+
 export const adminApi = {
   listUsers: (role?: string, q?: string) => {
     let path = '/admin/users';
@@ -641,6 +711,11 @@ export const adminApi = {
     request<{ deleted: boolean }>(`/admin/users/${id}`, { method: 'DELETE' }),
   getUserRecords: (id: string) =>
     request<LearningRecord[]>(`/admin/users/${id}/records`),
+  cleanupZombieLearningRecords: (dryRun = true) =>
+    request<CleanupLearningRecordsResult>('/admin/learning-records/cleanup-zombies', {
+      method: 'POST',
+      body: JSON.stringify({ dryRun })
+    }),
   liveSessions: () => request<AdminLiveSession[]>('/admin/live-sessions'),
   recordings: (courseId?: string) => request<AdminRecording[]>(`/admin/recordings${courseId ? `?courseId=${courseId}` : ''}`),
   notes: () => request<AdminNote[]>('/admin/notes'),
@@ -662,3 +737,6 @@ export const adminApi = {
     }),
   deleteRecording: (id: string) => request<{ deleted: boolean }>(`/recordings/${id}`, { method: 'DELETE' })
 };
+
+export { request as apiFetch };
+

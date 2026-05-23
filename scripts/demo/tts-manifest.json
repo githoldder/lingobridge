@@ -1,0 +1,161 @@
+{
+  "version": "1.0.0",
+  "generatedAt": null,
+  "description": "LingoBridge 上台演示 TTS 音频资产清单 — 中文和俄语预设句子，预先用云 API 生成 MP3 并缓存。断网时仍可播放。",
+  "notes": [
+    "所有音频文件存放于 public/demo-audio/，通过 /demo-audio/<filename> 访问。",
+    "AK/SK/API key 仅来自环境变量，不写入仓库。",
+    "生成脚本: scripts/demo/generate-tts-assets.ts",
+    "上台演示优先使用预生成 MP3，不实时调用云 API。",
+    "ElevenLabs voice 字段存 voice_id（如 pNInz6obpgDQGcFmaJgB 对应 Adam），非显示名。",
+    "Azure voice 字段存完整语音名（如 zh-CN-XiaoxiaoNeural）。"
+  ],
+  "entries": [
+    {
+      "id": "cn-welcome",
+      "lang": "zh-CN",
+      "text": "同学们好，欢迎来到中文课堂。",
+      "translationRu": "Здравствуйте, ученики! Добро пожаловать на урок китайского языка.",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 100,
+      "outputFile": "cn-welcome.mp3"
+    },
+    {
+      "id": "cn-intro",
+      "lang": "zh-CN",
+      "text": "今天我们来学习新的单词和句子。",
+      "translationRu": "Сегодня мы будем учить новые слова и предложения.",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 100,
+      "outputFile": "cn-intro.mp3"
+    },
+    {
+      "id": "cn-word-1",
+      "lang": "zh-CN",
+      "text": "你好",
+      "translationRu": "Здравствуйте",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 80,
+      "outputFile": "cn-nihao.mp3"
+    },
+    {
+      "id": "cn-word-2",
+      "lang": "zh-CN",
+      "text": "谢谢",
+      "translationRu": "Спасибо",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 80,
+      "outputFile": "cn-xiexie.mp3"
+    },
+    {
+      "id": "cn-word-3",
+      "lang": "zh-CN",
+      "text": "学习",
+      "translationRu": "Учиться",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 80,
+      "outputFile": "cn-xuexi.mp3"
+    },
+    {
+      "id": "cn-sentence-1",
+      "lang": "zh-CN",
+      "text": "我叫安娜，我是俄罗斯人。",
+      "translationRu": "Меня зовут Анна, я из России.",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 100,
+      "outputFile": "cn-introduce.mp3"
+    },
+    {
+      "id": "cn-sentence-2",
+      "lang": "zh-CN",
+      "text": "我喜欢学习中文。",
+      "translationRu": "Я люблю учить китайский язык.",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 100,
+      "outputFile": "cn-like-learning.mp3"
+    },
+    {
+      "id": "cn-grammar",
+      "lang": "zh-CN",
+      "text": "'是'字句：我是学生，你是老师。",
+      "translationRu": "Конструкция с '是': Я студент, ты учитель.",
+      "provider": "azure",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "speed": 100,
+      "outputFile": "cn-shi-sentence.mp3"
+    },
+    {
+      "id": "ru-welcome",
+      "lang": "ru-RU",
+      "text": "Добро пожаловать на урок китайского языка!",
+      "translationZh": "欢迎来到中文课堂！",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 100,
+      "outputFile": "ru-welcome.mp3"
+    },
+    {
+      "id": "ru-instruction",
+      "lang": "ru-RU",
+      "text": "Повторяйте за мной, пожалуйста.",
+      "translationZh": "请跟我读。",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 100,
+      "outputFile": "ru-repeat.mp3"
+    },
+    {
+      "id": "ru-encourage",
+      "lang": "ru-RU",
+      "text": "Отлично! У вас хорошо получается.",
+      "translationZh": "很好！你们做得很好。",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 100,
+      "outputFile": "ru-encourage.mp3"
+    },
+    {
+      "id": "ru-word-1",
+      "lang": "ru-RU",
+      "text": "Привет",
+      "translationZh": "你好",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 80,
+      "outputFile": "ru-privet.mp3"
+    },
+    {
+      "id": "ru-word-2",
+      "lang": "ru-RU",
+      "text": "Спасибо",
+      "translationZh": "谢谢",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 80,
+      "outputFile": "ru-spasibo.mp3"
+    },
+    {
+      "id": "ru-word-3",
+      "lang": "ru-RU",
+      "text": "Учиться",
+      "translationZh": "学习",
+      "provider": "elevenlabs",
+      "voice": "pNInz6obpgDQGcFmaJgB",
+      "voiceLabel": "Adam",
+      "speed": 80,
+      "outputFile": "ru-uchitsya.mp3"
+    }
+  ]
+}

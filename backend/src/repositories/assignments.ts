@@ -20,12 +20,14 @@ function mapAssignmentNode(row: Record<string, any>): AssignmentNodeDto {
 }
 
 function mapTask(row: Record<string, any>): LearningTaskDto {
+  const taskKey = row.task_key ?? row.taskKey ?? row.taskId ?? row.id;
   return {
     id: row.id,
     courseId: row.course_id ?? row.courseId,
     lessonNodeId: row.lesson_node_id ?? row.lessonNodeId,
     assignmentNodeId: row.assignment_node_id ?? row.assignmentNodeId,
-    taskKey: row.task_key ?? row.taskKey,
+    taskKey,
+    taskId: taskKey,
     taskType: row.task_type ?? row.taskType,
     unit: row.unit ?? 1,
     lesson: row.lesson ?? 1,
@@ -137,6 +139,68 @@ export async function findLearningRecords(studentId: string, lessonNodeId?: stri
   const params = lessonNodeId ? [studentId, lessonNodeId] : [studentId];
   const rows = await queryRows(sql, params);
   return rows.map(mapRecord);
+}
+
+export interface CleanupLearningRecordsResult {
+  deleted: number;
+  scanned: number;
+  dryRun: boolean;
+  reasons: Record<string, number>;
+}
+
+export async function cleanupZombieLearningRecords(dryRun = true): Promise<CleanupLearningRecordsResult> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const scanned = db.learningRecords.length;
+    const userIds = new Set(db.users.map((u) => u.id));
+    const taskIds = new Set(db.learningTasks.map((t) => t.taskId));
+    const lessonNodeIds = new Set(db.lessonNodes.map((n) => n.id));
+    const recordingIds = new Set(db.recordings.map((r) => r.id));
+    const reasons: Record<string, number> = {};
+    const zombies = db.learningRecords.filter((record) => {
+      const recordReasons: string[] = [];
+      if (!userIds.has(record.studentId)) recordReasons.push('missing_student');
+      if (!taskIds.has(record.taskId)) recordReasons.push('missing_task');
+      if (record.lessonNodeId && !lessonNodeIds.has(record.lessonNodeId)) recordReasons.push('missing_lesson_node');
+      if (record.lastRecordingId && !recordingIds.has(record.lastRecordingId)) recordReasons.push('missing_recording');
+      for (const reason of recordReasons) reasons[reason] = (reasons[reason] || 0) + 1;
+      return recordReasons.length > 0;
+    });
+    if (!dryRun && zombies.length > 0) {
+      const zombieIds = new Set(zombies.map((record) => record.id));
+      db.learningRecords = db.learningRecords.filter((record) => !zombieIds.has(record.id));
+      await writeDb(db);
+    }
+    return { deleted: zombies.length, scanned, dryRun, reasons };
+  }
+
+  const rows = await queryRows(
+    `SELECT lr.id,
+            CASE WHEN u.id IS NULL THEN 'missing_student'
+                 WHEN lt.id IS NULL THEN 'missing_task'
+                 WHEN lr.lesson_node_id IS NOT NULL AND ln.id IS NULL THEN 'missing_lesson_node'
+                 WHEN lr.last_recording_id IS NOT NULL AND r.id IS NULL THEN 'missing_recording'
+            END AS reason
+       FROM learning_records lr
+       LEFT JOIN users u ON u.id = lr.student_id
+       LEFT JOIN learning_tasks lt ON lt.id = lr.task_id
+       LEFT JOIN lesson_nodes ln ON ln.id = lr.lesson_node_id
+       LEFT JOIN recordings r ON r.id = lr.last_recording_id
+      WHERE u.id IS NULL
+         OR lt.id IS NULL
+         OR (lr.lesson_node_id IS NOT NULL AND ln.id IS NULL)
+         OR (lr.last_recording_id IS NOT NULL AND r.id IS NULL)`
+  );
+  const reasons = rows.reduce<Record<string, number>>((acc, row) => {
+    const reason = String(row.reason || 'unknown');
+    acc[reason] = (acc[reason] || 0) + 1;
+    return acc;
+  }, {});
+  const countRow = await queryRow('SELECT count(*)::int AS count FROM learning_records');
+  if (!dryRun && rows.length > 0) {
+    await query('DELETE FROM learning_records WHERE id = ANY($1::uuid[])', [rows.map((row) => row.id)]);
+  }
+  return { deleted: rows.length, scanned: Number(countRow?.count || 0), dryRun, reasons };
 }
 
 export async function upsertLearningRecord(data: {

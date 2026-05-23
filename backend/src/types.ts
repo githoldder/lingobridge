@@ -50,10 +50,14 @@ export interface HomeworkImport {
 export interface Course {
   id: string;
   teacherId: string;
+  classId?: string;
   title: string;
   description: string;
+  coverImageUrl?: string;
   createdAt: string;
+  updatedAt?: string;
   status: 'published' | 'draft';
+  defaultCoursewareFileId?: string;
 }
 
 export interface CoursePage {
@@ -142,6 +146,7 @@ export interface Recording {
   id: string;
   studentId: string;
   courseId: string;
+  lessonNodeId?: string;
   pageNumber: number;
   taskId?: string;
   audioUrl: string;
@@ -166,7 +171,7 @@ export interface LiveSession {
   courseId: string;
   teacherId: string;
   lessonNodeId: string;
-  status: 'active' | 'ended';
+  status: 'active' | 'ended' | 'scheduled';
   sourceMode: 'screen' | 'pdf';
   currentPage: number;
   recordingStatus: 'idle' | 'recording' | 'saved';
@@ -234,6 +239,35 @@ export interface CoursewareFile {
   createdAt: string;
 }
 
+export interface Class {
+  id: string;
+  teacherId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassMember {
+  id: string;
+  classId: string;
+  studentId: string;
+  joinedAt: string;
+}
+
+export interface HomeworkSubmission {
+  id: string;
+  studentId: string;
+  courseId: string;
+  lessonNodeId: string;
+  assignmentNodeId: string;
+  status: 'draft' | 'submitted' | 'graded';
+  draftData: Record<string, any>;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Database {
   users: User[];
   courses: Course[];
@@ -254,4 +288,7 @@ export interface Database {
   teacherStudentLinks: TeacherStudentLink[];
   liveClassStudents: LiveClassStudent[];
   homeworkImports: HomeworkImport[];
+  classes: Class[];
+  classMembers: ClassMember[];
+  homeworkSubmissions: HomeworkSubmission[];
 }

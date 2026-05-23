@@ -188,6 +188,7 @@ const translations: Record<Language, Record<string, string>> = {
     'schedule.agenda': 'Agenda',
     'schedule.week': 'Week',
     'schedule.join_class': 'Join Live Class',
+    'schedule.enter_classroom': 'Enter Classroom',
     'schedule.details': 'Details',
     'schedule.add_personal': 'Add Personal Schedule',
     'schedule.tomorrow': 'Tomorrow',
@@ -338,6 +339,7 @@ const translations: Record<Language, Record<string, string>> = {
     'classroom.start_video': 'Start Video',
     'classroom.raise_hand': 'Raise Hand',
     'classroom.waiting_teacher': 'Waiting for Teacher...',
+    'classroom.self_study': 'Self Study',
     'classroom.on_stage': 'On Stage',
     'classroom.stop_recording': 'Stop Recording',
     'classroom.record_lesson': 'Record Lesson',
@@ -475,6 +477,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Status',
     'course_info.cover_image': 'Cover Image',
     'course_info.upload_cover': 'Upload Cover',
+    'course_info.cover_invalid': 'Please upload an image file.',
     'course_info.save': 'Save Changes',
     'course_info.saved': 'Course information saved.',
     'course_info.save_failed': 'Failed to save course information.',
@@ -785,6 +788,7 @@ const translations: Record<Language, Record<string, string>> = {
     'schedule.agenda': '议程',
     'schedule.week': '周',
     'schedule.join_class': '加入直播课',
+    'schedule.enter_classroom': '进入教室',
     'schedule.details': '详情',
     'schedule.add_personal': '添加个人日程',
     'schedule.tomorrow': '明天',
@@ -935,6 +939,7 @@ const translations: Record<Language, Record<string, string>> = {
     'classroom.start_video': '开启视频',
     'classroom.raise_hand': '举手',
     'classroom.waiting_teacher': '等待老师...',
+    'classroom.self_study': '自主学习',
     'classroom.on_stage': '连麦中',
     'classroom.stop_recording': '停止录制',
     'classroom.record_lesson': '录制课程',
@@ -1072,6 +1077,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': '状态',
     'course_info.cover_image': '封面图片',
     'course_info.upload_cover': '上传封面',
+    'course_info.cover_invalid': '请上传图片文件。',
     'course_info.save': '保存修改',
     'course_info.saved': '课程信息已保存。',
     'course_info.save_failed': '保存课程信息失败。',
@@ -1381,6 +1387,7 @@ const translations: Record<Language, Record<string, string>> = {
     'schedule.agenda': 'Повестка',
     'schedule.week': 'Неделя',
     'schedule.join_class': 'Присоединиться к уроку',
+    'schedule.enter_classroom': 'Войти в класс',
     'schedule.details': 'Подробнее',
     'schedule.add_personal': 'Добавить личное расписание',
     'schedule.tomorrow': 'Завтра',
@@ -1531,6 +1538,7 @@ const translations: Record<Language, Record<string, string>> = {
     'classroom.start_video': 'Включить видео',
     'classroom.raise_hand': 'Поднять руку',
     'classroom.waiting_teacher': 'Ожидание учителя...',
+    'classroom.self_study': 'Самостоятельное обучение',
     'classroom.on_stage': 'На сцене',
     'classroom.stop_recording': 'Остановить запись',
     'classroom.record_lesson': 'Записать урок',
@@ -1668,6 +1676,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Статус',
     'course_info.cover_image': 'Обложка',
     'course_info.upload_cover': 'Загрузить обложку',
+    'course_info.cover_invalid': 'Загрузите файл изображения.',
     'course_info.save': 'Сохранить',
     'course_info.saved': 'Информация сохранена.',
     'course_info.save_failed': 'Не удалось сохранить информацию.',
@@ -1978,6 +1987,7 @@ const translations: Record<Language, Record<string, string>> = {
     'schedule.agenda': 'Күн тәртібі',
     'schedule.week': 'Апта',
     'schedule.join_class': 'Тікелей сабаққа қосылу',
+    'schedule.enter_classroom': 'Сабаққа кіру',
     'schedule.details': 'Толығырақ',
     'schedule.add_personal': 'Жеке кестені қосу',
     'schedule.tomorrow': 'Ертең',
@@ -2128,6 +2138,7 @@ const translations: Record<Language, Record<string, string>> = {
     'classroom.start_video': 'Бейнебаянды бастау',
     'classroom.raise_hand': 'Қол көтеру',
     'classroom.waiting_teacher': 'Мұғалімді күтуде...',
+    'classroom.self_study': 'Өздігінен оқу',
     'classroom.on_stage': 'Сахнада',
     'classroom.stop_recording': 'Жазуды тоқтату',
     'classroom.record_lesson': 'Сабақты жазу',
@@ -2265,6 +2276,7 @@ const translations: Record<Language, Record<string, string>> = {
     'course_info.status': 'Статус',
     'course_info.cover_image': 'Мұқаба',
     'course_info.upload_cover': 'Мұқаба жүктеу',
+    'course_info.cover_invalid': 'Сурет файлын жүктеңіз.',
     'course_info.save': 'Сақтау',
     'course_info.saved': 'Ақпарат сақталды.',
     'course_info.save_failed': 'Ақпаратты сақтау сәтсіз.',
@@ -2398,15 +2410,22 @@ const translations: Record<Language, Record<string, string>> = {
   },
 };
 
+const FALLBACK_ORDER: Language[] = ['zh', 'kk', 'ru', 'en'];
+
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>('zh');
 
   const t = (key: string, params?: Record<string, string>) => {
-    let translation = translations[language][key];
+    const langOrder = language === 'zh' ? FALLBACK_ORDER : [language, ...FALLBACK_ORDER.filter((l) => l !== language)];
+    let translation: string | undefined;
+    for (const lang of langOrder) {
+      translation = translations[lang][key];
+      if (translation) break;
+    }
     if (!translation) {
-      console.warn(`[i18n] Missing key: "${key}" for language: "${language}"`);
+      console.warn(`[i18n] Missing key: "${key}" for any language`);
       translation = key;
     }
     if (params) {

@@ -51,6 +51,23 @@ const SidebarItem = ({ icon: Icon, label, id, active, onClick }: any) => (
   </button>
 );
 
+function defaultAvatarUrl(displayName: string, role: UserRole) {
+  const initials = (displayName || 'LB')
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const palette = role === 'admin'
+    ? ['#111827', '#F59E0B']
+    : role === 'teacher'
+      ? ['#0056D2', '#14B8A6']
+      : ['#7C3AED', '#EC4899'];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette[0]}"/><stop offset="1" stop-color="${palette[1]}"/></linearGradient></defs><rect width="96" height="96" rx="48" fill="url(#g)"/><circle cx="74" cy="22" r="12" fill="rgba(255,255,255,.18)"/><text x="48" y="58" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800" fill="#fff">${initials || 'LB'}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export default function Layout({ children, activeTab, setActiveTab, role }: LayoutProps) {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
@@ -253,7 +270,7 @@ export default function Layout({ children, activeTab, setActiveTab, role }: Layo
               </div>
               {user ? (
                 <img 
-                  src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=0056D2&textColor=ffffff`}
+                  src={defaultAvatarUrl(displayName, role)}
                   alt="Profile" 
                   className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-gray-200"
                 />

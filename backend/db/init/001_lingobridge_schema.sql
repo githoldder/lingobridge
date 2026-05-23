@@ -106,14 +106,38 @@ CREATE TABLE IF NOT EXISTS teacher_student_links (
 CREATE INDEX IF NOT EXISTS idx_teacher_student_teacher ON teacher_student_links(teacher_id, status);
 CREATE INDEX IF NOT EXISTS idx_teacher_student_student ON teacher_student_links(student_id, status);
 
+CREATE TABLE IF NOT EXISTS classes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
+
+CREATE TABLE IF NOT EXISTS class_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  class_id uuid NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  student_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  removed_at timestamptz,
+  CONSTRAINT class_members_unique UNIQUE (class_id, student_id)
+);
+CREATE INDEX IF NOT EXISTS idx_class_members_class ON class_members(class_id, removed_at);
+CREATE INDEX IF NOT EXISTS idx_class_members_student ON class_members(student_id, removed_at);
+
 CREATE TABLE IF NOT EXISTS courses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
   title text NOT NULL,
   description text NOT NULL DEFAULT '',
+  cover_image_url text,
   status course_status NOT NULL DEFAULT 'draft',
   starts_at timestamptz,
   ends_at timestamptz,
+  default_courseware_file_id uuid, -- Cannot add foreign key yet as files table is created later
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT courses_time_order CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at)
@@ -145,6 +169,7 @@ CREATE TABLE IF NOT EXISTS lesson_nodes (
   color_token text NOT NULL DEFAULT 'blue',
   shape_token text NOT NULL DEFAULT 'circle',
   status lesson_status NOT NULL DEFAULT 'draft',
+  default_courseware_file_id uuid, -- Foreign key added at the end
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT lesson_nodes_time_order CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at)
@@ -314,6 +339,50 @@ CREATE TABLE IF NOT EXISTS learning_records (
 CREATE INDEX IF NOT EXISTS idx_learning_records_student_lesson ON learning_records(student_id, lesson_node_id, status);
 CREATE INDEX IF NOT EXISTS idx_learning_records_task ON learning_records(task_id);
 
+CREATE TABLE IF NOT EXISTS homework_submissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  lesson_node_id uuid NOT NULL REFERENCES lesson_nodes(id) ON DELETE CASCADE,
+  assignment_node_id uuid NOT NULL REFERENCES assignment_nodes(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'graded')),
+  submitted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  draft_data jsonb DEFAULT '{}',
+  CONSTRAINT homework_submissions_unique UNIQUE (student_id, assignment_node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_homework_submissions_student_course ON homework_submissions(student_id, course_id);
+
+CREATE TABLE IF NOT EXISTS homework_recording_attempts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  lesson_node_id uuid NOT NULL REFERENCES lesson_nodes(id) ON DELETE CASCADE,
+  task_id uuid NOT NULL REFERENCES learning_tasks(id) ON DELETE CASCADE,
+  slot_index integer NOT NULL CHECK (slot_index BETWEEN 1 AND 3),
+  audio_url text NOT NULL,
+  local_cache_key text,
+  score_status text NOT NULL DEFAULT 'pending',
+  score_payload jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT homework_recording_attempts_unique UNIQUE (student_id, task_id, slot_index)
+);
+CREATE INDEX IF NOT EXISTS idx_homework_recording_attempts_student_task ON homework_recording_attempts(student_id, task_id);
+
+CREATE TABLE IF NOT EXISTS vocabulary_progress (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  lesson_node_id uuid REFERENCES lesson_nodes(id) ON DELETE CASCADE,
+  task_id uuid NOT NULL REFERENCES learning_tasks(id) ON DELETE CASCADE,
+  mastery_step numeric(3,2) NOT NULL DEFAULT 0.00,
+  review_count integer NOT NULL DEFAULT 0,
+  last_reviewed_at timestamptz,
+  decay_state numeric(3,2) NOT NULL DEFAULT 1.00,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT vocabulary_progress_unique UNIQUE (student_id, task_id)
+);
+CREATE INDEX IF NOT EXISTS idx_vocabulary_progress_student ON vocabulary_progress(student_id);
+
 CREATE TABLE IF NOT EXISTS recordings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -409,3 +478,20 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_actor ON admin_audit_logs(actor_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_entity ON admin_audit_logs(entity_type, entity_id);
+
+DO $$ BEGIN
+  ALTER TABLE courses
+    ADD CONSTRAINT courses_default_courseware_fk
+    FOREIGN KEY (default_courseware_file_id) REFERENCES files(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE lesson_nodes
+    ADD CONSTRAINT lesson_nodes_default_courseware_fk
+    FOREIGN KEY (default_courseware_file_id) REFERENCES files(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Migration: ensure homework_submissions has draft_data column (for DBs created before the column was added)
+DO $$ BEGIN
+  ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS draft_data jsonb DEFAULT '{}';
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;

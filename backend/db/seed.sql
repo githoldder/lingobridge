@@ -44,7 +44,7 @@ VALUES
   ('a0000000-0000-0000-0000-000000000005', '2024003', '文科院中文测试班', '哈萨克斯坦', 'kk')
 ON CONFLICT (user_id) DO NOTHING;
 
--- ─── Teacher-Student Links ───
+-- ─── Teacher-Student Links (Legacy) ───
 INSERT INTO teacher_student_links (teacher_id, student_id, class_name, status)
 VALUES
   ('a0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003', '文科院中文测试班', 'active')
@@ -60,10 +60,33 @@ VALUES
   ('a0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', '文科院中文测试班', 'active')
 ON CONFLICT (teacher_id, student_id) DO NOTHING;
 
--- ─── Demo Course ───
-INSERT INTO courses (id, teacher_id, title, description, status)
+-- ─── Classes (New Model) ───
+INSERT INTO classes (id, teacher_id, name, description)
 VALUES
-  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', '第三课：自我介绍', 'MVP demo course generated from teacher courseware.', 'published')
+  ('d0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', '文科院中文测试班', 'Demo class for testing')
+ON CONFLICT (id) DO NOTHING;
+
+-- ─── Class Members ───
+INSERT INTO class_members (class_id, student_id)
+VALUES
+  ('d0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003')
+ON CONFLICT (class_id, student_id) DO NOTHING;
+
+INSERT INTO class_members (class_id, student_id)
+VALUES
+  ('d0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004')
+ON CONFLICT (class_id, student_id) DO NOTHING;
+
+INSERT INTO class_members (class_id, student_id)
+VALUES
+  ('d0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005')
+ON CONFLICT (class_id, student_id) DO NOTHING;
+
+
+-- ─── Demo Course ───
+INSERT INTO courses (id, teacher_id, class_id, title, description, status)
+VALUES
+  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', '第三课：自我介绍', 'MVP demo course generated from teacher courseware.', 'published')
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Course Members ───

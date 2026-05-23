@@ -16,20 +16,76 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { coursesApi, liveSessionsApi, lessonNodesApi } from '../services/apiClient.ts';
 
 interface DashboardViewProps {
-  onNavigate?: (target: string) => void;
+  onNavigate?: (target: string, ctx?: { courseId?: string; lessonNodeId?: string }) => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const [liveInfo, setLiveInfo] = React.useState<{ courseId: string; lessonNodeId: string } | null>(null);
+  const [courses, setCourses] = React.useState<Array<{ id: string; title: string; exercisesCount?: number; pagesCount?: number }>>([]);
+  const [homeworkInfo, setHomeworkInfo] = React.useState<{ courseId: string; lessonNodeId: string; title: string } | null>(null);
 
-  const leaderboard = [
-    { rank: 2, name: t('leaderboard.li_min'), points: '2,940', avatar: 'Li Min' },
-    { rank: 1, name: user?.displayName || t('leaderboard.you'), points: user ? '3,120' : '—', avatar: user?.displayName || t('leaderboard.you'), isUser: true },
-    { rank: 3, name: t('leaderboard.zhang_wei'), points: '2,810', avatar: 'Zhang Wei' },
-  ];
+  React.useEffect(() => {
+    const fetchLiveContext = async () => {
+      try {
+        const courses = await coursesApi.list();
+        setCourses(courses);
+        if (!courses || courses.length === 0) return;
+
+        // 1. Try finding active live session
+        for (const course of courses) {
+          const activeSession = await liveSessionsApi.getActive(course.id);
+          if (activeSession && activeSession.status === 'active') {
+            const lessonNodeId = (activeSession as any).lessonNodeId;
+            if (lessonNodeId) {
+              setLiveInfo({ courseId: course.id, lessonNodeId });
+              return;
+            }
+          }
+        }
+
+        // 2. Fallback to latest lesson node of the first course
+        const firstCourse = courses[0];
+        const nodes = await lessonNodesApi.list(firstCourse.id);
+        if (nodes && nodes.length > 0) {
+          const latestNode = nodes[nodes.length - 1];
+          setLiveInfo({ courseId: firstCourse.id, lessonNodeId: latestNode.id });
+          setHomeworkInfo({ courseId: firstCourse.id, lessonNodeId: latestNode.id, title: latestNode.title || firstCourse.title });
+        }
+      } catch (err) {
+        console.error('Failed to load student live context:', err);
+      }
+    };
+    fetchLiveContext();
+  }, []);
+
+  const handleJoinClassroom = () => {
+    if (liveInfo) {
+      localStorage.setItem('lingobridge_courseId', liveInfo.courseId);
+      localStorage.setItem('lingobridge_lessonNodeId', liveInfo.lessonNodeId);
+      onNavigate?.('student-classroom', { courseId: liveInfo.courseId, lessonNodeId: liveInfo.lessonNodeId });
+    } else {
+      onNavigate?.('student-classroom');
+    }
+  };
+
+  const handleOpenHomework = () => {
+    if (homeworkInfo) {
+      localStorage.setItem('lingobridge_courseId', homeworkInfo.courseId);
+      localStorage.setItem('lingobridge_lessonNodeId', homeworkInfo.lessonNodeId);
+      onNavigate?.('homework', { courseId: homeworkInfo.courseId, lessonNodeId: homeworkInfo.lessonNodeId });
+    } else {
+      onNavigate?.('homework');
+    }
+  };
+
+  const activeCourse = courses[0];
+  const totalHomework = courses.reduce((sum, course) => sum + (course.exercisesCount || 0), 0);
+  const totalPages = courses.reduce((sum, course) => sum + (course.pagesCount || 0), 0);
 
   return (
     <div id="dashboard-view" className="space-y-8">
@@ -41,7 +97,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <p className="text-xs md:text-sm text-gray-600 mb-6 max-w-sm">{t('dashboard.quote')}</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <button className="bg-[#0056D2] text-white px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors shadow-sm">
-                {t('dashboard.continue')}
+                {activeCourse?.title || t('dashboard.continue')}
               </button>
               <button 
                 onClick={() => onNavigate?.('schedule')}
@@ -65,8 +121,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="text-center sm:text-left">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('dashboard.streak')}</p>
               <div className="flex items-baseline justify-center sm:justify-start gap-1">
-                <span className="text-2xl font-bold text-gray-900">28</span>
-                <span className="text-xs text-gray-500">{t('stats.days')}</span>
+                <span className="text-2xl font-bold text-gray-900">{courses.length}</span>
+                <span className="text-xs text-gray-500">{t('nav.courses')}</span>
               </div>
             </div>
           </div>
@@ -77,8 +133,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="text-center sm:text-left">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('dashboard.points')}</p>
               <div className="flex items-baseline justify-center sm:justify-start gap-1">
-                <span className="text-2xl font-bold text-gray-900">2,860</span>
-                <span className="text-xs text-gray-500">{t('stats.pts')}</span>
+                <span className="text-2xl font-bold text-gray-900">{totalHomework}</span>
+                <span className="text-xs text-gray-500">{t('homework.title')}</span>
               </div>
             </div>
           </div>
@@ -104,9 +160,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <span className="bg-blue-100 text-[#0056D2] text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">+10 {t('stats.pts')}</span>
             </div>
             <p className="text-xs font-semibold text-[#0056D2] mb-1">{t('dashboard.task.preview')}</p>
-            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{t('dashboard.task.prep_family')}</h3>
-            <p className="text-sm text-gray-600 mb-6 line-clamp-2">{t('dashboard.task.prep_desc')}</p>
-            <button className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm group-hover:bg-blue-700 transition-colors">
+            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{activeCourse?.title || t('dashboard.task.prep_family')}</h3>
+            <p className="text-sm text-gray-600 mb-6 line-clamp-2">{totalPages > 0 ? `${totalPages} ${t('classroom.slide')}` : t('schedule.no_classes')}</p>
+            <button onClick={() => onNavigate?.('schedule')} className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm group-hover:bg-blue-700 transition-colors">
               {t('dashboard.task.start')}
             </button>
           </div>
@@ -123,13 +179,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider mr-6">+20 {t('stats.pts')}</span>
             </div>
             <p className="text-xs font-semibold text-orange-600 mb-1">{t('dashboard.task.reminder')}</p>
-            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{t('dashboard.task.live_lesson')}</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{homeworkInfo?.title || activeCourse?.title || t('dashboard.task.live_lesson')}</h3>
             <div className="flex items-center gap-2 mb-6">
               <Clock size={14} className="text-orange-500" />
-              <p className="text-sm text-orange-600 font-medium">{t('stats.starting_in')} 15 {t('stats.minutes')}</p>
+              <p className="text-sm text-orange-600 font-medium">{liveInfo ? t('schedule.live_badge') : t('schedule.enter_classroom')}</p>
             </div>
             <button 
-              onClick={() => onNavigate?.('student-classroom')}
+              onClick={handleJoinClassroom}
               className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
             >
               {t('dashboard.join_classroom')}
@@ -145,9 +201,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <span className="bg-green-100 text-green-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">+15 {t('stats.pts')}</span>
             </div>
             <p className="text-xs font-semibold text-green-600 mb-1">{t('dashboard.task.homework')}</p>
-            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{t('dashboard.task.review_ch2')}</h3>
-            <p className="text-sm text-gray-600 mb-6 line-clamp-2">{t('dashboard.task.review_desc')}</p>
-            <button className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm group-hover:bg-blue-700 transition-colors">
+            <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">{homeworkInfo?.title || t('dashboard.task.review_ch2')}</h3>
+            <p className="text-sm text-gray-600 mb-6 line-clamp-2">{totalHomework > 0 ? `${totalHomework} ${t('homework.title')}` : t('homework.no_tasks')}</p>
+            <button onClick={handleOpenHomework} className="w-full bg-[#0056D2] text-white py-2.5 rounded-lg font-semibold text-sm group-hover:bg-blue-700 transition-colors">
               {t('dashboard.task.submit')}
             </button>
           </div>
@@ -159,25 +215,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-gray-900">{t('dashboard.quick_access')}</h2>
           <div className="grid grid-cols-2 gap-4">
-            <button className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
+            <button onClick={() => onNavigate?.('schedule')} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
               <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0056D2] flex items-center justify-center group-hover:bg-[#0056D2] group-hover:text-white transition-colors">
                 <Calendar size={22} />
               </div>
               <span className="text-xs font-bold text-gray-600 uppercase tracking-widest text-center">{t('dashboard.my_schedule')}</span>
             </button>
-            <button className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
+            <button onClick={() => onNavigate?.('schedule')} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
               <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0056D2] flex items-center justify-center group-hover:bg-[#0056D2] group-hover:text-white transition-colors">
                 <BarChart size={22} />
               </div>
               <span className="text-xs font-bold text-gray-600 uppercase tracking-widest text-center">{t('dashboard.week_stats')}</span>
             </button>
-            <button className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
+            <button onClick={() => onNavigate?.('homework', homeworkInfo || undefined)} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
               <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0056D2] flex items-center justify-center group-hover:bg-[#0056D2] group-hover:text-white transition-colors">
                 <BookOpen size={22} />
               </div>
               <span className="text-xs font-bold text-gray-600 uppercase tracking-widest text-center">{t('dashboard.char_lab')}</span>
             </button>
-            <button className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
+            <button onClick={handleJoinClassroom} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex flex-col items-center gap-3 hover:border-[#0056D2] hover:bg-blue-50/10 transition-all group">
               <div className="w-12 h-12 rounded-full bg-blue-50 text-[#0056D2] flex items-center justify-center group-hover:bg-[#0056D2] group-hover:text-white transition-colors">
                 <TrendingUp size={22} />
               </div>
@@ -186,64 +242,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Weekly Ranking */}
+        {/* Real Course Summary */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-900">{t('dashboard.ranking')}</h2>
-            <button className="text-[#0056D2] text-xs font-semibold hover:underline">{t('dashboard.leaderboard')}</button>
+            <h2 className="text-xl font-bold text-gray-900">{t('nav.courses')}</h2>
+            <button onClick={() => onNavigate?.('schedule')} className="text-[#0056D2] text-xs font-semibold hover:underline">{t('dashboard.view_all_action')}</button>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex justify-between items-end gap-2 md:gap-8 min-h-[140px] mb-8">
-              {leaderboard.map((entry) => {
-                const isFirst = entry.rank === 1;
-                const borderClass = isFirst
-                  ? 'border-4 border-yellow-400 shadow-lg'
-                  : entry.rank === 2
-                    ? 'border-2 border-gray-100'
-                    : 'border-2 border-orange-200';
-                const sizeClass = isFirst ? 'w-20 h-20' : entry.rank === 2 ? 'w-14 h-14' : 'w-12 h-12';
-                const badgeBg = isFirst ? 'bg-yellow-400 text-white' : entry.rank === 2 ? 'bg-gray-200 text-gray-700' : 'bg-orange-100 text-orange-700';
-                const badgeSize = isFirst ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-[10px]';
-                const nameSize = isFirst ? 'text-base font-bold' : 'text-sm font-semibold';
-                const pointsColor = isFirst ? 'text-[#0056D2]' : 'text-gray-400';
-                const pointsSize = isFirst ? 'text-xs' : 'text-[10px]';
-                const mbClass = isFirst ? 'mb-4' : '';
-
-                return (
-                  <div key={entry.rank} className={`flex flex-col items-center gap-3 flex-1 ${mbClass}`}>
-                    <div className="relative">
-                      {isFirst && (
-                        <Star size={32} className="text-yellow-400 fill-yellow-400 absolute -top-8 left-1/2 -translate-x-1/2 drop-shadow-sm" />
-                      )}
-                      {entry.isUser && user ? (
-                        <img
-                          src={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(entry.avatar)}&backgroundColor=0056D2&textColor=ffffff`}
-                          className={`${sizeClass} rounded-full ${borderClass} object-cover`}
-                          alt={`R${entry.rank}`}
-                        />
-                      ) : (
-                        <div className={`${sizeClass} rounded-full ${borderClass} bg-gray-100 flex items-center justify-center`}>
-                          <UserIcon size={isFirst ? 32 : entry.rank === 2 ? 22 : 18} className="text-gray-400" />
-                        </div>
-                      )}
-                      <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 ${badgeSize} rounded-full ${badgeBg} flex items-center justify-center font-bold border-2 border-white shadow-sm`}>
-                        {entry.rank}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <p className={`${nameSize} text-gray-900`}>{entry.name}</p>
-                      <p className={`${pointsSize} font-bold ${pointsColor} uppercase`}>{entry.points} pt</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="flex justify-center gap-1.5">
-              <div className="w-6 h-1.5 rounded-full bg-[#0056D2]" />
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-            </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+            {courses.length > 0 ? courses.slice(0, 4).map((course) => (
+              <button
+                key={course.id}
+                onClick={() => onNavigate?.('schedule')}
+                className="w-full flex items-center justify-between gap-4 rounded-xl border border-gray-100 p-4 text-left hover:border-[#0056D2] hover:bg-blue-50/30 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900 truncate">{course.title}</p>
+                  <p className="text-xs text-gray-500 mt-1">{course.pagesCount || 0} {t('classroom.slide')} · {course.exercisesCount || 0} {t('homework.title')}</p>
+                </div>
+                <ChevronRight size={18} className="text-gray-300 shrink-0" />
+              </button>
+            )) : (
+              <div className="py-12 text-center text-sm font-semibold text-gray-400">{t('schedule.no_classes')}</div>
+            )}
           </div>
         </div>
       </div>

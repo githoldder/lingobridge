@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -11,16 +11,18 @@ import {
   Plus,
   Trash2,
   Edit2,
-  CheckCircle,
-  X,
   Loader2,
   FileText,
   Play,
   Download,
   UserPlus,
   AlertCircle,
+  Eye,
+  Volume2,
+  Search,
+  Award,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import {
   coursesApi,
@@ -30,8 +32,12 @@ import {
   assignmentsApi,
   homeworkApi,
   lessonNodesApi,
+  learningRecordsApi,
+  recordingsApi,
+  mediaUrl,
   fileToBase64,
   type Course,
+  type LiveSessionData,
 } from '../services/apiClient.ts';
 import { styleFromSeed } from '../utils/styleFromSeed.ts';
 
@@ -81,7 +87,7 @@ interface LiveSession {
   lessonNodeId?: string;
 }
 
-type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework' | 'live';
+type TabKey = 'info' | 'students' | 'schedule' | 'courseware' | 'homework';
 
 interface TeacherCourseDetailViewProps {
   courseId: string;
@@ -96,7 +102,6 @@ const TABS: { key: TabKey; icon: React.ReactNode }[] = [
   { key: 'schedule', icon: <Clock size={16} /> },
   { key: 'courseware', icon: <UploadCloud size={16} /> },
   { key: 'homework', icon: <FileSpreadsheet size={16} /> },
-  { key: 'live', icon: <Video size={16} /> },
 ];
 
 const ShapeIcon: React.FC<{ shape: string; size?: number; color?: string }> = ({ shape, size = 20, color = 'currentColor' }) => {
@@ -230,9 +235,8 @@ export default function TeacherCourseDetailView({ courseId, onNavigate, onBack, 
         {activeTab === 'info' && <CourseInfoTab course={course} onSave={loadCourse} t={t} />}
         {activeTab === 'students' && <StudentsTab courseId={courseId} t={t} />}
         {activeTab === 'courseware' && <CoursewareTab courseId={courseId} t={t} />}
-        {activeTab === 'schedule' && <ScheduleTab courseId={courseId} t={t} />}
+        {activeTab === 'schedule' && <ScheduleTab courseId={courseId} t={t} onEnterLive={onEnterLive} />}
         {activeTab === 'homework' && <HomeworkTab courseId={courseId} t={t} />}
-        {activeTab === 'live' && <LiveTab courseId={courseId} t={t} onEnterLive={onEnterLive} />}
       </motion.div>
     </div>
   );
@@ -284,6 +288,7 @@ function LiveClassSelect({
 function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => void; t: (k: string) => string }) {
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description);
+  const [coverImageUrl, setCoverImageUrl] = useState(course.coverImageUrl || '');
   const [status, setStatus] = useState(course.status);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -293,6 +298,30 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
     setMessage('');
     try {
       await coursesApi.update(course.id, { title, description, status });
+      setMessage(t('course_info.saved'));
+      onSave();
+    } catch (e: any) {
+      setMessage(e.message || t('course_info.save_failed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCoverUpload = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage(t('course_info.cover_invalid'));
+      return;
+    }
+    const base64 = await fileToBase64(file);
+    setCoverImageUrl(`data:${file.type};base64,${base64}`);
+  };
+
+  const handleSaveWithCover = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await coursesApi.update(course.id, { title, description, status, coverImageUrl });
       setMessage(t('course_info.saved'));
       onSave();
     } catch (e: any) {
@@ -342,11 +371,15 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
           <label className="block text-sm font-bold text-gray-600 mb-1">{t('course_info.cover_image')}</label>
           <div className="flex items-center gap-4">
             <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-blue-50 to-slate-100 flex items-center justify-center border border-gray-200">
-              <BookOpen size={32} className="text-[#0056D2]" />
+              {coverImageUrl ? (
+                <img src={coverImageUrl} alt={title} className="w-full h-full rounded-xl object-cover" />
+              ) : (
+                <BookOpen size={32} className="text-[#0056D2]" />
+              )}
             </div>
             <label className="px-4 py-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors">
               {t('course_info.upload_cover')}
-              <input type="file" accept="image/*" className="hidden" />
+              <input type="file" accept="image/*" className="hidden" onChange={e => handleCoverUpload(e.target.files?.[0])} />
             </label>
           </div>
         </div>
@@ -361,7 +394,7 @@ function CourseInfoTab({ course, onSave, t }: { course: Course; onSave: () => vo
       )}
 
       <button
-        onClick={handleSave}
+        onClick={handleSaveWithCover}
         disabled={saving}
         className="flex items-center gap-2 px-6 py-2.5 bg-[#0056D2] text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all disabled:opacity-50"
       >
@@ -379,6 +412,7 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState('');
+  const [selectedStudentForProgress, setSelectedStudentForProgress] = useState<{ studentId: string; displayName: string } | null>(null);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -492,19 +526,326 @@ function StudentsTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                   <p className="text-xs text-gray-400">{m.email}</p>
                 </div>
               </div>
-              <button
-                onClick={() => removeStudent(m.id)}
-                className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedStudentForProgress({ studentId: m.userId, displayName: m.displayName })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#0056D2] rounded-xl hover:bg-blue-100 font-bold text-xs transition-colors"
+                >
+                  <Eye size={12} />
+                  检查进度与作业
+                </button>
+                <button
+                  onClick={() => removeStudent(m.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedStudentForProgress && (
+          <StudentProgressModal
+            courseId={courseId}
+            studentId={selectedStudentForProgress.studentId}
+            displayName={selectedStudentForProgress.displayName}
+            onClose={() => setSelectedStudentForProgress(null)}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+export interface StudentProgressModalProps {
+  courseId?: string;
+  studentId: string;
+  displayName: string;
+  onClose: () => void;
+  t: (k: string) => string;
+}
+
+export const StudentProgressModal: React.FC<StudentProgressModalProps> = ({ courseId, studentId, displayName, onClose, t }) => {
+  const [activeTab, setActiveTab] = useState<'homework' | 'recordings'>('homework');
+  const [loading, setLoading] = useState(true);
+  const [homeworkTasks, setHomeworkTasks] = useState<any[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState(courseId || '');
+
+  useEffect(() => {
+    async function fetchCourses() {
+      try {
+        const list = await coursesApi.list();
+        setCourses(list || []);
+        if (!selectedCourseId && list.length > 0) {
+          setSelectedCourseId(list[0].id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchCourses();
+  }, [courseId]);
+
+  const loadData = useCallback(async () => {
+    if (!selectedCourseId) return;
+    setLoading(true);
+    try {
+      const [tasksData, recordsData, recordingsData] = await Promise.all([
+        homeworkApi.tasks(selectedCourseId, { includeAll: true }).catch(() => []),
+        learningRecordsApi.list(selectedCourseId, { studentId }).catch(() => []),
+        recordingsApi.list(selectedCourseId, { studentId }).catch(() => [])
+      ]);
+      setHomeworkTasks(tasksData || []);
+      setRecords(recordsData || []);
+      setRecordings(recordingsData || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCourseId, studentId]);
+
+  useEffect(() => {
+    loadData();
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [loadData]);
+
+  const handlePlayRecording = (url: string, id: string) => {
+    if (playingId === id) {
+      audioRef.current?.pause();
+      setPlayingId(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      const audio = new Audio(mediaUrl(url));
+      audio.onended = () => setPlayingId(null);
+      audio.onerror = () => setPlayingId(null);
+      audioRef.current = audio;
+      audio.play();
+      setPlayingId(id);
+    }
+  };
+
+  // Stats calculation
+  const hwTasks = homeworkTasks.filter(t => t.publishToHomework);
+  const hwRecords = records.filter(r => r.context === 'homework');
+  const completedHwTasks = hwTasks.filter(task => 
+    hwRecords.some(r => r.taskId === task.taskId && r.status === 'completed')
+  );
+  const hwProgress = hwTasks.length > 0 ? Math.round((completedHwTasks.length / hwTasks.length) * 100) : 0;
+
+  const vocabTasks = homeworkTasks.filter(t => t.publishToVocab || t.taskType === 'vocabulary');
+  const vocabRecords = records.filter(r => r.context === 'vocabulary');
+  const masteredVocab = vocabTasks.filter(task =>
+    vocabRecords.some(r => r.taskId === task.taskId && r.status === 'completed' && r.score >= 80)
+  );
+  const vocabProgress = vocabTasks.length > 0 ? Math.round((masteredVocab.length / vocabTasks.length) * 100) : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 text-left"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-[2rem] p-6 md:p-8 max-w-3xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative border border-gray-100 flex flex-col gap-6"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all hover:bg-gray-100 font-bold"
+        >
+          ✕
+        </button>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+              <Award className="text-[#0056D2]" size={28} />
+              学生学习进度检查
+            </h2>
+            <p className="text-sm font-semibold text-gray-400 mt-1">学生: <span className="text-gray-700">{displayName}</span></p>
+          </div>
+          {courses.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">选择课程:</span>
+              <select
+                value={selectedCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-[#0056D2] cursor-pointer"
+              >
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="py-20 text-center">
+            <div className="w-10 h-10 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-400 font-bold">{t('course.loading')}</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-blue-800 tracking-wider uppercase mb-1">口语作业进度</h4>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-black text-blue-900">{completedHwTasks.length}</span>
+                    <span className="text-gray-400 font-bold">/ {hwTasks.length} 个任务已完成</span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex justify-between text-xs font-bold text-blue-700 mb-1.5">
+                    <span>完成度</span>
+                    <span>{hwProgress}%</span>
+                  </div>
+                  <div className="w-full bg-blue-100 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-[#0056D2] h-full rounded-full" style={{ width: `${hwProgress}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-orange-800 tracking-wider uppercase mb-1">单词掌握进度</h4>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-3xl font-black text-orange-900">{masteredVocab.length}</span>
+                    <span className="text-gray-400 font-bold">/ {vocabTasks.length} 个单词已掌握</span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex justify-between text-xs font-bold text-orange-700 mb-1.5">
+                    <span>掌握度 (得分≥80)</span>
+                    <span>{vocabProgress}%</span>
+                  </div>
+                  <div className="w-full bg-orange-100 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-orange-500 h-full rounded-full" style={{ width: `${vocabProgress}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex bg-gray-50 rounded-xl p-1 border border-gray-100 self-start">
+              <button
+                onClick={() => setActiveTab('homework')}
+                className={`px-4 py-2 rounded-lg text-sm font-extrabold transition-all ${activeTab === 'homework' ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-900'}`}
+              >
+                作业明细
+              </button>
+              <button
+                onClick={() => setActiveTab('recordings')}
+                className={`px-4 py-2 rounded-lg text-sm font-extrabold transition-all ${activeTab === 'recordings' ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-900'}`}
+              >
+                学生录音记录 ({recordings.length})
+              </button>
+            </div>
+
+            {/* Tab Contents */}
+            <div className="flex-1 overflow-y-auto max-h-[40vh] min-h-[25vh]">
+              {activeTab === 'homework' ? (
+                <div className="space-y-3">
+                  {hwTasks.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 font-bold">当前课程未发布口语作业。</div>
+                  ) : (
+                    hwTasks.map((task) => {
+                      const record = hwRecords.find(r => r.taskId === task.taskId);
+                      const isCompleted = record?.status === 'completed';
+                      return (
+                        <div key={task.taskId} className="flex justify-between items-center p-4 rounded-2xl border border-gray-100 hover:border-gray-200 transition-colors">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded">
+                              Unit {task.unit} · Lesson {task.lesson}
+                            </span>
+                            <h5 className="font-bold text-gray-800 text-sm mt-1">{task.zhText}</h5>
+                            <p className="text-xs text-gray-400 font-mono">{task.pinyin}</p>
+                          </div>
+                          <div>
+                            {isCompleted ? (
+                              <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-bold px-3 py-1 rounded-full border border-green-100">
+                                最佳分: {record.score}
+                              </span>
+                            ) : (
+                              <span className="bg-gray-50 text-gray-400 text-xs font-bold px-3 py-1 rounded-full border border-gray-100">
+                                未完成
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recordings.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 font-bold">无录音记录。</div>
+                  ) : (
+                    recordings.map((rec) => {
+                      const matchedTask = homeworkTasks.find(t => t.taskId === rec.taskId);
+                      const isPlaying = playingId === rec.id;
+                      return (
+                        <div key={rec.id} className="flex justify-between items-center p-4 rounded-2xl border border-gray-100 hover:border-gray-200 transition-colors">
+                          <div className="space-y-1 flex-1">
+                            <h5 className="font-bold text-gray-800 text-sm">{matchedTask ? matchedTask.zhText : '口语练习'}</h5>
+                            <p className="text-xs text-gray-400">
+                              提交时间: {new Date(rec.createdAt).toLocaleString()} · 时长: {rec.durationSec}秒
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handlePlayRecording(rec.audioUrl, rec.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isPlaying ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50 text-[#0056D2] border border-blue-100 hover:bg-blue-100'}`}
+                          >
+                            {isPlaying ? (
+                              <>
+                                <span className="w-1.5 h-1.5 bg-red-600 rounded-full animate-ping" />
+                                停止
+                              </>
+                            ) : (
+                              <>
+                                <Play size={12} fill="currentColor" />
+                                播放录音
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
 
 function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => string }) {
   const [files, setFiles] = useState<CoursewareFile[]>([]);
@@ -526,10 +867,6 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
   const handleUpload = async (file: File) => {
-    if (!lessonNodeId) {
-      setMessage(t('live_class.required_before_upload'));
-      return;
-    }
     if (!file.name.match(/\.(pdf|pptx)$/i)) {
       setMessage(t('course_courseware.invalid_type'));
       return;
@@ -543,7 +880,22 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
     }, 200);
 
     try {
-      await coursesApi.uploadCourseware(courseId, file, lessonNodeId);
+      let finalLessonNodeId = lessonNodeId;
+      if (!finalLessonNodeId) {
+        setMessage('正在为您自动创建课时节点...');
+        const nodes = await lessonNodesApi.list(courseId);
+        if (nodes && nodes.length > 0) {
+          finalLessonNodeId = nodes[0].id;
+        } else {
+          const created = await lessonNodesApi.create(courseId, {
+            title: `Live Lesson ${new Date().toLocaleDateString()}`
+          });
+          finalLessonNodeId = created.lessonNode.id;
+        }
+        setLessonNodeId(finalLessonNodeId);
+      }
+
+      await coursesApi.uploadCourseware(courseId, file, finalLessonNodeId);
       setProgress(100);
       setMessage(t('course_courseware.uploaded').replace('{filename}', file.name));
       loadFiles();
@@ -632,11 +984,13 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   );
 }
 
-function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => string }) {
+function ScheduleTab({ courseId, t, onEnterLive }: { courseId: string; t: (k: string) => string; onEnterLive?: (courseId: string, lessonNodeId: string) => void }) {
   const [nodes, setNodes] = useState<LessonNode[]>([]);
   const [members, setMembers] = useState<CourseMember[]>([]);
   const [files, setFiles] = useState<CoursewareFile[]>([]);
+  const [activeSession, setActiveSession] = useState<LiveSessionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingNodeId, setStartingNodeId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newStartsAt, setNewStartsAt] = useState('');
   const [newEndsAt, setNewEndsAt] = useState('');
@@ -650,12 +1004,14 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
     try {
       const data = await lessonNodesApi.list(courseId);
       setNodes(data || []);
-      const [memberData, fileData] = await Promise.all([
+      const [memberData, fileData, sessionData] = await Promise.all([
         courseMembersApi.list(courseId).catch(() => []),
         coursewareFilesApi.list(courseId).catch(() => []),
+        liveSessionsApi.getActive(courseId).catch(() => null),
       ]);
       setMembers(memberData || []);
       setFiles(fileData || []);
+      setActiveSession(sessionData);
     } catch {
       setNodes([]);
     } finally {
@@ -692,6 +1048,20 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       loadNodes();
     } catch {
       setMessage(t('course_schedule.update_failed'));
+    }
+  };
+
+  const startLiveClass = async (lessonNodeId: string) => {
+    setStartingNodeId(lessonNodeId);
+    setMessage('');
+    try {
+      const session = await liveSessionsApi.create(courseId, lessonNodeId, 'pdf');
+      setActiveSession(session);
+      onEnterLive?.(courseId, lessonNodeId);
+    } catch (e: any) {
+      setMessage(e.message || t('course_live.create_failed'));
+    } finally {
+      setStartingNodeId('');
     }
   };
 
@@ -825,6 +1195,24 @@ function ScheduleTab({ courseId, t }: { courseId: string; t: (k: string) => stri
                        node.status === 'completed' ? t('classroom.stopped') :
                        t('course_schedule.scheduled')}
                     </span>
+                    {activeSession?.lessonNodeId === node.id ? (
+                      <button
+                        onClick={() => onEnterLive?.(courseId, node.id)}
+                        className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-bold"
+                      >
+                        <Play size={12} />
+                        {t('course_live.enter')}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => startLiveClass(node.id)}
+                        disabled={!!startingNodeId}
+                        className="ml-auto inline-flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                      >
+                        {startingNodeId === node.id ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />}
+                        {t('course_live.create')}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -849,7 +1237,7 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       setTasksCount(0);
       return;
     }
-    homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId)
+    homeworkApi.tasks(courseId, { lessonNodeId })
       .then((tasks) => {
         setTasksCount(tasks.length);
       })
@@ -877,7 +1265,7 @@ function HomeworkTab({ courseId, t }: { courseId: string; t: (k: string) => stri
       setResult(result);
       setMessage(t('course_homework.imported').replace('{filename}', file.name));
       // Re-fetch tasks count dynamically from backend
-      const tasks = await homeworkApi.tasks(courseId, undefined, undefined, lessonNodeId);
+      const tasks = await homeworkApi.tasks(courseId, { lessonNodeId });
       setTasksCount(tasks.length);
     } catch (e: any) {
       setMessage(e.message || t('course_homework.import_failed'));
@@ -1011,151 +1399,6 @@ CZU-CHN-001, 1, 1, CZU-CHN-001-L01-001, pronunciation, 大家好，我叫阿合�
               </ul>
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiveTab({ courseId, t, onEnterLive }: { courseId: string; t: (k: string) => string; onEnterLive?: (courseId: string, lessonNodeId: string) => void }) {
-  const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const [lessonNodes, setLessonNodes] = useState<LessonNode[]>([]);
-  const [selectedLessonNodeId, setSelectedLessonNodeId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [message, setMessage] = useState('');
-
-  const loadSessions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const active = await liveSessionsApi.getActive(courseId);
-      if (active) {
-        const sessionData = active as any;
-        setSessions([{
-          id: active.id,
-          title: '',
-          status: active.status,
-          startedAt: active.startedAt,
-          lessonNodeId: sessionData.lessonNodeId || '',
-        }]);
-      } else {
-        setSessions([]);
-      }
-    } catch {
-      setSessions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [courseId]);
-
-  const loadLessonNodes = useCallback(async () => {
-    try {
-      const data = await lessonNodesApi.list(courseId);
-      setLessonNodes(data || []);
-      if (data?.length > 0 && !selectedLessonNodeId) {
-        setSelectedLessonNodeId(data[0].id);
-      }
-    } catch {
-      setLessonNodes([]);
-    }
-  }, [courseId, selectedLessonNodeId]);
-
-  useEffect(() => { loadSessions(); loadLessonNodes(); }, [loadSessions, loadLessonNodes]);
-
-  const createLive = async () => {
-    if (!selectedLessonNodeId) {
-      setMessage(t('course_live.select_lesson'));
-      return;
-    }
-    setCreating(true);
-    setMessage('');
-    try {
-      const session = await liveSessionsApi.create(courseId, selectedLessonNodeId, 'screen');
-      setMessage(t('course_live.created'));
-      loadSessions();
-    } catch (e: any) {
-      setMessage(e.message || t('course_live.create_failed'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-6">
-      <h2 className="text-lg font-extrabold text-gray-900">{t('course_live.title')}</h2>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-bold text-gray-600 mb-1">{t('course_live.select_lesson')}</label>
-          <select
-            value={selectedLessonNodeId}
-            onChange={e => setSelectedLessonNodeId(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium outline-none focus:border-[#0056D2]"
-          >
-            <option value="">{t('course_live.no_lessons')}</option>
-            {lessonNodes.map(n => (
-              <option key={n.id} value={n.id}>{n.title}</option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={createLive}
-          disabled={creating || !selectedLessonNodeId}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all disabled:opacity-50"
-        >
-          {creating ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
-          {t('course_live.create')}
-        </button>
-      </div>
-
-      {message && (
-        <div className={`text-sm font-bold px-4 py-2 rounded-xl ${
-          message.includes('failed') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
-        }`}>
-          {message}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="py-8 text-center text-gray-400 font-bold">{t('course.loading')}</div>
-      ) : sessions.length === 0 ? (
-        <div className="py-8 text-center text-gray-400 font-bold">{t('course_live.empty')}</div>
-      ) : (
-        <div className="space-y-3">
-          {sessions.map(s => (
-            <div key={s.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${s.status === 'active' ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{s.title || `Live ${s.id.slice(0, 8)}`}</p>
-                  <p className="text-xs text-gray-400">{new Date(s.startedAt).toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  s.status === 'active' ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-500'
-                }`}>
-                  {s.status === 'active' ? t('classroom.live') : t('classroom.stopped')}
-                </span>
-                {s.recordingUrl && (
-                  <button className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-500">
-                    <Download size={14} />
-                  </button>
-                )}
-                {s.status === 'active' && (
-                  <button
-                    onClick={() => s.lessonNodeId && onEnterLive?.(courseId, s.lessonNodeId)}
-                    disabled={!s.lessonNodeId}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                  >
-                    <Play size={12} />
-                    {t('course_live.enter')}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>

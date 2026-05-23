@@ -58,12 +58,50 @@ export async function findActiveByCourseId(courseId: string): Promise<LiveSessio
   return row ? mapSession(row) : null;
 }
 
+export async function findActiveByLessonNodeId(lessonNodeId: string): Promise<LiveSessionDto | null> {
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const s = db.liveSessions.find((s) => s.lessonNodeId === lessonNodeId && (s.status === 'active' || s.status === 'scheduled' as string));
+    return s ? mapSession(s) : null;
+  }
+  const row = await queryRow(
+    `SELECT * FROM live_sessions
+     WHERE lesson_node_id = $1 AND status IN ('scheduled', 'active')
+     ORDER BY created_at DESC LIMIT 1`,
+    [lessonNodeId]
+  );
+  return row ? mapSession(row) : null;
+}
+
+export async function endActiveByCourseAndTeacher(courseId: string, teacherId: string): Promise<void> {
+  const endedAt = new Date().toISOString();
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    for (const session of db.liveSessions) {
+      if (session.courseId === courseId && session.teacherId === teacherId && session.status === 'active') {
+        session.status = 'ended';
+        session.endedAt = endedAt;
+      }
+    }
+    await writeDb(db);
+    return;
+  }
+  await query(
+    `UPDATE live_sessions
+     SET status = 'ended', ended_at = $3, updated_at = now()
+     WHERE course_id = $1 AND teacher_id = $2 AND status = 'active'`,
+    [courseId, teacherId, endedAt]
+  );
+}
+
 export async function createSession(data: {
   courseId: string;
   teacherId: string;
   lessonNodeId: string;
   sourceMode?: string;
+  status?: string;
 }): Promise<LiveSessionDto> {
+  const now = new Date().toISOString();
   if (getDbMode() === 'json') {
     const db = await readDb();
     const session = {
@@ -71,27 +109,30 @@ export async function createSession(data: {
       courseId: data.courseId,
       teacherId: data.teacherId,
       lessonNodeId: data.lessonNodeId,
-      status: 'scheduled',
+      status: data.status ?? 'scheduled',
       sourceMode: data.sourceMode ?? 'pdf',
       currentPage: 1,
       recordingStatus: 'idle',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      startedAt: data.status === 'active' ? now : undefined,
+      endedAt: '',
+      createdAt: now,
+      updatedAt: now,
     };
     db.liveSessions.push(session as any);
     await writeDb(db);
     return mapSession(session);
   }
   const row = await queryRow(
-    `INSERT INTO live_sessions (course_id, teacher_id, lesson_node_id, source_mode)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO live_sessions (course_id, teacher_id, lesson_node_id, source_mode, status, started_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [data.courseId, data.teacherId, data.lessonNodeId, data.sourceMode ?? 'pdf']
+    [data.courseId, data.teacherId, data.lessonNodeId, data.sourceMode ?? 'pdf', data.status ?? 'scheduled', data.status === 'active' ? now : null]
   );
   return mapSession(row!);
 }
 
 export async function updateSession(id: string, data: Partial<{
+  sourceMode: string;
   status: string;
   currentPage: number;
   recordingStatus: string;
@@ -109,6 +150,7 @@ export async function updateSession(id: string, data: Partial<{
   const sets: string[] = [];
   const vals: any[] = [];
   let i = 1;
+  if (data.sourceMode !== undefined) { sets.push(`source_mode = $${i++}`); vals.push(data.sourceMode); }
   if (data.status !== undefined) { sets.push(`status = $${i++}`); vals.push(data.status); }
   if (data.currentPage !== undefined) { sets.push(`current_page = $${i++}`); vals.push(data.currentPage); }
   if (data.recordingStatus !== undefined) { sets.push(`recording_status = $${i++}`); vals.push(data.recordingStatus); }
@@ -132,4 +174,25 @@ export async function findClassStudents(lessonNodeId: string): Promise<LiveClass
     [lessonNodeId]
   );
   return rows.map(mapClassStudent);
+}
+
+export async function addClassStudent(lessonNodeId: string, studentId: string, source = 'course_member'): Promise<LiveClassStudentDto> {
+  const now = new Date().toISOString();
+  if (getDbMode() === 'json') {
+    const db = await readDb();
+    const existing = db.liveClassStudents.find((s) => s.lessonNodeId === lessonNodeId && s.studentId === studentId);
+    if (existing) return mapClassStudent(existing);
+    const row = { id: crypto.randomUUID(), lessonNodeId, studentId, source, joinedAt: now };
+    db.liveClassStudents.push(row as any);
+    await writeDb(db);
+    return mapClassStudent(row);
+  }
+  const row = await queryRow(
+    `INSERT INTO live_class_students (lesson_node_id, student_id, source)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (lesson_node_id, student_id) DO UPDATE SET removed_at = NULL
+     RETURNING *`,
+    [lessonNodeId, studentId, source]
+  );
+  return mapClassStudent(row!);
 }

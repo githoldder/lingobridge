@@ -1,94 +1,136 @@
-import React from 'react';
-import { 
-  Users, 
-  Search, 
-  MessageSquare, 
-  MoreVertical,
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Users,
+  Search,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext';
+import { coursesApi, courseMembersApi, teacherStudentsApi } from '../services/apiClient.ts';
+import { StudentProgressModal } from './TeacherCourseDetailView.tsx';
+import { AnimatePresence } from 'motion/react';
+
+interface StudentRow {
+  id: string;
+  username: string;
+  displayName: string;
+  email?: string;
+  courseCount: number;
+}
 
 const TeacherStudentsView = () => {
   const { t } = useLanguage();
+  const [query, setQuery] = useState('');
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStudentForProgress, setSelectedStudentForProgress] = useState<{ studentId: string; displayName: string } | null>(null);
 
-  const students = [
-    { id: 1, name: 'Anna Zhang', level: 'HSK 3', progress: 85, attendance: '92%', lastActive: `2 ${t('time.hours')} ${t('time.ago')}`, status: t('students.on_track'), image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop" },
-    { id: 2, name: 'Ivan Petrov', level: 'HSK 3', progress: 42, attendance: '75%', lastActive: `1 ${t('time.days')} ${t('time.ago')}`, status: t('students.at_risk'), image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop" },
-    { id: 3, name: 'Maria Koslova', level: 'HSK 3', progress: 98, attendance: '100%', lastActive: t('time.now'), status: t('students.excellence'), image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&auto=format&fit=crop" },
-    { id: 4, name: 'Dmitry Orlov', level: 'HSK 2', progress: 65, attendance: '88%', lastActive: `5 ${t('time.hours')} ${t('time.ago')}`, status: t('students.on_track'), image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop" },
-  ];
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const [roster, courses] = await Promise.all([
+          teacherStudentsApi.search(query).catch(() => []),
+          coursesApi.list().catch(() => []),
+        ]);
+        const courseMembers = await Promise.all(
+          courses.map((course) => courseMembersApi.list(course.id).catch(() => []))
+        );
+        const countByStudent = new Map<string, number>();
+        courseMembers.flat().forEach((member) => {
+          countByStudent.set(member.userId, (countByStudent.get(member.userId) || 0) + 1);
+        });
+        if (!active) return;
+        setStudents(roster.map((student) => ({
+          id: student.id,
+          username: student.username,
+          displayName: student.displayName,
+          email: student.email || student.username,
+          courseCount: countByStudent.get(student.id) || 0,
+        })));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [query]);
+
+  const stats = useMemo(() => {
+    const assigned = students.filter((student) => student.courseCount > 0).length;
+    return {
+      total: students.length,
+      assigned,
+      unassigned: Math.max(0, students.length - assigned),
+    };
+  }, [students]);
 
   return (
     <div id="teacher-students" className="space-y-8">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-end">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{t('students.title')}</h1>
           <p className="text-gray-500 font-medium mt-1">{t('students.subtitle')}</p>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input 
-            type="text" 
-            placeholder={t('students.search_placeholder')} 
-            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all w-64"
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('students.search_placeholder')}
+            className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all w-full md:w-64"
           />
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-              <th className="px-8 py-5">{t('students.table_student')}</th>
-              <th className="px-8 py-5">{t('students.table_engagement')}</th>
-              <th className="px-8 py-5">{t('students.table_attendance')}</th>
-              <th className="px-8 py-5">{t('students.table_status')}</th>
-              <th className="px-8 py-5">{t('students.table_actions')}</th>
+              <th className="px-6 py-4">{t('students.table_student')}</th>
+              <th className="px-6 py-4">{t('course.my_courses')}</th>
+              <th className="px-6 py-4">{t('students.table_status')}</th>
+              <th className="px-6 py-4 text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {students.map((student) => (
-              <tr key={student.id} className="hover:bg-gray-50 transition-colors group">
-                <td className="px-8 py-6">
+            {loading ? (
+              <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course.loading')}</td></tr>
+            ) : students.length === 0 ? (
+              <tr><td colSpan={4} className="px-6 py-10 text-center text-gray-400 font-bold">{t('course_students.empty')}</td></tr>
+            ) : students.map((student) => (
+              <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-5">
                   <div className="flex items-center gap-3">
-                    <img src={student.image} className="w-10 h-10 rounded-full object-cover border border-gray-100" alt={student.name} referrerPolicy="no-referrer" />
+                    <div className="w-10 h-10 rounded-full bg-[#0056D2] text-white flex items-center justify-center text-sm font-black">
+                      {student.displayName.slice(0, 1)}
+                    </div>
                     <div>
-                      <div className="text-sm font-bold text-gray-900">{student.name}</div>
-                      <div className="text-xs text-gray-400">{student.level} • {t('students.active_label')} {student.lastActive}</div>
+                      <div className="text-sm font-bold text-gray-900">{student.displayName}</div>
+                      <div className="text-xs text-gray-400">{student.email}</div>
                     </div>
                   </div>
                 </td>
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-3 w-48">
-                    <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-[#0056D2] h-full rounded-full" style={{ width: `${student.progress}%` }} />
-                    </div>
-                    <span className="text-xs font-bold text-gray-600">{student.progress}%</span>
-                  </div>
-                </td>
-                <td className="px-8 py-6 text-sm font-bold text-gray-600">{student.attendance}</td>
-                <td className="px-8 py-6">
-                  <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 w-fit ${
-                    student.status === t('students.excellence') ? 'bg-green-100 text-green-700' :
-                    student.status === t('students.at_risk') ? 'bg-red-100 text-red-600' :
-                    'bg-blue-100 text-[#0056D2]'
+                <td className="px-6 py-5 text-sm font-bold text-gray-600">{student.courseCount}</td>
+                <td className="px-6 py-5">
+                  <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                    student.courseCount > 0 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                   }`}>
-                    {student.status === t('students.excellence') && <CheckCircle size={10} />}
-                    {student.status === t('students.at_risk') && <AlertCircle size={10} />}
-                    {student.status}
+                    {student.courseCount > 0 ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
+                    {student.courseCount > 0 ? t('students.on_track') : t('live_class.unassigned')}
                   </span>
                 </td>
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-2">
-                    <button className="p-2 text-gray-400 hover:text-[#0056D2] hover:bg-blue-50 rounded-lg transition-all">
-                      <MessageSquare size={18} />
-                    </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all">
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
+                <td className="px-6 py-5 text-right">
+                  <button
+                    onClick={() => setSelectedStudentForProgress({ studentId: student.id, displayName: student.displayName })}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-[#0056D2] rounded-xl hover:bg-blue-100 font-bold text-xs transition-colors"
+                  >
+                    <Eye size={12} />
+                    检查进度与作业
+                  </button>
                 </td>
               </tr>
             ))}
@@ -97,36 +139,36 @@ const TeacherStudentsView = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-6">
-          <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-[#0056D2]">
-            <Users size={28} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-gray-900">124</div>
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('students.total_students')}</div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-6">
-          <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-green-600">
-            <CheckCircle size={28} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-gray-900">92%</div>
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('students.avg_attendance')}</div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-6">
-          <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
-            <AlertCircle size={28} />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-gray-900">8</div>
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('students.students_at_risk')}</div>
-          </div>
-        </div>
+        <Metric icon={<Users size={26} />} value={stats.total} label={t('students.total_students')} tone="blue" />
+        <Metric icon={<CheckCircle size={26} />} value={stats.assigned} label={t('course.my_courses')} tone="green" />
+        <Metric icon={<AlertCircle size={26} />} value={stats.unassigned} label={t('live_class.unassigned')} tone="yellow" />
       </div>
+
+      <AnimatePresence>
+        {selectedStudentForProgress && (
+          <StudentProgressModal
+            studentId={selectedStudentForProgress.studentId}
+            displayName={selectedStudentForProgress.displayName}
+            onClose={() => setSelectedStudentForProgress(null)}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
+function Metric({ icon, value, label, tone }: { icon: React.ReactNode; value: number; label: string; tone: 'blue' | 'green' | 'yellow' }) {
+  const toneClass = tone === 'green' ? 'bg-green-50 text-green-600' : tone === 'yellow' ? 'bg-yellow-50 text-yellow-700' : 'bg-blue-50 text-[#0056D2]';
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-5">
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${toneClass}`}>{icon}</div>
+      <div>
+        <div className="text-2xl font-black text-gray-900">{value}</div>
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</div>
+      </div>
+    </div>
+  );
+}
 
 export default TeacherStudentsView;
