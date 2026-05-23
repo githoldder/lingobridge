@@ -563,5 +563,13 @@ Action: Fix calendar paging, date isolating dots, embedded HTML5 video play, sec
 
 [Status] | S5-T12 (calendar navigation, date isolating dots & video replay modal popup) & S5-T13 (secure student query API, check progress buttons, and inline audio progress modal) completed | Done
 
+---
+
+# 2026-05-24 Vocabulary Practice Feedback Panel Visual Position Fix
+Date: 2026-05-24
+Action: Resolve global centering overflow in vocabulary practice feedback panel by offsetting its fixed boundaries (`lg:left-[260px]`) so that it centers beautifully inside the right-hand content workspace instead of overlapping the left sidebar.
+
+[Status] | All changes integrated, committed, pushed & E2E regression passed green | Done
+
 
 

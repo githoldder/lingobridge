@@ -375,7 +375,7 @@ const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: 
       </AnimatePresence>
 
       {/* Action Area */}
-      <div className={`fixed bottom-0 left-0 right-0 z-50 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}>
+      <div className={`fixed bottom-0 lg:left-[260px] left-0 right-0 z-50 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}>
         <div className={`max-w-2xl mx-auto rounded-3xl p-8 shadow-2xl border flex flex-col items-center justify-center gap-6 text-center ${
           isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
