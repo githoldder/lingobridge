@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
 import { initPostgres, healthCheck as pgHealthCheck } from './db/postgres.ts';
-import { saveBase64File, storageRoot } from './storage.ts';
+import { saveBase64File, saveBufferFile, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
 import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course, LiveClassStudent, HomeworkImport } from './types.ts';
 import { ttsFacade } from './providers/ttsFacade.ts';
@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx';
 import { query, queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
+const MAX_MULTIPART_COURSEWARE_BYTES = MAX_COURSEWARE_BYTES + 2 * 1024 * 1024;
 
 function ok(res: Response, data: unknown = null, message = 'success') {
   return res.json({ code: 0, data, message });
@@ -34,6 +35,83 @@ function currentUserId(req: Request) {
 
 function extensionOf(filename: string) {
   return path.extname(filename).slice(1).toLowerCase();
+}
+
+function parseContentDisposition(value: string) {
+  const out: Record<string, string> = {};
+  for (const part of value.split(';')) {
+    const [rawKey, ...rawValue] = part.trim().split('=');
+    if (!rawKey || rawValue.length === 0) continue;
+    out[rawKey.toLowerCase()] = rawValue.join('=').trim().replace(/^"|"$/g, '');
+  }
+  return out;
+}
+
+async function readRequestBuffer(req: Request, maxBytes: number) {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.byteLength;
+    if (total > maxBytes) {
+      throw new Error(`Request body exceeds ${Math.floor(maxBytes / 1024 / 1024)}MB`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function parseMultipartCourseware(req: Request) {
+  const contentType = req.header('content-type') || '';
+  const boundary = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[1] || contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[2];
+  if (!boundary) throw new Error('Missing multipart boundary');
+
+  const body = await readRequestBuffer(req, MAX_MULTIPART_COURSEWARE_BYTES);
+  const delimiter = Buffer.from(`--${boundary}`);
+  const fields: Record<string, string> = {};
+  let file: { filename: string; mimeType: string; buffer: Buffer } | null = null;
+  let cursor = body.indexOf(delimiter);
+
+  while (cursor !== -1) {
+    let partStart = cursor + delimiter.byteLength;
+    if (body.subarray(partStart, partStart + 2).toString() === '--') break;
+    if (body.subarray(partStart, partStart + 2).toString() === '\r\n') partStart += 2;
+
+    const next = body.indexOf(delimiter, partStart);
+    if (next === -1) break;
+    let part = body.subarray(partStart, next);
+    if (part.subarray(part.length - 2).toString() === '\r\n') {
+      part = part.subarray(0, part.length - 2);
+    }
+
+    const headerEnd = part.indexOf(Buffer.from('\r\n\r\n'));
+    if (headerEnd !== -1) {
+      const rawHeaders = part.subarray(0, headerEnd).toString('latin1');
+      const data = part.subarray(headerEnd + 4);
+      const headers = new Map<string, string>();
+      for (const line of rawHeaders.split('\r\n')) {
+        const idx = line.indexOf(':');
+        if (idx > 0) headers.set(line.slice(0, idx).toLowerCase(), line.slice(idx + 1).trim());
+      }
+      const disposition = parseContentDisposition(headers.get('content-disposition') || '');
+      const name = disposition.name;
+      if (name) {
+        if (disposition.filename !== undefined) {
+          file = {
+            filename: disposition.filename,
+            mimeType: headers.get('content-type') || 'application/octet-stream',
+            buffer: data
+          };
+        } else {
+          fields[name] = data.toString('utf8');
+        }
+      }
+    }
+
+    cursor = next;
+  }
+
+  return { fields, file };
 }
 
 function publicUser(user: import('./types.ts').User) {
@@ -397,9 +475,36 @@ export function createApp() {
   });
 
   app.post('/api/v1/coursewares', async (req, res) => {
-    const { courseId, lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+    let upload: {
+      courseId?: string;
+      lessonNodeId?: string;
+      filename?: string;
+      mimeType: string;
+      base64?: string;
+      buffer?: Buffer;
+    };
+
+    try {
+      if ((req.header('content-type') || '').includes('multipart/form-data')) {
+        const multipart = await parseMultipartCourseware(req);
+        upload = {
+          courseId: multipart.fields.courseId,
+          lessonNodeId: multipart.fields.lessonNodeId,
+          filename: multipart.file?.filename,
+          mimeType: multipart.file?.mimeType || 'application/octet-stream',
+          buffer: multipart.file?.buffer
+        };
+      } else {
+        const { courseId, lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+        upload = { courseId, lessonNodeId, filename, mimeType, base64 };
+      }
+    } catch (err: any) {
+      return fail(res, 413, err?.message || 'Courseware upload is too large');
+    }
+
+    const { courseId, lessonNodeId, filename, mimeType, base64, buffer } = upload;
     if (!courseId) return fail(res, 400, 'courseId is required');
-    if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
+    if (!filename || (!base64 && !buffer)) return fail(res, 400, 'filename and file are required');
 
     const ext = extensionOf(filename);
     if (!['pptx', 'pdf', 'xlsx'].includes(ext)) return fail(res, 415, 'Only pptx, pdf and xlsx are supported');
@@ -422,7 +527,9 @@ export function createApp() {
 
     const db = await readDb();
 
-    const saved = await saveBase64File({ base64, filename, folder: 'coursewares' });
+    const saved = buffer
+      ? await saveBufferFile({ buffer, filename, folder: 'coursewares' })
+      : await saveBase64File({ base64: base64 || '', filename, folder: 'coursewares' });
     if (saved.sizeBytes > MAX_COURSEWARE_BYTES) return fail(res, 413, 'Courseware file exceeds 50MB');
 
     const fileMeta = await filesRepo.createFile({

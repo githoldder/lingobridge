@@ -79,10 +79,11 @@ interface ApiEnvelope<T> {
 
 async function request<T>(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
@@ -170,15 +171,13 @@ export const coursesApi = {
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
   async uploadCourseware(courseId: string, file: File, lessonNodeId?: string) {
+    const formData = new FormData();
+    formData.append('courseId', courseId);
+    if (lessonNodeId) formData.append('lessonNodeId', lessonNodeId);
+    formData.append('file', file, file.name);
     return request<{ file: unknown; pages: CoursePage[]; exercises: Exercise[]; tasks: LearningTask[]; vocabulary: VocabularyItem[]; warnings?: string[] }>('/coursewares', {
       method: 'POST',
-      body: JSON.stringify({
-        courseId,
-        lessonNodeId,
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        base64: await fileToBase64(file)
-      })
+      body: formData
     });
   }
 };
@@ -739,4 +738,3 @@ export const adminApi = {
 };
 
 export { request as apiFetch };
-
