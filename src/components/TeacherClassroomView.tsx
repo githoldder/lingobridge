@@ -1083,9 +1083,69 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     });
   };
 
-  const stopControlsDrag = () => {
-    controlsDragRef.current.dragging = false;
-  };
+  const isClassroomActive = liveSession && liveSession.status === 'active';
+
+  if (role === 'student' && !isClassroomActive) {
+    return (
+      <div id="classroom-view" className="fixed inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] text-white z-[100] flex flex-col font-sans">
+        <header className="h-16 px-6 border-b border-white/5 flex justify-between items-center bg-black/20 backdrop-blur-md z-50">
+          <div className="flex items-center gap-4">
+            <Logo />
+            <div className="w-[1px] h-4 bg-white/20" />
+            <div>
+              <div className="text-xs uppercase tracking-widest text-emerald-400 font-bold animate-pulse">
+                {t('classroom.waiting_teacher') || 'Waiting for Teacher'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              cleanupMedia();
+              onExit();
+            }}
+            className="bg-white/5 hover:bg-red-600/20 text-gray-300 hover:text-red-500 px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 border border-white/5 cursor-pointer"
+          >
+            <LogOut size={14} />
+            {t('classroom.leave') || 'Leave Classroom'}
+          </button>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
+          {/* Ambient Glows */}
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+
+          <div className="max-w-md w-full text-center space-y-8 z-10 bg-white/[0.02] border border-white/5 p-10 rounded-[2.5rem] backdrop-blur-xl shadow-2xl">
+            {/* Pulsing Sonar Indicator */}
+            <div className="relative w-24 h-24 mx-auto">
+              <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping" />
+              <div className="absolute inset-2 rounded-full bg-blue-500/30 animate-pulse" />
+              <div className="absolute inset-4 rounded-full bg-[#0056D2] flex items-center justify-center shadow-lg border border-blue-400/20">
+                <Video size={32} className="text-white" />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h2 className="text-2xl font-black tracking-tight">{t('classroom.empty_student_title') || 'Waiting for Class to Start'}</h2>
+              <p className="text-sm text-gray-400 font-medium leading-relaxed max-w-sm mx-auto">
+                {t('classroom.empty_student_desc') || 'The teacher has not started sharing content yet. Please wait...'}
+              </p>
+            </div>
+
+            <div className="py-4 px-6 bg-white/[0.03] border border-white/5 rounded-2xl inline-flex items-center gap-3">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-gray-400 tracking-wide animate-pulse">
+                {t('classroom.waiting_pulse') || 'Connecting to classroom...'}
+              </span>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div id="classroom-view" className="fixed inset-0 bg-[#0F172A] text-white z-[60] flex flex-col font-sans">
