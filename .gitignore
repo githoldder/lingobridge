@@ -19,3 +19,4 @@ tmp/
 .playwright-cli/
 output/playwright/screenshots/
 test-results/
+.vercel

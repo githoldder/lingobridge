@@ -591,4 +591,59 @@ Action: Elegant student wait classroom state with micro-pulsing loader and auto-
 
 [Status] | S5-T03 (student wait room) & S5-T04 (default courseware Star selection) successfully completed | Done
 
+---
 
+# 2026-05-24 E2E Screenshots Capture & High-Aesthetic Obsidian User Manual Complete
+Date: 2026-05-24
+Action: Fix locator timeout bugs in screenshots automation script, run full 11-step multi-character smoke testing to capture crisp Retina images, and compose high-aesthetic Obsidian user manual.
+
+## Plan:
+1. Modify `scripts/generate_manual_screenshots.mjs`:
+   - Change seed course title click target to '第三课：自我介绍' to match backend database seeds.
+   - Force 'zh-CN' locale inside Playwright `browser.newContext()` contexts.
+   - Add side navigation link click step to properly switch to Courses view from default Home workspace.
+   - Refactor generic navbar locators to precise element IDs (e.g. `#sidebar-item-homework`).
+   - Add left settings panel click to expand the whiteboard toolbar controls before paintbrush toggles.
+   - Handle double-click exiting of the student classroom to properly dismiss the exit confirmation popup.
+2. Run automation script `node scripts/generate_manual_screenshots.mjs` to capture all 11 crisp high-DPI Retina snapshots.
+3. Write high-aesthetic commercial challenge-ready layout user manual into Obsidian record file `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md`.
+
+[Status] | All 11 screenshots successfully captured & High-aesthetic Obsidian User Manual compiled | Done
+
+---
+
+# 2026-05-24 User Manual Detail Supplementation Complete
+Date: 2026-05-24
+Action: Expand Obsidian user manual to exhaustively detail the student 3-slot homework recording loop, real-time live danmaku messages, backend ASR translation/scoring pipelines, and teacher online student progress review modals (with Token-bearing inline audio plays and strict whitelist comment updates).
+
+[Status] | Obsidian user manual details exhaustively supplemented and finalized | Done
+
+---
+
+# 2026-05-24 High-Aesthetic Image-Led Obsidian User Manual Finalized
+Date: 2026-05-24
+Action: Completely restructure and rewrite the Obsidian user manual into an image-first, visual-driven masterpiece. Every single section now starts with high-DPI Retina screenshots showing exact classroom danmaku synchronization, student 3-slot audios, backend ASR radar scores, and teacher check-progress popups. The entire 12-screenshot suite is perfectly embedded in Obsidian.
+
+[Status] | Image-led final user manual successfully created & pushed | Done
+
+
+# 2026-05-24 Homework pathway re-architected to prioritize LessonNodes
+Date: 2026-05-24
+Action: Restructured HomeworkView pathway generation from task-level unit/lesson numbers to course-level LessonNode instances. Fully resolved location Bug by utilizing sorted LessonNode titles/IDs in combination with a safe unit-lesson aggregation fallback. Added premium PathArrow connector animations to dynamically indicate visual flow.
+
+[Status] | Homework LessonNode re-architecture completed & verified | Done
+
+
+# 2026-05-24 Vercel Proxy via Direct IP & Caddy Port 80 Hardening Complete
+Date: 2026-05-24
+Action: Configure remote Caddy to listen on port 80 (any host), modify Vercel proxy to target remote server IP (101.34.72.227) directly to bypass ISP HTTP domain inspection/GFW interception, and seed remote Postgres DB.
+
+## Plan:
+1. Modify remote Caddyfile via TAT to listen on `:80` instead of `http://lingobridge.duckdns.org` to allow direct IP proxy handling.
+2. Re-create remote Caddy container.
+3. Update local `vercel.json` rewrites to proxy to `http://101.34.72.227` directly.
+4. Deploy the updated project to Vercel production.
+5. Pipe the standard `seed.sql` into the remote Postgres container via TAT to seed all test users.
+6. Verify deployment by checking `/api/v1/health` and `/api/v1/auth/login` endpoints via Vercel.
+
+[Status] | All Vercel-to-Tencent proxy pathways and login integration testing PASSED green! | Done

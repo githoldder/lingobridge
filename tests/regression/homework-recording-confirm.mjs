@@ -27,13 +27,29 @@ if (fs.existsSync(dbPath)) {
     // 重启 PM2 进程 4 (lingobridge-backend)
     execSync('pm2 restart 4', { stdio: 'inherit' });
     console.log('[E2E-Prep] Restarted PM2 backend server successfully!');
-    // 稍微等待 500ms 确保服务恢复响应
-    execSync('sleep 0.5');
+    // 稍微等待 2 秒确保服务恢复响应并完成端口绑定
+    execSync('sleep 2');
   } catch (err) {
     console.warn('[E2E-Prep] Failed to clean backend JSON database or restart server:', err);
   }
 }
 
+
+// ─── 轮询健康检查，确保后端完全启动并绑定端口 ───
+let ok = false;
+for (let i = 0; i < 90; i++) {
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/health`);
+    if (res.ok) {
+      ok = true;
+      console.log('[E2E-Prep] Backend is fully online and responsive!');
+      break;
+    }
+  } catch {
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+if (!ok) throw new Error('[E2E-Prep] Backend failed to start within timeout.');
 
 const courseRes = await fetch(`${BACKEND}/api/v1/courses`, {
   headers: { Authorization: 'Bearer student-1' }
@@ -142,8 +158,19 @@ await page.addInitScript(({ courseId, lessonNodeId }) => {
 
 await page.goto(FRONTEND, { waitUntil: 'networkidle' });
 await page.locator('#homework-path').waitFor({ state: 'visible', timeout: 10000 });
-await page.locator('#homework-path button').first().click();
-await page.locator('.fixed button[class*="w-12"][class*="h-12"]').first().click();
+
+// 智能适配 Focus Locator：检查是否已经自动弹出选定课时的关卡 Modal，未弹出时则手动点击关卡节点
+const taskButton = page.locator('.fixed button[class*="w-12"][class*="h-12"]').first();
+try {
+  await taskButton.waitFor({ state: 'visible', timeout: 3000 });
+  console.log('[E2E] Focus Locator worked successfully! Homework lesson modal was automatically popped up.');
+} catch {
+  console.log('[E2E] Homework lesson modal did not pop up automatically. Manually clicking the first pathway node...');
+  await page.locator('#homework-path button').first().click();
+  await taskButton.waitFor({ state: 'visible', timeout: 5000 });
+}
+
+await taskButton.click();
 await page.locator('#homework-task-view').waitFor({ state: 'visible', timeout: 10000 });
 
 // 循环答完所有题，每道题均打满 3 分，然后切下一题，直至完成提交
