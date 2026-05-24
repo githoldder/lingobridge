@@ -161,7 +161,7 @@ export const coursesApi = {
     method: 'POST',
     body: JSON.stringify({ title, description })
   }),
-  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft'; coverImageUrl?: string }) =>
+  update: (id: string, updates: { title?: string; description?: string; status?: 'published' | 'draft'; coverImageUrl?: string; defaultCoursewareFileId?: string | null }) =>
     request<Course>(`/courses/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates)

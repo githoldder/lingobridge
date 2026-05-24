@@ -21,6 +21,7 @@ import {
   Volume2,
   Search,
   Award,
+  Star,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
@@ -855,6 +856,32 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   const [message, setMessage] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
+  const [courseDefaultId, setCourseDefaultId] = useState<string | null>(null);
+  const [lessonDefaults, setLessonDefaults] = useState<Record<string, string>>({});
+
+  const loadDefaults = useCallback(async () => {
+    try {
+      const courses = await coursesApi.list();
+      const c = courses.find(item => item.id === courseId);
+      if (c?.defaultCoursewareFileId) {
+        setCourseDefaultId(c.defaultCoursewareFileId);
+      } else {
+        setCourseDefaultId(null);
+      }
+      
+      const nodes = await lessonNodesApi.list(courseId);
+      const dict: Record<string, string> = {};
+      for (const n of nodes) {
+        if (n.defaultCoursewareFileId) {
+          dict[n.id] = n.defaultCoursewareFileId;
+        }
+      }
+      setLessonDefaults(dict);
+    } catch (e) {
+      console.error('Failed to load courseware defaults:', e);
+    }
+  }, [courseId]);
+
   const loadFiles = useCallback(async () => {
     try {
       const data = await coursewareFilesApi.list(courseId, lessonNodeId || undefined);
@@ -865,6 +892,29 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
   }, [courseId, lessonNodeId]);
 
   useEffect(() => { loadFiles(); }, [loadFiles]);
+  useEffect(() => { loadDefaults(); }, [loadDefaults]);
+
+  const handleSetDefault = async (fileId: string, fileLessonNodeId?: string) => {
+    try {
+      setMessage('');
+      const isCurrentDefault = fileLessonNodeId 
+        ? lessonDefaults[fileLessonNodeId] === fileId
+        : courseDefaultId === fileId;
+      
+      const nextValue = isCurrentDefault ? null : fileId;
+
+      if (fileLessonNodeId) {
+        await lessonNodesApi.update(fileLessonNodeId, { defaultCoursewareFileId: nextValue || undefined });
+        setMessage(isCurrentDefault ? '已取消该课时的默认课件。' : '已成功将该文件设为当前课时的默认课件。');
+      } else {
+        await coursesApi.update(courseId, { defaultCoursewareFileId: nextValue });
+        setMessage(isCurrentDefault ? '已取消课程默认课件。' : '已成功将该文件设为课程的默认课件。');
+      }
+      await loadDefaults();
+    } catch (e: any) {
+      setMessage(e.message || '操作失败。');
+    }
+  };
 
   const handleUpload = async (file: File) => {
     if (!file.name.match(/\.(pdf|pptx)$/i)) {
@@ -931,7 +981,7 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
         <p className="text-sm font-bold text-gray-500 mb-2">{t('course_courseware.drop_hint')}</p>
         <p className="text-xs text-gray-400 mb-4">{t('course_courseware.format_hint')}</p>
         <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0056D2] text-white rounded-xl font-bold text-sm cursor-pointer hover:shadow-lg transition-all">
-          <FileText size={16} />
+          <UploadCloud size={16} />
           {t('course_courseware.select_file')}
           <input
             type="file"
@@ -958,26 +1008,42 @@ function CoursewareTab({ courseId, t }: { courseId: string; t: (k: string) => st
       {files.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-bold text-gray-600">{t('course_courseware.files')}</h3>
-          {files.map(f => (
-            <div key={f.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50">
-              <div className="flex items-center gap-3">
-                <FileText size={18} className="text-[#0056D2]" />
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{f.filename}</p>
-                  <p className="text-xs text-gray-400">
-                    {f.liveClassTitle || t('live_class.unassigned')} · {f.pageCount} {t('homework.pages')}
-                  </p>
+          {files.map(f => {
+            const isDefault = f.lessonNodeId 
+              ? lessonDefaults[f.lessonNodeId] === f.id
+              : courseDefaultId === f.id;
+            return (
+              <div key={f.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 hover:bg-gray-100/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <FileText size={18} className="text-[#0056D2]" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{f.filename}</p>
+                    <p className="text-xs text-gray-400">
+                      {f.liveClassTitle || t('live_class.unassigned')} · {f.pageCount} {t('homework.pages')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleSetDefault(f.id, f.lessonNodeId)}
+                    title={isDefault ? t('course_courseware.default_badge') || '默认课件' : t('course_courseware.set_default') || '设为默认'}
+                    className={`p-1.5 rounded-lg hover:bg-white/80 transition-colors ${
+                      isDefault ? 'text-amber-500 hover:text-amber-600' : 'text-gray-300 hover:text-amber-500'
+                    }`}
+                  >
+                    <Star size={16} fill={isDefault ? 'currentColor' : 'none'} />
+                  </button>
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    f.status === 'ready' ? 'bg-green-100 text-green-700' :
+                    f.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {f.status}
+                  </span>
                 </div>
               </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                f.status === 'ready' ? 'bg-green-100 text-green-700' :
-                f.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
-                'bg-red-100 text-red-700'
-              }`}>
-                {f.status}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -571,4 +571,24 @@ Action: Resolve global centering overflow in vocabulary practice feedback panel 
 
 [Status] | All changes integrated, committed, pushed & E2E regression passed green | Done
 
+---
+
+# 2026-05-24 S5-T03 & S5-T04: Class-Lesson-Live Fusion and Default Courseware Selection
+Date: 2026-05-24
+Action: Elegant student wait classroom state with micro-pulsing loader and auto-connection polling, Star selections for courseware, default courseware auto resolution, and type safety integration.
+
+## Plan:
+1. Modify `src/services/apiClient.ts`:
+   - Add `defaultCoursewareFileId` to `coursesApi.update` updates payload parameter.
+2. Modify `src/components/TeacherCourseDetailView.tsx`:
+   - Import `Star` icon from `lucide-react`.
+   - Add `courseDefaultId` and `lessonDefaults` states to CoursewareTab.
+   - For each courseware file in list, render a Star icon button to set/unset the file as default (binding to LessonNode if assigned, or Course if unassigned).
+3. Modify `src/components/TeacherClassroomView.tsx`:
+   - Insert conditional student waiting room early return: when student role enters but the live session is not active, display premium full-screen wait layout with double pulsing radars, background connecting status, and clean leave classroom navigation.
+4. Modify `src/context/LanguageContext.tsx`:
+   - Add entries for `classroom.waiting_pulse`, `course_courseware.set_default`, and `course_courseware.default_badge` across english, chinese, russian, and kazakh languages.
+
+[Status] | S5-T03 (student wait room) & S5-T04 (default courseware Star selection) successfully completed | Done
+
 
