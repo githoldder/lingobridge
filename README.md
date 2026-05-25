@@ -1,32 +1,43 @@
-# LingoBridge
+<p align="center">
+  <img src="./public/logo.svg" alt="LingoBridge Logo" width="160" />
+</p>
 
-LingoBridge is a Chinese learning MVP for Kazakhstani international students. The approved MVP scope is intentionally narrow: teachers upload PPT/PDF courseware, students follow the generated course pages, use Chinese TTS, record pronunciation, and manage their own recordings.
+<h1 align="center">LingoBridge</h1>
 
-The current codebase is still a Vite/React prototype at the repository root. This light refactor adds project-management, AI-collaboration, testing, deployment, and future backend folders without moving the existing frontend code yet.
+<p align="center">
+  中文学习直播课堂 MVP / Chinese Learning Live Classroom MVP
+</p>
 
-## Source Of Truth
+## 项目简介 / Overview
 
-| Document | Purpose |
-|---|---|
-| [PRD index](./prds/prd.md) | Human-readable navigation entry for split PRD files |
-| [PRD maintenance guide](./prds/README.md) | Rules for reading, writing, and archiving PRD files |
-| [Sprint PRDs](./prds/sprints/) | Canonical sprint-numbered execution plans |
-| [PRD task package](./prds/prd.json) | Legacy machine-readable package for older AI delegation prompts |
-| [Project brief](./context/project-brief.md) | Short context for new contributors and AI workers |
-| [Agent guide](./Agent.md) | AI workflow, rules, and folder conventions |
+| 中文 | English |
+| --- | --- |
+| LingoBridge 是面向哈萨克斯坦来华留学生的中文学习 MVP。项目聚焦教师上传课件、学生同步学习、中文 TTS、录音练习、作业导入和直播课堂演示。 | LingoBridge is a Chinese learning MVP for Kazakhstani international students. It focuses on teacher courseware upload, synchronized student learning, Chinese TTS, recording practice, homework import, and live classroom demos. |
+| 当前 MVP 范围刻意收窄，目标是稳定完成课堂演示闭环，而不是构建完整 LMS 或 SaaS 平台。 | The current MVP scope is intentionally narrow. The goal is to complete a reliable classroom demo loop, not a full LMS or SaaS platform. |
+| 代码仍以仓库根目录的 Vite + React 前端为主，同时包含 Express API、测试、部署、脚本和 AI 协作规范。 | The codebase still centers on the root Vite + React frontend, with an Express API, tests, deployment assets, scripts, and AI collaboration rules. |
 
-## Current App
+## 快速开始 / Quick Start
 
-```bash
-npm install
-npm run dev
-npm run build
-npm run lint
-```
+| 中文 | English |
+| --- | --- |
+| 安装依赖 | Install dependencies |
+| `npm install` | `npm install` |
+| 启动本地开发服务 | Start the local dev server |
+| `npm run dev` | `npm run dev` |
+| 构建前端 | Build the frontend |
+| `npm run build` | `npm run build` |
+| 运行类型检查 | Run type checks |
+| `npm run lint` | `npm run lint` |
+| 运行后端测试 | Run backend tests |
+| `npm run backend:test` | `npm run backend:test` |
 
-## Local Simulation Order
+## 本地模拟顺序 / Local Simulation Order
 
-Use PM2 for local port and process management before Docker packaging:
+| 中文 | English |
+| --- | --- |
+| 推荐先用 PM2 管理本地端口和进程，确认本地 E2E 稳定后，再进入 Docker 和云端部署。 | Use PM2 first for local port and process management. Move to Docker and cloud deployment only after local E2E is stable. |
+| 后端 API 默认端口：`127.0.0.1:3001` | Backend API default port: `127.0.0.1:3001` |
+| 前端 preview 默认端口：`127.0.0.1:4174` | Frontend preview default port: `127.0.0.1:4174` |
 
 ```bash
 npm run build
@@ -36,65 +47,78 @@ curl --noproxy '*' -sS http://127.0.0.1:3001/api/v1/health
 curl --noproxy '*' -sS -o /dev/null -w '%{http_code} %{content_type}\n' http://127.0.0.1:4174/
 ```
 
-Local stable ports:
+## 线上演示 / Public Demo
 
-- Backend API: `127.0.0.1:3001`
-- Frontend preview: `127.0.0.1:4174`
+| 中文 | English |
+| --- | --- |
+| Vercel HTTPS 前端适合演示登录、页面流转、媒体权限和轻量 API。 | The Vercel HTTPS frontend is suitable for login, page flow, media permission, and lightweight API demos. |
+| 腾讯云直连后端适合验证 API、健康检查和文件上传稳定性。 | The direct Tencent Cloud backend is suitable for API, health check, and file upload verification. |
+| 大文件上传不应依赖 Vercel rewrite 链路，正式方案应走对象存储直传。 | Large file upload should not rely on the Vercel rewrite route. The long-term solution is direct object-storage upload. |
 
-Only after PM2-managed local E2E passes should the project move to Docker packaging, Tencent Cloud CLI deployment, and service mounting.
+## 目录结构 / Directory Map
 
-Current frontend entry points remain at the repository root:
+| 路径 / Path | 中文 | English |
+| --- | --- | --- |
+| `.agent/` | AI 协作规则、技能和工作流 | AI collaboration rules, skills, and workflows |
+| `backend/` | Express API、数据仓库、文件存储和服务提供方 | Express API, repositories, file storage, and providers |
+| `src/` | 当前 React 前端源码 | Current React frontend source |
+| `public/` | 前端公共资源 | Public frontend assets |
+| `tests/` | E2E、回归、验收和样本资产 | E2E, regression, acceptance, and sample assets |
+| `scripts/` | 部署、种子数据、健康检查和演示脚本 | Deployment, seed, health check, and demo scripts |
+| `docker/` | Docker Compose、Caddy/Nginx 部署配置 | Docker Compose, Caddy/Nginx deployment config |
+| `docs/` | 长期技术文档、测试和部署说明 | Durable technical docs, testing, and deployment notes |
+| `prds/` | 已批准 PRD 和 sprint 控制文档 | Approved PRDs and sprint control docs |
+| `drafts/` | 未批准草稿和交付材料 | Unapproved drafts and delivery materials |
+| `prompts/` | 可交给其他 agent 的任务提示词 | Delegation prompts for other agents |
 
-- `src/`
-- `public/`
-- `index.html`
-- `package.json`
-- `vite.config.ts`
+## 事实来源 / Source Of Truth
 
-Do not move these into `frontend/` until Vercel/build configuration is updated deliberately.
+| 文档 / Document | 中文用途 | English Purpose |
+| --- | --- | --- |
+| [PRD index](./prds/prd.md) | PRD 导航入口 | PRD navigation entry |
+| [PRD maintenance guide](./prds/README.md) | PRD 维护规则 | PRD maintenance rules |
+| [Sprint PRDs](./prds/sprints/) | sprint 执行计划 | Sprint execution plans |
+| [Project brief](./context/project-brief.md) | 新协作者快速上下文 | Quick context for new contributors |
+| [Agent guide](./Agent.md) | AI 工作规则和目录约定 | AI workflow rules and folder conventions |
 
-## Directory Map
+## MVP 边界 / MVP Boundary
 
-```text
-LingoBridge/
-├─ .agent/                    # AI rules, workflows, project-specific collaboration notes
-├─ analysis/                  # Business and scope analysis drafts
-├─ context/                   # High-signal project context for humans and AI
-├─ docs/                      # Reference docs, architecture notes, testing/deployment docs
-├─ drafts/                    # Unapproved drafts and archive
-├─ prds/                      # Approved PRD/control outputs
-├─ prompts/                   # Delegation prompts for backend/frontend/deployment/audit workers
-├─ templates/                 # Reusable report and task templates
-├─ backend/                   # Reserved for MVP backend implementation
-├─ tests/                     # E2E, fixtures, and acceptance artifacts
-├─ docker/                    # Nginx and compose deployment assets
-├─ scripts/                   # Deploy, seed, and health-check automation
-├─ src/                       # Current frontend source, not moved in this light refactor
-└─ public/                    # Current frontend public assets
+| 范围内 / In Scope | 范围外 / Out Of Scope |
+| --- | --- |
+| PPT/PDF 课件上传和课程页生成 / PPT/PDF upload and course page generation | 在线 PPT 编辑 / Online PPT editing |
+| Excel 作业导入 / Excel homework import | 多租户 SaaS / Multi-tenant SaaS |
+| 中文 TTS / Chinese TTS | 国际支付 / International payment |
+| 学生录音、回放和管理 / Student recording, playback, and management | AI 发音评分 / AI pronunciation scoring |
+| 教师直播课堂、PDF 同步和媒体演示 / Teacher live classroom, PDF sync, and media demo | 社交弹幕产品化 / Productized social comments |
+| 中俄哈多语言 UI / Chinese, Russian, and Kazakh UI | 完整 LMS 平台 / Full LMS platform |
+
+## 演示数据 / Demo Data
+
+| 中文 | English |
+| --- | --- |
+| 拼音三课演示数据位于 `tests/samples/generated/pinyin-demo/`。 | Pinyin three-lesson demo data lives in `tests/samples/generated/pinyin-demo/`. |
+| 可用脚本生成并注入演示课程、三页 PDF 和 Excel 作业。 | Use the script to generate and seed demo courses, three-page PDFs, and Excel homework. |
+
+```bash
+node scripts/demo/seed-pinyin-demo-data.mjs --generate-only
+node scripts/demo/seed-pinyin-demo-data.mjs --base-url=https://lingobridge-lake.vercel.app
 ```
 
-## MVP Boundary
+## 测试 / Testing
 
-In scope:
+| 中文 | English |
+| --- | --- |
+| 后端 API 回归测试 | Backend API regression tests |
+| `npm run backend:test` | `npm run backend:test` |
+| 生产直播同步 smoke 脚本 | Production live-sync smoke script |
+| `node tests/regression/prod-live-sync-smoke.mjs` | `node tests/regression/prod-live-sync-smoke.mjs` |
+| Playwright E2E | Playwright E2E |
+| `npm run e2e` | `npm run e2e` |
 
-- PPT/PDF upload and generated course pages.
-- Excel practice/homework import linked to course/page.
-- Chinese TTS.
-- Student recording capture, upload, playback, download, delete.
-- Teacher screen/camera recording and replay.
-- Teacher live local-screen mode and PDF/canvas mode.
-- Chinese/Russian/Kazakh UI switching.
-- Tencent Cloud public test deployment.
+## 安全 / Security
 
-Out of scope for MVP:
-
-- Online PPT editing.
-- Real-time bilingual subtitles.
-- Bullet comments/social features.
-- Multi-tenant SaaS.
-- International payment.
-- AI pronunciation scoring.
-
-## Security
-
-Never commit real secrets. Local Obsidian server notes may contain plaintext keys and tokens; only sanitized summaries may be copied into this repository. `.env*` is ignored except `.env.example`.
+| 中文 | English |
+| --- | --- |
+| 不要提交真实密钥、令牌、`.env` 文件或私有上传文件。 | Never commit real secrets, tokens, `.env` files, or private uploads. |
+| `.env*` 默认忽略，只有 `.env.example` 可提交。 | `.env*` is ignored by default. Only `.env.example` may be committed. |
+| Obsidian 或本地笔记里的密钥只能转写为脱敏说明。 | Secrets from Obsidian or local notes may only be copied as sanitized summaries. |
