@@ -664,3 +664,23 @@ Action: Organize and stage the newly added `.agent` rules, skills, workflows, ha
 - `drafts/08-multi-deploy-branch-and-agent-ops-plan.md`: Deployment strategies, branch models, and agent delegation plan.
 
 [Status] | All agent rules, skills, workflows, and prompts handoff assets finalized and staged | Done
+
+
+# 2026-05-25 Sprint 6 Dual-Plate Reorganization & Task-Commit Complete
+Date: 2026-05-25
+Action: Restructure prds/ directory to follow Sprint-Bound Dual-Plate (md/json) protocol and execute the 8 handoff tasks via strict local Task-Commit sequence.
+
+## Added & Updated Files:
+- prds/README.md: Dual-plate synchronization governance guide.
+- prds/md/sprint06-prd-260525-v0.1.md: Human-facing Sprint 6 roadmap (milestones & objectives) timestamped at 11:08.
+- prds/json/sprint06-prd-260525-v0.1.json: Machine-facing Sprint 6 micro-task executor steps and references.
+- docs/03-testing-deployment/local-demo-runbook.md: Secure media contexts and direct upload localhost handbook.
+- docs/03-testing-deployment/overseas-vercel-runbook.md: Vercel HTTPS reverse proxy variables and 20MB+ upload bounds documentation.
+- docs/03-testing-deployment/tencent-runbook.md: Tencent direct HTTP IP routes, TAT patch deploy, and config protection guide.
+- .github/workflows/ci.yml: Automated GitHub Actions pipeline for tsc compilation, build, and backend test execution.
+- .agent/workflows/prototype-vibe-coding.md: Screen-first design flow and strict MVP scope guidelines.
+- .agent/workflows/technical-research.md: Alternative spike comparison matrix and repository impact assessment protocol.
+- docs/CONTRIBUTING.md: Unified open source onboarding guidelines, local environment setup, and zero-secrets regulation.
+- docs/03-testing-deployment/env-matrix.md & .env.example: Environment configuration lane matrices and clean commented guide.
+
+[Status] | Sprint 6 dual-plate PRD restructuring and 8 task commits verified completed locally | Done
