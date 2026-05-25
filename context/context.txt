@@ -728,3 +728,15 @@ Action: Fix Undefined Control Sequence compilation error caused by illegal TikZ 
 
 [Status] | TikZ legend syntax conflict resolved and 01-FA compiled to 7-page PDF! | Done
 
+
+# 2026-05-25 Document Specifications Localized & Reference Bibliography Built
+Date: 2026-05-25
+Action: Add project localized documentation standard skill (.agent/skills/05_lingobridge_docs_standard/SKILL.md) and update shared BibTeX database (shared/refs.bib) with 6 historical spike technology survey citations (Ref-TeamsTencent to Ref-SpikePlan) for robust citation backing.
+
+## Added & Updated Files:
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Localized academic writing, light-theme charts, and GB/T 7714 bibliography specifications.
+- docs/00-project-docs/shared/refs.bib: Added 6 detailed BibTeX techreport citations referencing the historical spike documents.
+
+[Status] | Project localized document standard established and citation database completed | Done
+
+
