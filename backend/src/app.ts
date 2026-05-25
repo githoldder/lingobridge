@@ -125,6 +125,31 @@ function publicUser(user: import('./types.ts').User) {
   };
 }
 
+type LivePresence = {
+  userId: string;
+  displayName: string;
+  username: string;
+  role: string;
+  joinedAt: string;
+  lastSeenAt: string;
+  handRaised: boolean;
+  mediaGranted: boolean;
+  cameraOn: boolean;
+  micOn: boolean;
+};
+
+type LiveSignal = {
+  seq: number;
+  id: string;
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  targetUserId: string | null;
+  type: string;
+  payload: unknown;
+  createdAt: string;
+};
+
 function extractPptxText(absolutePath: string): string[] {
   try {
     const data = fs.readFileSync(absolutePath);
@@ -206,6 +231,9 @@ function createPagesFromCourseware(courseId: string, filename: string, fileUrl: 
 
 export function createApp() {
   const app = express();
+  const livePresence = new Map<string, Map<string, LivePresence>>();
+  const liveSignals = new Map<string, LiveSignal[]>();
+  let liveSignalSeq = 0;
 
   app.use(express.json({ limit: '90mb' }));
 
@@ -247,6 +275,19 @@ export function createApp() {
       return null;
     }
     return item;
+  }
+
+  function activePresenceFor(sessionId: string) {
+    const now = Date.now();
+    const rows = Array.from(livePresence.get(sessionId)?.values() || []);
+    return rows.filter((row) => now - Date.parse(row.lastSeenAt) < 45_000);
+  }
+
+  function pruneSignals(sessionId: string) {
+    const rows = liveSignals.get(sessionId) || [];
+    const cutoff = Date.now() - 5 * 60_000;
+    const next = rows.filter((row) => Date.parse(row.createdAt) >= cutoff).slice(-500);
+    liveSignals.set(sessionId, next);
   }
 
   function setCachedTranslation(text: string, from: string, to: string, translatedText: string, provider: string) {
@@ -1772,13 +1813,34 @@ export function createApp() {
 
     const studentId = currentUserId(req);
     if (!studentId) return fail(res, 401, 'Unauthorized');
+    const student = await usersRepo.findById(studentId);
+    if (!student) return fail(res, 401, 'Unauthorized');
 
     const courseMembers = await coursesRepo.findMembers(session.courseId);
     const isCourseMember = courseMembers.some(
       (m) => m.courseId === session.courseId && m.userId === studentId && m.role === 'student'
     );
+    const markJoined = async () => {
+      const now = new Date().toISOString();
+      const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+      const existing = sessionPresence.get(studentId);
+      sessionPresence.set(studentId, {
+        userId: studentId,
+        displayName: student.displayName,
+        username: student.username,
+        role: student.role,
+        joinedAt: existing?.joinedAt || now,
+        lastSeenAt: now,
+        handRaised: existing?.handRaised || false,
+        mediaGranted: existing?.mediaGranted || false,
+        cameraOn: existing?.cameraOn || false,
+        micOn: existing?.micOn || false,
+      });
+      livePresence.set(session.id, sessionPresence);
+    };
     if (isCourseMember) {
       await liveRepo.addClassStudent(session.lessonNodeId, studentId, 'course_member');
+      await markJoined();
       return ok(res, { allowed: true });
     }
 
@@ -1786,7 +1848,10 @@ export function createApp() {
     const isLiveClassStudent = liveClassStudents.some(
       (s) => s.lessonNodeId === session.lessonNodeId && s.studentId === studentId
     );
-    if (isLiveClassStudent) return ok(res, { allowed: true });
+    if (isLiveClassStudent) {
+      await markJoined();
+      return ok(res, { allowed: true });
+    }
 
     return fail(res, 403, 'You are not enrolled in this course');
   });
@@ -1794,20 +1859,123 @@ export function createApp() {
   app.get('/api/v1/live-sessions/:id/participants', async (req, res) => {
     const session = await liveRepo.findById(req.params.id);
     if (!session) return fail(res, 404, 'Live session not found');
-    const rows = await liveRepo.findClassStudents(session.lessonNodeId);
-    const participants = [];
-    for (const row of rows) {
-      const user = await usersRepo.findById(row.studentId);
-      if (!user) continue;
-      participants.push({
-        id: row.id,
-        studentId: row.studentId,
-        displayName: user.displayName,
-        username: user.username,
-        joinedAt: row.joinedAt,
-      });
-    }
-    ok(res, participants);
+    ok(res, activePresenceFor(session.id).filter((row) => row.role === 'student').map((row) => ({
+      id: `${session.id}:${row.userId}`,
+      studentId: row.userId,
+      displayName: row.displayName,
+      username: row.username,
+      joinedAt: row.joinedAt,
+      lastSeenAt: row.lastSeenAt,
+      handRaised: row.handRaised,
+      mediaGranted: row.mediaGranted,
+      cameraOn: row.cameraOn,
+      micOn: row.micOn,
+    })));
+  });
+
+  app.post('/api/v1/live-sessions/:id/presence', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const now = new Date().toISOString();
+    const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+    const existing = sessionPresence.get(userId);
+    sessionPresence.set(userId, {
+      userId,
+      displayName: user.displayName,
+      username: user.username,
+      role: user.role,
+      joinedAt: existing?.joinedAt || now,
+      lastSeenAt: now,
+      handRaised: req.body?.handRaised !== undefined ? Boolean(req.body.handRaised) : existing?.handRaised || false,
+      mediaGranted: existing?.mediaGranted || false,
+      cameraOn: req.body?.cameraOn !== undefined ? Boolean(req.body.cameraOn) : existing?.cameraOn || false,
+      micOn: req.body?.micOn !== undefined ? Boolean(req.body.micOn) : existing?.micOn || false,
+    });
+    livePresence.set(session.id, sessionPresence);
+    ok(res, sessionPresence.get(userId));
+  });
+
+  app.get('/api/v1/live-sessions/:id/presence', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    ok(res, activePresenceFor(session.id));
+  });
+
+  app.post('/api/v1/live-sessions/:id/permissions', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+    if (user.role !== 'admin' && session.teacherId !== userId) return fail(res, 403, 'Only the teacher can grant live media');
+
+    const studentId = String(req.body?.studentId || '');
+    if (!studentId) return fail(res, 400, 'studentId is required');
+    const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+    const existing = sessionPresence.get(studentId);
+    const student = await usersRepo.findById(studentId);
+    if (!student) return fail(res, 404, 'Student not found');
+    const now = new Date().toISOString();
+    sessionPresence.set(studentId, {
+      userId: studentId,
+      displayName: student.displayName,
+      username: student.username,
+      role: student.role,
+      joinedAt: existing?.joinedAt || now,
+      lastSeenAt: now,
+      handRaised: false,
+      mediaGranted: Boolean(req.body?.mediaGranted ?? true),
+      cameraOn: existing?.cameraOn || false,
+      micOn: existing?.micOn || false,
+    });
+    livePresence.set(session.id, sessionPresence);
+    ok(res, sessionPresence.get(studentId));
+  });
+
+  app.post('/api/v1/live-sessions/:id/signals', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const senderId = currentUserId(req);
+    if (!senderId) return fail(res, 401, 'Unauthorized');
+    const sender = await usersRepo.findById(senderId);
+    if (!sender) return fail(res, 401, 'Unauthorized');
+    const type = String(req.body?.type || '');
+    if (!type) return fail(res, 400, 'type is required');
+    const signal: LiveSignal = {
+      seq: ++liveSignalSeq,
+      id: crypto.randomUUID(),
+      sessionId: session.id,
+      senderId,
+      senderName: sender.displayName,
+      targetUserId: req.body?.targetUserId ? String(req.body.targetUserId) : null,
+      type,
+      payload: req.body?.payload ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    const rows = liveSignals.get(session.id) || [];
+    rows.push(signal);
+    liveSignals.set(session.id, rows);
+    pruneSignals(session.id);
+    ok(res, signal);
+  });
+
+  app.get('/api/v1/live-sessions/:id/signals', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const since = Number(req.query.since || 0);
+    pruneSignals(session.id);
+    const rows = (liveSignals.get(session.id) || []).filter((row) =>
+      row.seq > since && row.senderId !== userId && (!row.targetUserId || row.targetUserId === userId)
+    );
+    ok(res, rows);
   });
 
   app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {

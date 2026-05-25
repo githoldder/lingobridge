@@ -46,7 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import Logo from './Logo.tsx';
 import PdfViewer from './PdfViewer.tsx';
-import { lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, coursewareFilesApi, lessonNodesApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
+import { authApi, lecturesApi, coursesApi, homeworkApi, vocabularyApi, learningRecordsApi, recordingsApi, ttsApi, liveSessionsApi, coursewareFilesApi, lessonNodesApi, type CoursePage, type LearningTask, type VocabularyItem, type LiveSessionData, type LivePresenceData, type LiveSignalData, mediaUrl, fileToBase64 } from '../services/apiClient.ts';
 import { ttsService } from '../services/ttsService.ts';
 import { startAsr, stopAsr, isAsrSupported, isAsrListening, startDemoSubtitles, stopDemoSubtitles } from '../services/asrService.ts';
 import { translateText } from '../services/translationService.ts';
@@ -180,8 +180,13 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
 
   // Live session
   const [liveSession, setLiveSession] = useState<LiveSessionData | null>(null);
-  const [participants, setParticipants] = useState<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>([]);
+  const [participants, setParticipants] = useState<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string; lastSeenAt?: string; handRaised?: boolean; mediaGranted?: boolean; cameraOn?: boolean; micOn?: boolean }>>([]);
+  const [teacherRemoteStream, setTeacherRemoteStream] = useState<MediaStream | null>(null);
+  const [studentRemoteStreams, setStudentRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const currentUserRef = useRef(authApi.currentUser());
   const liveSessionRef = useRef<LiveSessionData | null>(null);
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const lastSignalSeqRef = useRef(0);
   const handlePdfRenderError = useCallback((detail: string) => {
     console.error(`PdfViewer error [${detail}] for lessonNode:`, lessonNodeId || liveSession?.lessonNodeId);
   }, [lessonNodeId, liveSession?.lessonNodeId]);
@@ -193,6 +198,112 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
   const stopTracks = (stream: MediaStream | null) => {
     stream?.getTracks().forEach((track) => track.stop());
   };
+
+  const sendLiveSignal = useCallback((targetUserId: string, type: string, payload: any) => {
+    const session = liveSessionRef.current;
+    if (!session?.id) return Promise.resolve(null);
+    return liveSessionsApi.signals.send(session.id, { targetUserId, type, payload }).catch((error) => {
+      console.warn('[live] signal send failed', type, error);
+      return null;
+    });
+  }, []);
+
+  const upsertRemoteTrack = useCallback((remoteUserId: string, stream: MediaStream) => {
+    if (isTeacher) {
+      setStudentRemoteStreams((prev) => ({ ...prev, [remoteUserId]: stream }));
+    } else {
+      setTeacherRemoteStream(stream);
+    }
+  }, [isTeacher]);
+
+  const getOrCreatePeer = useCallback((remoteUserId: string) => {
+    const existing = peerConnectionsRef.current.get(remoteUserId);
+    if (existing) return existing;
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendLiveSignal(remoteUserId, 'candidate', event.candidate.toJSON());
+      }
+    };
+    pc.ontrack = (event) => {
+      const [stream] = event.streams;
+      if (stream) upsertRemoteTrack(remoteUserId, stream);
+    };
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        if (isTeacher) {
+          setStudentRemoteStreams((prev) => {
+            const next = { ...prev };
+            delete next[remoteUserId];
+            return next;
+          });
+        } else {
+          setTeacherRemoteStream(null);
+        }
+      }
+    };
+
+    peerConnectionsRef.current.set(remoteUserId, pc);
+    return pc;
+  }, [isTeacher, sendLiveSignal, upsertRemoteTrack]);
+
+  const publishLocalTracksToPeer = useCallback((pc: RTCPeerConnection, stream: MediaStream | null) => {
+    for (const track of stream?.getTracks() || []) {
+      const alreadyAdded = pc.getSenders().some((sender) => sender.track === track);
+      if (!alreadyAdded) pc.addTrack(track, stream!);
+    }
+  }, []);
+
+  const createOfferFor = useCallback(async (remoteUserId: string) => {
+    const pc = getOrCreatePeer(remoteUserId);
+    publishLocalTracksToPeer(pc, localStreamRef.current);
+    if (pc.getTransceivers().length === 0) {
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+    }
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await sendLiveSignal(remoteUserId, 'offer', offer);
+  }, [getOrCreatePeer, publishLocalTracksToPeer, sendLiveSignal]);
+
+  const handleLiveSignal = useCallback(async (signal: LiveSignalData) => {
+    const currentUser = currentUserRef.current;
+    if (!currentUser || signal.senderId === currentUser.id) return;
+    const pc = getOrCreatePeer(signal.senderId);
+
+    if (signal.type === 'offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      publishLocalTracksToPeer(pc, localStreamRef.current);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await sendLiveSignal(signal.senderId, 'answer', answer);
+    } else if (signal.type === 'answer') {
+      if (pc.signalingState !== 'stable') {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      }
+    } else if (signal.type === 'candidate' && signal.payload) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(signal.payload));
+      } catch (error) {
+        console.warn('[live] ICE candidate ignored', error);
+      }
+    } else if (signal.type === 'page-sync' && !isTeacher) {
+      const payload = signal.payload || {};
+      if (payload.liveMode) setLiveMode(payload.liveMode);
+      if (payload.pdfFile) {
+        setPdfFile(payload.pdfFile);
+        setIsPdfType(Boolean(payload.isPdfType));
+        setCoursewareStatus('ready');
+      }
+      if (payload.page) {
+        if (payload.isPdfType) setPdfPage(Number(payload.page));
+        else setCurrentPageIdx(Math.max(0, Number(payload.page) - 1));
+      }
+    }
+  }, [getOrCreatePeer, isTeacher, publishLocalTracksToPeer, sendLiveSignal, setPdfPage]);
 
   useEffect(() => { drawingToolRef.current = drawingTool; }, [drawingTool]);
   useEffect(() => { brushColorRef.current = brushColor; }, [brushColor]);
@@ -247,8 +358,12 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     recordingStreamRef.current = null;
     stopTracks(localStreamRef.current);
     stopTracks(screenStreamRef.current);
+    peerConnectionsRef.current.forEach((pc) => pc.close());
+    peerConnectionsRef.current.clear();
     setLocalStream(null);
     setScreenStream(null);
+    setTeacherRemoteStream(null);
+    setStudentRemoteStreams({});
     setIsMicOn(false);
     setIsCamOn(false);
     setIsScreenSharing(false);
@@ -529,7 +644,11 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       }
       liveSessionsApi.create(courseId, activeLessonNodeId, liveMode === 'local' ? 'screen' : 'pdf')
         .then((s) => { setLiveSession(s); liveSessionRef.current = s; })
-        .catch(() => {});
+        .catch(() => {
+          liveSessionsApi.getActive(courseId).then((s) => {
+            if (s) { setLiveSession(s); liveSessionRef.current = s; }
+          }).catch(() => {});
+        });
     } else {
       liveSessionsApi.getActive(courseId)
         .then((session) => {
@@ -590,27 +709,107 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     let cancelled = false;
     const load = () => {
       liveSessionsApi.participants(liveSession.id)
-        .then((items) => { if (!cancelled) setParticipants(items); })
+        .then((items) => {
+          if (cancelled) return;
+          setParticipants(items);
+          for (const item of items) {
+            if (!peerConnectionsRef.current.has(item.studentId)) {
+              createOfferFor(item.studentId).catch((error) => console.warn('[live] offer failed', error));
+            }
+          }
+          const activeIds = new Set(items.map((item) => item.studentId));
+          for (const [studentId, pc] of peerConnectionsRef.current) {
+            if (!activeIds.has(studentId) && isTeacher) {
+              pc.close();
+              peerConnectionsRef.current.delete(studentId);
+              setStudentRemoteStreams((prev) => {
+                const next = { ...prev };
+                delete next[studentId];
+                return next;
+              });
+            }
+          }
+        })
         .catch(() => { if (!cancelled) setParticipants([]); });
     };
     load();
-    const interval = setInterval(load, 3000);
+    const interval = setInterval(load, 2000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [liveSession?.id, isTeacher]);
+  }, [liveSession?.id, isTeacher, createOfferFor]);
+
+  useEffect(() => {
+    if (!isTeacher) return;
+    const raised = participants.find((item) => item.handRaised && !item.mediaGranted);
+    setPendingHandRaise(Boolean(raised));
+    if (raised) setStudentName(raised.displayName);
+  }, [participants, isTeacher]);
+
+  useEffect(() => {
+    if (!liveSession?.id) return;
+    let cancelled = false;
+    const heartbeat = () => {
+      liveSessionsApi.presence.heartbeat(liveSession.id, {
+        handRaised: isHandRaised,
+        cameraOn: isCamOn,
+        micOn: isMicOn,
+      }).then((presence) => {
+        if (cancelled || isTeacher) return;
+        setIsPermissionGranted(Boolean(presence.mediaGranted));
+        if (presence.mediaGranted) setIsHandRaised(false);
+      }).catch(() => {});
+    };
+    heartbeat();
+    const interval = setInterval(heartbeat, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [liveSession?.id, isTeacher, isHandRaised, isCamOn, isMicOn]);
+
+  useEffect(() => {
+    if (!liveSession?.id) return;
+    let cancelled = false;
+    const pollSignals = () => {
+      liveSessionsApi.signals.list(liveSession.id, lastSignalSeqRef.current)
+        .then(async (signals) => {
+          if (cancelled) return;
+          for (const signal of signals) {
+            lastSignalSeqRef.current = Math.max(lastSignalSeqRef.current, signal.seq);
+            await handleLiveSignal(signal);
+          }
+        })
+        .catch(() => {});
+    };
+    pollSignals();
+    const interval = setInterval(pollSignals, 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [liveSession?.id, handleLiveSignal]);
+
+  useEffect(() => {
+    if (!liveSession?.id) return;
+    peerConnectionsRef.current.forEach((pc, remoteUserId) => {
+      publishLocalTracksToPeer(pc, localStream);
+      createOfferFor(remoteUserId).catch((error) => console.warn('[live] renegotiation failed', error));
+    });
+  }, [liveSession?.id, localStream, createOfferFor, publishLocalTracksToPeer]);
 
   // Update live session page/source when changed
   useEffect(() => {
     if (!liveSession?.id || !isTeacher) return;
     if (isPdfType && pdfPageCount === 0) return;
-    const page = isPdfType ? pdfPage : currentPageIdx + 1;
     const timer = setTimeout(() => {
+      const page = isPdfType ? pdfPage : currentPageIdx + 1;
       liveSessionsApi.patch(liveSession.id, {
         currentPage: page,
         sourceMode: liveMode === 'local' ? 'screen' : 'pdf'
       }).catch(() => {});
+      for (const student of participants) {
+        liveSessionsApi.signals.send(liveSession.id, {
+          targetUserId: student.studentId,
+          type: 'page-sync',
+          payload: { page, liveMode, pdfFile, isPdfType, pdfPageCount }
+        }).catch(() => {});
+      }
     }, 500);
     return () => clearTimeout(timer);
-  }, [pdfPage, pdfPageCount, currentPageIdx, liveMode]);
+  }, [pdfPage, pdfPageCount, currentPageIdx, liveMode, pdfFile, participants, isTeacher, liveSession?.id]);
 
   // Student: poll live session currentPage every 3 seconds
   useEffect(() => {
@@ -1065,6 +1264,22 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
     }
   };
 
+  const grantFirstRaisedStudent = async () => {
+    const sessionId = liveSessionRef.current?.id || liveSession?.id;
+    const target = participants.find((item) => item.handRaised && !item.mediaGranted) || participants[0];
+    if (!sessionId || !target) return;
+    await liveSessionsApi.presence.grantMedia(sessionId, target.studentId, true).catch(() => {});
+    setPendingHandRaise(false);
+  };
+
+  const raiseHand = async () => {
+    setIsHandRaised(true);
+    if (liveSession?.id) {
+      await liveSessionsApi.presence.heartbeat(liveSession.id, { handRaised: true, cameraOn: isCamOn, micOn: isMicOn }).catch(() => {});
+    }
+    localStorage.setItem('lingobridge_hand_raised', 'true');
+  };
+
   const startControlsDrag = (event: React.PointerEvent) => {
     const target = event.currentTarget as HTMLElement;
     target.setPointerCapture(event.pointerId);
@@ -1265,15 +1480,39 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   <p className="text-xs font-medium">{t('classroom.no_participants')}</p>
                 </div>
               ) : participants.map((student) => (
-                <div key={student.id} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3">
+                <div key={student.id} className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-3">
+                  {studentRemoteStreams[student.studentId] && (
+                    <video
+                      autoPlay
+                      playsInline
+                      ref={(el) => {
+                        const stream = studentRemoteStreams[student.studentId];
+                        if (el && stream && el.srcObject !== stream) el.srcObject = stream;
+                      }}
+                      className="w-full aspect-video rounded-xl bg-black object-cover"
+                    />
+                  )}
+                  <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-black">
                     {student.displayName.slice(0, 1)}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-white truncate">{student.displayName}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{student.username}</p>
+                    <p className="text-[10px] text-gray-400 truncate">
+                      {student.username} · {student.cameraOn ? 'cam on' : 'cam off'} · {student.micOn ? 'mic on' : 'mic off'}
+                    </p>
                   </div>
-                  <span className="ml-auto w-2 h-2 rounded-full bg-green-400" />
+                  {student.handRaised && !student.mediaGranted ? (
+                    <button
+                      onClick={() => liveSession?.id && liveSessionsApi.presence.grantMedia(liveSession.id, student.studentId, true).catch(() => {})}
+                      className="ml-auto px-2 py-1 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 text-[10px] font-black"
+                    >
+                      Grant
+                    </button>
+                  ) : (
+                    <span className="ml-auto w-2 h-2 rounded-full bg-green-400" />
+                  )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1299,11 +1538,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
           {/* Teacher sees hand-raise badge */}
           {isTeacher && pendingHandRaise && (
             <button
-              onClick={() => {
-                localStorage.setItem('lingobridge_permission_granted', 'true');
-                setPendingHandRaise(false);
-                localStorage.removeItem('lingobridge_hand_raised');
-              }}
+              onClick={grantFirstRaisedStudent}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse"
             >
               <Hand size={18} />
@@ -1315,7 +1550,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${showParticipants ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}
           >
             <Users size={18} />
-            <span className="hidden sm:inline">{t('classroom.students')}</span>
+            <span className="hidden sm:inline">{t('classroom.students')}{isTeacher ? ` (${participants.length})` : ''}</span>
           </button>
           <button
             onClick={() => setShowExitConfirm(true)}
@@ -1751,13 +1986,14 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                 exit={{ opacity: 0, scale: 0.96 }}
                 className="absolute w-56 h-40 bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/50 z-[110] cursor-move active:scale-95 transition-transform"
               >
-                {isCamOn ? (
+                {(isTeacher ? isCamOn : Boolean(teacherRemoteStream)) ? (
                   <video
                     autoPlay
                     playsInline
-                    muted
+                    muted={isTeacher}
                     ref={(el) => {
-                      if (el && localStream && el.srcObject !== localStream) el.srcObject = localStream;
+                      const stream = isTeacher ? localStream : teacherRemoteStream;
+                      if (el && stream && el.srcObject !== stream) el.srcObject = stream;
                     }}
                     className="w-full h-full object-cover scale-x-[-1]"
                   />
@@ -1782,9 +2018,9 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
                   </button>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
-                   <div className={`${isMicOn ? 'bg-blue-600' : 'bg-gray-700'} rounded px-2 py-0.5 text-[8px] font-bold flex items-center gap-1 shadow-lg transition-colors`}>
-                      <Mic size={8} className={isMicOn ? 'animate-pulse' : ''} />
-                       {isMicOn ? t('classroom.on') : t('classroom.off')}
+                   <div className={`${(isTeacher ? isMicOn : Boolean(teacherRemoteStream?.getAudioTracks().length)) ? 'bg-blue-600' : 'bg-gray-700'} rounded px-2 py-0.5 text-[8px] font-bold flex items-center gap-1 shadow-lg transition-colors`}>
+                      <Mic size={8} className={(isTeacher ? isMicOn : Boolean(teacherRemoteStream?.getAudioTracks().length)) ? 'animate-pulse' : ''} />
+                       {(isTeacher ? isMicOn : Boolean(teacherRemoteStream?.getAudioTracks().length)) ? t('classroom.on') : t('classroom.off')}
                    </div>
                 </div>
                 <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-white border border-white/10 uppercase tracking-tighter">
@@ -2225,11 +2461,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
           {/* Teacher: hand-raise notification */}
           {pendingHandRaise && (
             <button
-              onClick={() => {
-                localStorage.setItem('lingobridge_permission_granted', 'true');
-                setPendingHandRaise(false);
-                localStorage.removeItem('lingobridge_hand_raised');
-              }}
+              onClick={grantFirstRaisedStudent}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold whitespace-nowrap animate-pulse"
             >
               <Hand size={14} />
@@ -2256,10 +2488,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
               </div>
             ) : (
               <button
-                onClick={() => {
-                  setIsHandRaised(true);
-                  localStorage.setItem('lingobridge_hand_raised', 'true');
-                }}
+                onClick={raiseHand}
                 disabled={isHandRaised}
                 className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all ${
                   isHandRaised

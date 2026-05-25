@@ -521,6 +521,31 @@ export interface LiveSessionData {
   endedAt: string;
 }
 
+export interface LivePresenceData {
+  userId: string;
+  displayName: string;
+  username: string;
+  role: Role;
+  joinedAt: string;
+  lastSeenAt: string;
+  handRaised: boolean;
+  mediaGranted: boolean;
+  cameraOn: boolean;
+  micOn: boolean;
+}
+
+export interface LiveSignalData {
+  seq: number;
+  id: string;
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  targetUserId: string | null;
+  type: 'offer' | 'answer' | 'candidate' | 'page-sync' | string;
+  payload: any;
+  createdAt: string;
+}
+
 export interface ClassroomCommentData {
   id: string;
   liveSessionId: string;
@@ -553,7 +578,30 @@ export const liveSessionsApi = {
   join: (sessionId: string) =>
     request<{ allowed: boolean }>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
   participants: (sessionId: string) =>
-    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>(`/live-sessions/${sessionId}/participants`),
+    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string; lastSeenAt?: string; handRaised?: boolean; mediaGranted?: boolean; cameraOn?: boolean; micOn?: boolean }>>(`/live-sessions/${sessionId}/participants`),
+  presence: {
+    heartbeat: (sessionId: string, updates: Partial<Pick<LivePresenceData, 'handRaised' | 'cameraOn' | 'micOn'>> = {}) =>
+      request<LivePresenceData>(`/live-sessions/${sessionId}/presence`, {
+        method: 'POST',
+        body: JSON.stringify(updates)
+      }),
+    list: (sessionId: string) =>
+      request<LivePresenceData[]>(`/live-sessions/${sessionId}/presence`),
+    grantMedia: (sessionId: string, studentId: string, mediaGranted = true) =>
+      request<LivePresenceData>(`/live-sessions/${sessionId}/permissions`, {
+        method: 'POST',
+        body: JSON.stringify({ studentId, mediaGranted })
+      })
+  },
+  signals: {
+    send: (sessionId: string, data: { targetUserId?: string; type: string; payload: any }) =>
+      request<LiveSignalData>(`/live-sessions/${sessionId}/signals`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    list: (sessionId: string, since = 0) =>
+      request<LiveSignalData[]>(`/live-sessions/${sessionId}/signals?since=${since}`)
+  },
   patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
     request<LiveSessionData>(`/live-sessions/${id}`, {
       method: 'PATCH',
