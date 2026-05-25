@@ -684,3 +684,13 @@ Action: Restructure prds/ directory to follow Sprint-Bound Dual-Plate (md/json) 
 - docs/03-testing-deployment/env-matrix.md & .env.example: Environment configuration lane matrices and clean commented guide.
 
 [Status] | Sprint 6 dual-plate PRD restructuring and 8 task commits verified completed locally | Done
+
+
+# 2026-05-25 Agent Ops Governance Rules Solidification
+Date: 2026-05-25
+Action: Add dedicated rules file (.agent/rules/agent-ops-governance.md) solidifying the project's strategic layers, requirement dual-plates, and task-commit constraints for global team alignment.
+
+## Added & Updated Files:
+- .agent/rules/agent-ops-governance.md: Canonical rulebook outlining project plates, PRD structures, 5W Root Cause processes, and Git Task-Commit constraints.
+
+[Status] | Agent ops governance rules successfully codified and local task commits logged | Done
