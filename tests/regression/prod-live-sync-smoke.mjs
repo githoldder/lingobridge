@@ -126,13 +126,32 @@ async function apiSmoke() {
 }
 
 async function loginUi(page, email) {
+  page.on('console', msg => console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`));
+  page.on('pageerror', err => console.error(`[Browser PageError] ${err.message}`));
+  page.on('requestfailed', req => console.error(`[Browser RequestFailed] ${req.method()} ${req.url()}: ${req.failure()?.errorText}`));
+  page.on('response', res => {
+    if (res.status() >= 400) {
+      console.error(`[Browser Response Error] ${res.status()} ${res.url()}`);
+    } else {
+      console.log(`[Browser Response] ${res.status()} ${res.url()}`);
+    }
+  });
+
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   const login = page.getByText(/登录|Login/i).first();
   await login.click({ timeout: 10_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await page.waitForTimeout(1800);
+  
+  // Intelligent adaptive wait for high latency Vercel reverse proxy (up to 15 seconds)
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(500);
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    if (!bodyText.includes('Signing in...') && !bodyText.includes('电子邮箱')) {
+      break;
+    }
+  }
 }
 
 async function uiSmoke() {
@@ -146,13 +165,32 @@ async function uiSmoke() {
   const studentPage = await studentContext.newPage();
 
   try {
+    console.log('Starting Teacher UI login...');
     await loginUi(teacherPage, TEACHER_EMAIL);
     const teacherBody = await teacherPage.locator('body').innerText({ timeout: 10_000 });
-    record('Teacher UI login', /王老师|Courses|课程/.test(teacherBody) ? 'PASS' : 'FAIL');
+    console.log('Teacher body text length:', teacherBody.length);
+    const teacherPass = /王老师|Courses|课程/.test(teacherBody);
+    if (!teacherPass) {
+      console.log('Teacher page body text sample:', teacherBody.slice(0, 1000));
+      await teacherPage.screenshot({ path: resolve(OUT_DIR, 'teacher-ui-fail.png') });
+    }
+    record('Teacher UI login', teacherPass ? 'PASS' : 'FAIL');
 
+    console.log('Starting Student UI login...');
     await loginUi(studentPage, STUDENT_EMAIL);
     const studentBody = await studentPage.locator('body').innerText({ timeout: 10_000 });
-    record('Student UI login', /阿合买提|课程|Dashboard|日程/.test(studentBody) ? 'PASS' : 'FAIL');
+    console.log('Student body text length:', studentBody.length);
+    const studentPass = /阿合买提|课程|Dashboard|日程/.test(studentBody);
+    if (!studentPass) {
+      console.log('Student page body text sample:', studentBody.slice(0, 1000));
+      await studentPage.screenshot({ path: resolve(OUT_DIR, 'student-ui-fail.png') });
+    }
+    record('Student UI login', studentPass ? 'PASS' : 'FAIL');
+  } catch (err) {
+    console.error('UI smoke error during run:', err);
+    await teacherPage.screenshot({ path: resolve(OUT_DIR, 'teacher-exception.png') });
+    await studentPage.screenshot({ path: resolve(OUT_DIR, 'student-exception.png') });
+    throw err;
   } finally {
     await browser.close();
   }
