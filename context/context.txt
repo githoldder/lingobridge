@@ -647,3 +647,20 @@ Action: Configure remote Caddy to listen on port 80 (any host), modify Vercel pr
 6. Verify deployment by checking `/api/v1/health` and `/api/v1/auth/login` endpoints via Vercel.
 
 [Status] | All Vercel-to-Tencent proxy pathways and login integration testing PASSED green! | Done
+
+
+# 2026-05-25 Document & Agent Handoff Assets Finalization
+Date: 2026-05-25
+Action: Organize and stage the newly added `.agent` rules, skills, workflows, handoff prompts, and drafts. No business logic or application code is modified.
+
+## Added & Updated Files:
+- `.agent/rules/project-map.md`: Orientation guide for frontend views, backend repositories, and deployment channels.
+- `.agent/rules/deployment-boundaries.md`: Strict boundary rules for Local, Vercel HTTPS, and Tencent direct routes.
+- `.agent/skills/tencent-tat-patch-deploy/SKILL.md`: Patch preparation, base64 encoding, TAT command invocation, and safety rules.
+- `.agent/skills/courseware-upload-debug/SKILL.md`: Multi-layer isolation checklist for PDF/PPTX upload and Vercel 502 router limits.
+- `.agent/workflows/devops-smoke-test.md`: Structured manual for health, login, courses, uploads, and media permissions smoke testing.
+- `.agent/workflows/tencent-release.md`: Deploy-config protection rules and TAT release sequence.
+- `prompts/deployment-handoff-agents.md`: Comprehensive handoff prompts for 8 prospective takeover agents.
+- `drafts/08-multi-deploy-branch-and-agent-ops-plan.md`: Deployment strategies, branch models, and agent delegation plan.
+
+[Status] | All agent rules, skills, workflows, and prompts handoff assets finalized and staged | Done

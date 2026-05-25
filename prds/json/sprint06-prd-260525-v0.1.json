@@ -1,0 +1,136 @@
+{
+  "sprint": "06",
+  "version": "0.1",
+  "status": "Active / Execution",
+  "lastUpdated": "2026-05-25 11:08",
+  "tasks": [
+    {
+      "id": "S6-T01",
+      "topic": "Local Demo Runbook",
+      "files": ["docs/03-testing-deployment/local-demo-runbook.md"],
+      "agentRole": "Agent 1: Local Demo Architect",
+      "steps": [
+        "Read .agent/rules/project-map.md and .agent/rules/deployment-boundaries.md.",
+        "Create docs/03-testing-deployment/local-demo-runbook.md to instruct local frontend & backend launch.",
+        "Explain how to use localhost secure context for camera/mic media permissions.",
+        "Include mock teacher/student accounts for easy local sandbox login testing.",
+        "Reference and link .agent/workflows/devops-smoke-test.md for verification steps."
+      ],
+      "references": [
+        "docker/README.md",
+        "package.json",
+        ".agent/workflows/devops-smoke-test.md"
+      ]
+    },
+    {
+      "id": "S6-T02",
+      "topic": "Overseas Vercel HTTPS Runbook",
+      "files": ["docs/03-testing-deployment/overseas-vercel-runbook.md"],
+      "agentRole": "Agent 2: Vercel Deploy Lead",
+      "steps": [
+        "Explain Vercel deployment as the secure HTTPS frontend shareable path.",
+        "Explicitly document the 20MB+ upload limit over rewrite proxy (explain 502 router external connection error).",
+        "Detail environment variables required for Vercel production.",
+        "Provide quick-smoke checks for lightweight API paths and request flow."
+      ],
+      "references": [
+        "vercel.json",
+        ".agent/rules/deployment-boundaries.md"
+      ]
+    },
+    {
+      "id": "S6-T03",
+      "topic": "Tencent Direct Runbook Refresh",
+      "files": ["docs/03-testing-deployment/tencent-runbook.md"],
+      "agentRole": "Agent 3: Tencent Cloud Ops",
+      "steps": [
+        "Document tencent direct HTTP public IP direct route facts (http://101.34.72.227/api/v1).",
+        "Integrate TAT patch-deploy methodology from .agent/skills/tencent-tat-patch-deploy/SKILL.md.",
+        "Include health/login smoke steps and warnings about HTTP insecure media context limits.",
+        "Add release-note and rollback rules avoiding overwriting manual Caddy/Docker configs."
+      ],
+      "references": [
+        ".agent/skills/tencent-tat-patch-deploy/SKILL.md",
+        ".agent/workflows/tencent-release.md"
+      ]
+    },
+    {
+      "id": "S6-T04",
+      "topic": "GitHub Actions CI Workflow",
+      "files": [".github/workflows/ci.yml"],
+      "agentRole": "Agent 4: CI Engineer",
+      "steps": [
+        "Configure .github/workflows/ci.yml using node 18/20 matrix or a single safe build.",
+        "Run npm ci.",
+        "Run existing scripts: lint, build, backend:test.",
+        "Ensure no credentials or secrets are leaked or required for basic PR validation."
+      ],
+      "references": [
+        "package.json",
+        "backend/package.json"
+      ]
+    },
+    {
+      "id": "S6-T05",
+      "topic": "Prototype Vibe Coding Workflow",
+      "files": [".agent/workflows/prototype-vibe-coding.md"],
+      "agentRole": "Agent 5: MVP Prototype Engineer",
+      "steps": [
+        "Create .agent/workflows/prototype-vibe-coding.md.",
+        "Establish screen-first design guidelines to focus on the primary user path.",
+        "Ensure MVP scope rules prevent SaaS/LMS scope bloat during prototype iteration.",
+        "Specify review and validation gates before merging UI layout updates."
+      ],
+      "references": [
+        ".agent/rules/mvp-scope.md"
+      ]
+    },
+    {
+      "id": "S6-T06",
+      "topic": "Technical Research Workflow",
+      "files": [".agent/workflows/technical-research.md"],
+      "agentRole": "Agent 6: Tech Research Lead",
+      "steps": [
+        "Define workflow in .agent/workflows/technical-research.md.",
+        "Instruct how to write actionable decision notes separating facts from assumptions.",
+        "Mandate reliance on official cloud, browser, and API specs.",
+        "Enforce a repository-impact assessment section including rollback paths."
+      ],
+      "references": [
+        ".agent/rules/security.md"
+      ]
+    },
+    {
+      "id": "S6-T07",
+      "topic": "Contributor Guide Update",
+      "files": ["docs/CONTRIBUTING.md"],
+      "agentRole": "Agent 7: Open Source Contributor",
+      "steps": [
+        "Create docs/CONTRIBUTING.md or update README.md.",
+        "Provide quick-start onboarding instructions for new external developers.",
+        "List repository layout, basic testing commands, and PR rules.",
+        "Highlight security bounds: strict prohibition of real secrets and private media uploads."
+      ],
+      "references": [
+        "README.md",
+        ".agent/rules/project-map.md"
+      ]
+    },
+    {
+      "id": "S6-T08",
+      "topic": "Env Variable Matrix",
+      "files": ["docs/03-testing-deployment/env-matrix.md", ".env.example"],
+      "agentRole": "Agent 8: Configuration Lead",
+      "steps": [
+        "Create docs/03-testing-deployment/env-matrix.md to list variables by lane.",
+        "Update .env.example with descriptive comments.",
+        "Clarify VITE_API_BASE_URL resolution, build-time vs runtime variables, and required fields.",
+        "Audit to ensure no default credentials or secrets are leaked."
+      ],
+      "references": [
+        ".env.example",
+        "src/services/apiClient.ts"
+      ]
+    }
+  ]
+}
