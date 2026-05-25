@@ -717,3 +717,14 @@ Action: Refactor docs/00-project-docs to strictly follow standard software lifec
 - .agent/skills/01_latex_infrastructure to 04_vibe_coding_engineering: Imported specialized agent skills.
 
 [Status] | LaTeX documentation restructured to 01-07 lifecycle and 100% compiled successfully! | Done
+
+
+# 2026-05-25 01-FA TikZ Compilation Error Fixed & Feasibility Study Complete
+Date: 2026-05-25
+Action: Fix Undefined Control Sequence compilation error caused by illegal TikZ draw command nested in tabular node within docs/00-project-docs/01-FA/templates/data/chap01.tex. Successfully verify 100% successful XeLaTeX compile of 01-FA.pdf.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Wrapped legend table cells with baseline-aligned inline \tikz scopes.
+
+[Status] | TikZ legend syntax conflict resolved and 01-FA compiled to 7-page PDF! | Done
+
