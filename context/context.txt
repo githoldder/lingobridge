@@ -754,4 +754,16 @@ Action: Completely refactor docs/00-project-docs/01-FA/templates/data/chap01.tex
 [Status] | Academic 01-FA feasibility study completely rewritten with 100% clean XeLaTeX output! | Done
 
 
+# 2026-05-25 Anti-AI & Anti-Markdown LaTeX Writing Rules Solidified
+Date: 2026-05-25
+Action: Add dedicated project writing rulebook (.agent/rules/latex-writing-discipline.md) and upgrade document standard skill (.agent/skills/05_lingobridge_docs_standard/SKILL.md) to strictly defensive Markdown syntax leakage and AI narratives in LaTeX.
+
+## Added & Updated Files:
+- .agent/rules/latex-writing-discipline.md: Canon rules outlining the 4 absolute high-voltage defense lines and checklist.
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Upgraded standard skill locking academic style and preventing AI phrasing.
+
+[Status] | Canonical GBT-compliant LaTeX writing rules globally solidified and committed locally | Done
+
+
+
 
