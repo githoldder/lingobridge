@@ -740,3 +740,18 @@ Action: Add project localized documentation standard skill (.agent/skills/05_lin
 [Status] | Project localized document standard established and citation database completed | Done
 
 
+# 2026-05-25 01-FA Restructuring & Light Architecture Integrated
+Date: 2026-05-25
+Action: Completely refactor docs/00-project-docs/01-FA/templates/data/chap01.tex to align with academic and GB/T 8567 standards. Incorporate 6 historical spike reference documents (Ref-TeamsTencent to Ref-SpikePlan) as robust citations. Copy and embed the standard high-DPI vector PDF architecture diagram (architecture.pdf) in figures/ folder, and generate a standardized light-theme architecture SVG (architecture.svg) for flawless Figma integration.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Complete narrative refactoring, removing AI list patterns and injecting standard citation markers.
+- docs/00-project-docs/01-FA/templates/ref/refs.bib: Synchronized BibTeX references database with 6 spike reports.
+- docs/00-project-docs/01-FA/templates/figures/architecture.pdf: Embedded users' vector system architecture diagram.
+- docs/00-project-docs/01-FA/templates/figures/architecture.svg: Scalable, light-background, GBT-compliant system architecture SVG for Figma micro-tuning.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Synced, 100% compiled clean 9-page PDF document.
+
+[Status] | Academic 01-FA feasibility study completely rewritten with 100% clean XeLaTeX output! | Done
+
+
+

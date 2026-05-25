@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" width="100%" height="100%">
+  <!-- 定义全局样式与滤镜 -->
+  <defs>
+    <!-- 清爽投影效果 -->
+    <filter id="gentle-shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#9CA3AF" flood-opacity="0.15" />
+    </filter>
+    
+    <!-- DevOps 通道渐变（紫红系，柔和） -->
+    <linearGradient id="dev-lane-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#EC4899" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+
+    <!-- 生产流量通道渐变（蓝绿系，柔和） -->
+    <linearGradient id="prod-lane-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+
+    <!-- 卡片背景渐变（白到淡蓝灰，严谨） -->
+    <linearGradient id="card-bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F9FAFB" />
+    </linearGradient>
+  </defs>
+
+  <!-- 严肃白底背景 -->
+  <rect width="880" height="500" rx="12" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1.5" />
+  
+  <!-- 极细学术背景网格 -->
+  <g opacity="0.4">
+    <path d="M 0,50 L 880,50 M 0,100 L 880,100 M 0,150 L 880,150 M 0,200 L 880,200 M 0,250 L 880,250 M 0,300 L 880,300 M 0,350 L 880,350 M 0,400 L 880,400 M 0,450 L 880,450" stroke="#F3F4F6" stroke-width="1" />
+    <path d="M 50,0 L 50,500 M 100,0 L 100,500 M 150,0 L 150,500 M 200,0 L 200,500 M 250,0 L 250,500 M 300,0 L 300,500 M 350,0 L 350,500 M 400,0 L 400,500 M 450,0 L 450,500 M 500,0 L 500,500 M 550,0 L 550,500 M 600,0 L 600,500 M 650,0 L 650,500 M 700,0 L 700,500 M 750,0 L 750,500 M 800,0 L 800,500 M 850,0 L 850,500" stroke="#F3F4F6" stroke-width="1" />
+  </g>
+
+  <!-- 报告标题与规范标识 -->
+  <text x="30" y="45" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="bold" fill="#1F2937" letter-spacing="0.5">LingoBridge 系统双通道安全部署与流量架构图</text>
+  <text x="30" y="65" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="10" fill="#6B7280" font-weight="600">TECHNICAL DEPLOYMENT BOUNDARIES &amp; PRODUCTION TRAFFIC LANE</text>
+
+  <!-- ==================== 通道 A：DEVOPS 构建与自动分发通道 (上半区) ==================== -->
+  <rect x="25" y="90" width="830" height="150" rx="8" fill="#FDF4FF" fill-opacity="0.5" stroke="#F0ABFC" stroke-dasharray="3 3" stroke-width="1" />
+  <text x="40" y="115" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="11" font-weight="bold" fill="#A21CAF">通道 A：DevOps 自动化构建与热补丁分发链路</text>
+
+  <!-- GitHub 代码仓节点 -->
+  <g transform="translate(60, 140)" filter="url(#gentle-shadow)">
+    <rect width="160" height="70" rx="6" fill="url(#card-bg-grad)" stroke="#EC4899" stroke-width="1.2" />
+    <text x="80" y="30" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">GitHub 代码仓库</text>
+    <text x="80" y="48" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="10" fill="#DB2777" text-anchor="middle">开发与 Bug 修复分支</text>
+  </g>
+
+  <!-- GitHub Actions CI 构建节点 -->
+  <g transform="translate(340, 140)" filter="url(#gentle-shadow)">
+    <rect width="180" height="70" rx="6" fill="url(#card-bg-grad)" stroke="#8B5CF6" stroke-width="1.2" />
+    <text x="90" y="28" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">自动化 CI 构建流水线</text>
+    <text x="90" y="44" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">语法检查 / 编译 / 后端测试</text>
+    <text x="90" y="58" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#7C3AED" text-anchor="middle">-> Vercel 静态托管发布</text>
+  </g>
+
+  <!-- 腾讯云 TAT 自动部署节点 -->
+  <g transform="translate(640, 140)" filter="url(#gentle-shadow)">
+    <rect width="180" height="70" rx="6" fill="url(#card-bg-grad)" stroke="#6366F1" stroke-width="1.2" />
+    <text x="90" y="30" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">腾讯云 TAT 自动部署</text>
+    <text x="90" y="48" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="10" fill="#4F46E5" text-anchor="middle">Shell 热补丁物理更新</text>
+  </g>
+
+  <!-- DevOps 连接线 -->
+  <path d="M 220,175 L 340,175" fill="none" stroke="url(#dev-lane-grad)" stroke-width="2" stroke-dasharray="4 2" />
+  <polygon points="340,175 332,171 332,179" fill="#8B5CF6" />
+  
+  <path d="M 520,175 L 640,175" fill="none" stroke="url(#dev-lane-grad)" stroke-width="2" stroke-dasharray="4 2" />
+  <polygon points="640,175 632,171 632,179" fill="#6366F1" />
+
+
+  <!-- ==================== 通道 B：生产流量通道 (下半区) ==================== -->
+  <rect x="25" y="270" width="830" height="200" rx="8" fill="#ECFDF5" fill-opacity="0.5" stroke="#A7F3D0" stroke-dasharray="3 3" stroke-width="1" />
+  <text x="40" y="295" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="11" font-weight="bold" fill="#047857">通道 B：生产 API 流量与双层语音缓存链路</text>
+
+  <!-- 前端 SPA 客户端节点 -->
+  <g transform="translate(60, 335)" filter="url(#gentle-shadow)">
+    <rect width="160" height="90" rx="6" fill="url(#card-bg-grad)" stroke="#3B82F6" stroke-width="1.2" />
+    <text x="80" y="28" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">前端单页面应用 (SPA)</text>
+    <text x="80" y="44" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">Vite / React 响应式 UI</text>
+    <text x="80" y="58" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">Web Audio 跟读采集</text>
+    <text x="80" y="74" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#2563EB" text-anchor="middle">HTTPS 跨域接入层</text>
+  </g>
+
+  <!-- Vercel 边缘代理节点 -->
+  <g transform="translate(340, 335)" filter="url(#gentle-shadow)">
+    <rect width="180" height="90" rx="6" fill="url(#card-bg-grad)" stroke="#10B981" stroke-width="1.2" />
+    <text x="90" y="26" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">Vercel 边缘网络代理</text>
+    <text x="90" y="42" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#059669" text-anchor="middle">/api/v1 安全路由分发</text>
+    <text x="90" y="56" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">CDN 静态文件缓存加速</text>
+    <text x="90" y="72" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">大包(20MB+)分片安全路由</text>
+  </g>
+
+  <!-- 腾讯云 CVM 宿主机节点 -->
+  <g transform="translate(640, 335)" filter="url(#gentle-shadow)">
+    <rect width="180" height="90" rx="6" fill="url(#card-bg-grad)" stroke="#059669" stroke-width="1.2" />
+    <text x="90" y="26" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="bold" fill="#1F2937" text-anchor="middle">腾讯云宿主机 (CVM)</text>
+    <text x="90" y="42" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#4B5563" text-anchor="middle">Express API 信令核心层</text>
+    <text x="90" y="56" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#059669" text-anchor="middle">L1 内存级语音合成缓存</text>
+    <text x="90" y="70" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="9" fill="#047857" text-anchor="middle">L2 磁盘级 /tts-cache (PG)</text>
+  </g>
+
+  <!-- 生产流量连接线 -->
+  <!-- 客户端与 Vercel 边缘网关 (双向数据流) -->
+  <path d="M 220,380 L 340,380" fill="none" stroke="url(#prod-lane-grad)" stroke-width="2" />
+  <polygon points="340,380 332,376 332,384" fill="#10B981" />
+  <polygon points="220,380 228,376 228,384" fill="#3B82F6" />
+
+  <!-- Vercel 网关与腾讯云主机 (双向 CVM 流量) -->
+  <path d="M 520,380 L 640,380" fill="none" stroke="url(#prod-lane-grad)" stroke-width="2" />
+  <polygon points="640,380 632,376 632,384" fill="#059669" />
+  <polygon points="520,380 528,376 528,384" fill="#10B981" />
+  
+  <!-- 辅助映射与配置指示线 (垂直虚线) -->
+  <path d="M 430,210 L 430,335" fill="none" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />
+  <polygon points="430,335 427,329 433,329" fill="#9CA3AF" />
+  <text x="436" y="278" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="8" fill="#6B7280" font-weight="600">网关路由映射配置</text>
+
+  <path d="M 730,210 L 730,335" fill="none" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />
+  <polygon points="730,335 727,329 733,329" fill="#9CA3AF" />
+  <text x="736" y="278" font-family="'Segoe UI', Inter, 'Microsoft YaHei', sans-serif" font-size="8" fill="#6B7280" font-weight="600">Caddy 热补丁更新部署</text>
+
+</svg>
