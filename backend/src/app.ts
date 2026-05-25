@@ -511,6 +511,25 @@ export function createApp() {
   });
 
   app.get('/api/v1/courses/:id/pages', async (req, res) => {
+    if (getDbMode() === 'postgres') {
+      const rows = await queryRows(
+        `SELECT cp.*, f.storage_url
+         FROM course_pages cp
+         LEFT JOIN files f ON f.id = cp.courseware_file_id
+         WHERE cp.course_id = $1
+         ORDER BY cp.page_number ASC`,
+        [req.params.id]
+      );
+      return ok(res, rows.map((page) => ({
+        id: page.id,
+        courseId: page.course_id,
+        lessonNodeId: page.lesson_node_id || undefined,
+        pageNumber: page.page_number,
+        contentHtml: page.content_html || '',
+        audioText: page.audio_text || '',
+        fileUrl: page.storage_url || page.image_url || undefined,
+      })));
+    }
     const db = await readDb();
     ok(res, db.coursePages.filter((page) => page.courseId === req.params.id).sort((a, b) => a.pageNumber - b.pageNumber));
   });
@@ -1198,9 +1217,37 @@ export function createApp() {
   });
 
   app.get('/api/v1/coursewares', async (req, res) => {
-    const db = await readDb();
     const courseId = String(req.query.courseId || '');
     const lessonNodeId = String(req.query.lessonNodeId || '');
+    if (getDbMode() === 'postgres') {
+      const clauses: string[] = [];
+      const vals: any[] = [];
+      if (courseId) { vals.push(courseId); clauses.push(`cf.course_id = $${vals.length}`); }
+      if (lessonNodeId) { vals.push(lessonNodeId); clauses.push(`cf.lesson_node_id = $${vals.length}`); }
+      const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const rows = await queryRows(
+        `SELECT cf.*, f.filename, f.mime_type, f.storage_url, ln.title AS live_class_title
+         FROM courseware_files cf
+         JOIN files f ON f.id = cf.id
+         LEFT JOIN lesson_nodes ln ON ln.id = cf.lesson_node_id
+         ${where}
+         ORDER BY cf.created_at DESC`,
+        vals
+      );
+      return ok(res, rows.map((f) => ({
+        id: f.id,
+        filename: f.filename,
+        mimeType: f.mime_type,
+        type: f.kind,
+        lessonNodeId: f.lesson_node_id || '',
+        storageUrl: f.storage_url || '',
+        liveClassTitle: f.live_class_title || '',
+        pageCount: f.page_count || 0,
+        status: f.render_status === 'failed' ? 'error' : f.render_status === 'ready' ? 'ready' : 'processing',
+        createdAt: f.created_at,
+      })));
+    }
+    const db = await readDb();
     let files = db.files;
     if (courseId) files = files.filter((f) => f.courseId === courseId);
     if (lessonNodeId) files = files.filter((f) => f.lessonNodeId === lessonNodeId);
