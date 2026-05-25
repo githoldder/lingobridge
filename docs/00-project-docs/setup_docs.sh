@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_TEMPLATE="/Users/caolei/Desktop/LatexCenterTool/packages/thuthesis-manual-writing-kit"
 SHARED="${BASE_DIR}/shared"
-DOCS=("FA" "SRS" "HLD" "LLD" "TP" "DEP" "UM")
+DOCS=("01-FA" "02-SRS" "03-HLD" "04-LLD" "05-TP" "06-DEP" "07-UM")
 
 for DOC in "${DOCS[@]}"; do
   DIR="${BASE_DIR}/${DOC}"
@@ -13,7 +13,7 @@ for DOC in "${DOCS[@]}"; do
 
   # Copy thusetup.tex and main tex
   cp "${SRC_TEMPLATE}/templates/thusetup.tex" "${DIR}/templates/"
-  cp "${SRC_TEMPLATE}/templates/thuthesis-example.tex" "${DIR}/templates/"
+  cp "${SRC_TEMPLATE}/templates/thuthesis-example.tex" "${DIR}/templates/${DOC}.tex"
 
   # Copy ref
   cp "${SRC_TEMPLATE}/templates/ref/refs.bib" "${DIR}/templates/ref/"
