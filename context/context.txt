@@ -694,3 +694,14 @@ Action: Add dedicated rules file (.agent/rules/agent-ops-governance.md) solidify
 - .agent/rules/agent-ops-governance.md: Canonical rulebook outlining project plates, PRD structures, 5W Root Cause processes, and Git Task-Commit constraints.
 
 [Status] | Agent ops governance rules successfully codified and local task commits logged | Done
+
+
+# 2026-05-25 Production Live Sync Deployment & Smoke Test Complete
+Date: 2026-05-25
+Action: Verify production backend hot-deploy, frontend Vercel deploy, and execute local regression tests to fully validate Presence/Signals APIs and UI logins on the public domain.
+
+## Added & Updated Files:
+- output/playwright/prod-live-sync-smoke-report.md: Production live sync regression smoke report (100% green pass).
+- tests/regression/prod-live-sync-smoke.mjs: Enhanced UI login resilience with adaptive polling loop to handle cross-border Vercel-to-CVM reverse proxy network latency.
+
+[Status] | Backend hot-deploy, Vercel frontend aliased, and full 10-step E2E regression PASSED green! | Done
