@@ -12,6 +12,8 @@ Use this folder as the canonical source for sprint-numbered execution.
 | Sprint 4 | `sprint-04-technical-review.md` | Markdown | Technical review |
 | Sprint 5 | `sprint-05-class-live-learning-cache-okrts.md` | Markdown | Class/live/homework cache model upgrade |
 | Sprint 6 | `sprint-06-prelaunch-smoke-deploy.md` | Markdown | Prelaunch smoke, deployment, tutorials |
+| Sprint 7 | `sprint-07-public-https-demo-deploy.md` | Markdown | Public domain, trusted HTTPS, camera/microphone demo deployment |
+| Sprint 7 | `sprint-07-public-https-demo-deploy.json` | JSON | Canonical machine-readable execution contract for public HTTPS deployment |
 | Candidate Sprint 7 | `sprint-07-candidate-speech-demo-spike.json` | JSON | Speech demo and subtitle spike candidate |
 
 ## Write Rules
@@ -20,4 +22,5 @@ Use this folder as the canonical source for sprint-numbered execution.
 - Use task IDs in the form `S6-T01`.
 - One sprint file should own its own Objective, Key Results, Task Breakdown, Execution Order, and Exit Criteria.
 - JSON files are for agent execution and must parse cleanly.
+- For Sprint 7 public HTTPS deployment, update `sprint-07-public-https-demo-deploy.json` first; Markdown is background context.
 - Do not create unnumbered files such as `next-plan.md` or `latest.md`.

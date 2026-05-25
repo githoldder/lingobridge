@@ -98,6 +98,32 @@ test('courseware upload creates pages and excel exercises', async () => {
   });
 });
 
+test('courseware upload accepts multipart form data without base64 expansion', async () => {
+  await withServer(async (baseUrl) => {
+    const pdfBytes = Buffer.from('%PDF multipart smoke\n%%EOF');
+    const form = new FormData();
+    form.append('courseId', 'course-1');
+    form.append('lessonNodeId', 'lesson-node-1');
+    form.append('file', new Blob([pdfBytes], { type: 'application/pdf' }), 'multipart-demo.pdf');
+
+    const upload = await fetch(`${baseUrl}/api/v1/coursewares`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer teacher-1' },
+      body: form
+    });
+    const uploadJson = await upload.json();
+    assert.equal(upload.status, 200);
+    assert.equal(uploadJson.code, 0);
+    assert.equal(uploadJson.data.file.filename, 'multipart-demo.pdf');
+    assert.equal(Number(uploadJson.data.file.sizeBytes), pdfBytes.byteLength);
+    assert.equal(uploadJson.data.pages.length, 1);
+
+    const staticPdf = await fetch(`${baseUrl}${uploadJson.data.file.storageUrl}`);
+    assert.equal(staticPdf.status, 200);
+    assert.equal(Buffer.compare(Buffer.from(await staticPdf.arrayBuffer()), pdfBytes), 0);
+  });
+});
+
 test('recording upload list delete works', async () => {
   await withServer(async (baseUrl) => {
     const upload = await fetch(`${baseUrl}/api/v1/recordings`, {

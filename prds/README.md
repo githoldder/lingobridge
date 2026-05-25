@@ -1,98 +1,56 @@
-# PRD Folder Maintenance Guide
+# PRD Directory & Synchronization Governance
 
-This folder stores product requirements, sprint execution plans, and machine-readable task packages for LingoBridge.
+This directory serves as the unified specification center for LingoBridge, governing both human review and agent execution. It follows the **Sprint-Bound Dual-Plate Protocol**, establishing a clean boundary between high-level objectives and concrete machine instructions.
 
-## Directory Layout
+---
 
-| Path | Purpose | Write Rule |
-|---|---|---|
-| `prd.md` | Lightweight compatibility index | Update only when navigation or canonical files change |
-| `prd.json` | Legacy machine-readable package used by existing prompts | Keep parseable; do not keep appending narrative text |
-| `current/` | Cross-sprint product baseline and current decisions | Write stable product decisions here |
-| `sprints/` | Sprint-numbered OKRTS, execution plans, and reviews | Write sprint work here first |
-| `machine/` | Split machine-readable summaries | Write JSON slices here when agents need structured input |
-| `archive/` | Superseded or obsolete PRD material | Move stale versions here with dates |
-
-## Canonical Reading Order
-
-For a normal implementation task:
-
-1. Read `prd.md` for navigation.
-2. Read the active sprint file in `sprints/`.
-3. Read only the needed `current/` baseline files.
-4. Use `prd.json` only when an older prompt explicitly asks for it.
-
-For Sprint 6 prelaunch work, read:
-
-1. `sprints/sprint-06-prelaunch-smoke-deploy.md`
-2. `current/01-current-status-and-guardrails.md`
-3. `current/03-api-acceptance-and-next-questions.md`
-4. `prd.json` only for compatibility checks.
-
-## Naming Standard
-
-Sprint files:
+## Directory Architecture
 
 ```text
-sprint-NN-short-topic-okrts.md
-sprint-NN-short-topic-review.md
-sprint-NN-execution-plan.json
+prds/
+  ├── README.md               # This governance guide
+  ├── md/                    # Human-focused markdown plates (Objectives & KR Milestones)
+  │   └── sprintNN-prd-YYMMDD-vX.Y.md
+  └── json/                  # Agent-focused json plates (Micro task breakdowns & steps)
+      └── sprintNN-prd-YYMMDD-vX.Y.json
 ```
 
-Examples:
+---
 
-- `sprint-04-data-pdf-course-okrts.md`
-- `sprint-04-technical-review.md`
-- `sprint-06-prelaunch-smoke-deploy.md`
+## The Dual-Plate Protocol
 
-Current baseline files:
+To maintain extreme robustness and prevent codebase regression, we separate requirements into two synced formats:
 
-```text
-NN-short-topic.md
-```
+### 1. Human Markdown Plate (`prds/md/`)
+* **Target Audience**: Human / Product Manager
+* **Content**: Quantifiable high-level **Key-Results (KR Milestones)** and high-level **Tasks** list.
+* **Format**: `sprint{NN}-prd-{YYMMDD}-v{X.Y}.md`
+* **Sync Rule**: Created or modified by the Agent whenever a new human request or quantitative goal is approved.
 
-Machine files:
+### 2. Agent JSON Plate (`prds/json/`)
+* **Target Audience**: AI Agent / Tech Lead
+* **Content**: High-density **micro task-steps, parameters, dependencies, references, and acceptance criteria**.
+* **Format**: `sprint{NN}-prd-{YYMMDD}-v{X.Y}.json`
+* **Sync Rule**: The Agent reads instructions here to carry out actions. Must map 1-to-1 with the Markdown Plate.
 
-```text
-prd-vMAJOR.MINOR-short-topic.json
-sprint-NN-execution-plan.json
-```
+---
 
-## Update Rules
+## Synchronization & Versioning Rules
 
-- Do not append new sprint content to root `prd.md`.
-- Do not make `prd.json` the only source of truth for a new sprint.
-- Every task must have a sprint ID, for example `S6-T04`.
-- Every sprint file should include Objective, Key Results, Task Breakdown, Execution Order, and Exit Criteria or Definition of Done.
-- If a cross-sprint decision changes product behavior, update `current/00-latest-product-decisions.md`.
-- If a sprint status changes, update the sprint file first, then update `current/01-current-status-and-guardrails.md` only when the change affects global execution.
-- If a file is superseded, move it to `archive/YYYY-MM-DD-original-name.md` instead of deleting it.
+1. **AI Synchronization**:
+   - Both `.md` and `.json` files are automatically synchronized and managed by the AI Agent. Humans only edit or review the Markdown files.
+2. **Naming Convention**:
+   - `sprintNN-prd-YYMMDD-vX.Y.{md|json}`
+   - Example: `sprint06-prd-260525-v0.1.md` and `sprint06-prd-260525-v0.1.json`.
+3. **Temporal Discipline**:
+   - Every file must contain an explicit timestamp in the headers:
+     `Last Updated: YYYY-MM-DD HH:MM` (e.g., `Last Updated: 2026-05-25 11:08`).
+   - Every update requires checking the date and minute to ensure maximum traceability.
 
-## Maintenance Checklist
+---
 
-Run this checklist after each sprint or before major deployment work:
+## Git Task-Commit Discipline
 
-- [ ] Root `prd.md` is under 100 lines and only acts as an index.
-- [ ] Active sprint file is the single narrative source for current tasks.
-- [ ] Machine JSON files parse with `node -e "JSON.parse(require('fs').readFileSync('<file>','utf8'))"`.
-- [ ] No new unnumbered sprint files were added.
-- [ ] Stale drafts are in `archive/`.
-- [ ] Any agent prompt points to the split files instead of the old giant PRD where possible.
-
-## Current Files
-
-| File | Purpose |
-|---|---|
-| `current/00-latest-product-decisions.md` | Latest cross-sprint product decisions from PRD v4.6 |
-| `current/01-current-status-and-guardrails.md` | Status, risk, guardrails, and OKRTS phase prompts |
-| `current/02-product-boundary-and-business-rules.md` | Diagnosis, product boundary, rules, module boundaries |
-| `current/03-api-acceptance-and-next-questions.md` | API boundaries, acceptance, closeout, next strategy questions |
-| `sprints/sprint-03-mvp-recovery-okrts.md` | Sprint 3 plan |
-| `sprints/sprint-04-data-pdf-course-okrts.md` | Sprint 4 OKRTS |
-| `sprints/sprint-04-execution-plan.json` | Sprint 4 machine execution plan |
-| `sprints/sprint-04-technical-review.md` | Sprint 4 technical review |
-| `sprints/sprint-05-class-live-learning-cache-okrts.md` | Sprint 5 OKRTS |
-| `sprints/sprint-06-prelaunch-smoke-deploy.md` | Sprint 6 prelaunch plan |
-| `sprints/sprint-07-candidate-speech-demo-spike.json` | Candidate speech demo spike plan |
-| `machine/prd-v4.6-current-summary.json` | Split current machine summary |
-
+* **Zero-Regression Rule**: To prevent unexpected file conflicts or broad breaking regressions, all tasks are isolated at a micro-level.
+* **Micro-Commits**: Upon completing any task's internal steps, the Agent must immediately perform `git add` and `git commit -m "<tag>: complete task <ID>"` locally.
+* **Local Staging**: All commits must remain local. Zero push to the remote origin is allowed during execution. The human will review and batch-push the commits upon Sprint sign-off.

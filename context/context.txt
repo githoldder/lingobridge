@@ -591,4 +591,167 @@ Action: Elegant student wait classroom state with micro-pulsing loader and auto-
 
 [Status] | S5-T03 (student wait room) & S5-T04 (default courseware Star selection) successfully completed | Done
 
+---
+
+# 2026-05-24 E2E Screenshots Capture & High-Aesthetic Obsidian User Manual Complete
+Date: 2026-05-24
+Action: Fix locator timeout bugs in screenshots automation script, run full 11-step multi-character smoke testing to capture crisp Retina images, and compose high-aesthetic Obsidian user manual.
+
+## Plan:
+1. Modify `scripts/generate_manual_screenshots.mjs`:
+   - Change seed course title click target to '第三课：自我介绍' to match backend database seeds.
+   - Force 'zh-CN' locale inside Playwright `browser.newContext()` contexts.
+   - Add side navigation link click step to properly switch to Courses view from default Home workspace.
+   - Refactor generic navbar locators to precise element IDs (e.g. `#sidebar-item-homework`).
+   - Add left settings panel click to expand the whiteboard toolbar controls before paintbrush toggles.
+   - Handle double-click exiting of the student classroom to properly dismiss the exit confirmation popup.
+2. Run automation script `node scripts/generate_manual_screenshots.mjs` to capture all 11 crisp high-DPI Retina snapshots.
+3. Write high-aesthetic commercial challenge-ready layout user manual into Obsidian record file `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md`.
+
+[Status] | All 11 screenshots successfully captured & High-aesthetic Obsidian User Manual compiled | Done
+
+---
+
+# 2026-05-24 User Manual Detail Supplementation Complete
+Date: 2026-05-24
+Action: Expand Obsidian user manual to exhaustively detail the student 3-slot homework recording loop, real-time live danmaku messages, backend ASR translation/scoring pipelines, and teacher online student progress review modals (with Token-bearing inline audio plays and strict whitelist comment updates).
+
+[Status] | Obsidian user manual details exhaustively supplemented and finalized | Done
+
+---
+
+# 2026-05-24 High-Aesthetic Image-Led Obsidian User Manual Finalized
+Date: 2026-05-24
+Action: Completely restructure and rewrite the Obsidian user manual into an image-first, visual-driven masterpiece. Every single section now starts with high-DPI Retina screenshots showing exact classroom danmaku synchronization, student 3-slot audios, backend ASR radar scores, and teacher check-progress popups. The entire 12-screenshot suite is perfectly embedded in Obsidian.
+
+[Status] | Image-led final user manual successfully created & pushed | Done
+
+
+# 2026-05-24 Homework pathway re-architected to prioritize LessonNodes
+Date: 2026-05-24
+Action: Restructured HomeworkView pathway generation from task-level unit/lesson numbers to course-level LessonNode instances. Fully resolved location Bug by utilizing sorted LessonNode titles/IDs in combination with a safe unit-lesson aggregation fallback. Added premium PathArrow connector animations to dynamically indicate visual flow.
+
+[Status] | Homework LessonNode re-architecture completed & verified | Done
+
+
+# 2026-05-24 Vercel Proxy via Direct IP & Caddy Port 80 Hardening Complete
+Date: 2026-05-24
+Action: Configure remote Caddy to listen on port 80 (any host), modify Vercel proxy to target remote server IP (101.34.72.227) directly to bypass ISP HTTP domain inspection/GFW interception, and seed remote Postgres DB.
+
+## Plan:
+1. Modify remote Caddyfile via TAT to listen on `:80` instead of `http://lingobridge.duckdns.org` to allow direct IP proxy handling.
+2. Re-create remote Caddy container.
+3. Update local `vercel.json` rewrites to proxy to `http://101.34.72.227` directly.
+4. Deploy the updated project to Vercel production.
+5. Pipe the standard `seed.sql` into the remote Postgres container via TAT to seed all test users.
+6. Verify deployment by checking `/api/v1/health` and `/api/v1/auth/login` endpoints via Vercel.
+
+[Status] | All Vercel-to-Tencent proxy pathways and login integration testing PASSED green! | Done
+
+
+# 2026-05-25 Document & Agent Handoff Assets Finalization
+Date: 2026-05-25
+Action: Organize and stage the newly added `.agent` rules, skills, workflows, handoff prompts, and drafts. No business logic or application code is modified.
+
+## Added & Updated Files:
+- `.agent/rules/project-map.md`: Orientation guide for frontend views, backend repositories, and deployment channels.
+- `.agent/rules/deployment-boundaries.md`: Strict boundary rules for Local, Vercel HTTPS, and Tencent direct routes.
+- `.agent/skills/tencent-tat-patch-deploy/SKILL.md`: Patch preparation, base64 encoding, TAT command invocation, and safety rules.
+- `.agent/skills/courseware-upload-debug/SKILL.md`: Multi-layer isolation checklist for PDF/PPTX upload and Vercel 502 router limits.
+- `.agent/workflows/devops-smoke-test.md`: Structured manual for health, login, courses, uploads, and media permissions smoke testing.
+- `.agent/workflows/tencent-release.md`: Deploy-config protection rules and TAT release sequence.
+- `prompts/deployment-handoff-agents.md`: Comprehensive handoff prompts for 8 prospective takeover agents.
+- `drafts/08-multi-deploy-branch-and-agent-ops-plan.md`: Deployment strategies, branch models, and agent delegation plan.
+
+[Status] | All agent rules, skills, workflows, and prompts handoff assets finalized and staged | Done
+
+
+# 2026-05-25 Sprint 6 Dual-Plate Reorganization & Task-Commit Complete
+Date: 2026-05-25
+Action: Restructure prds/ directory to follow Sprint-Bound Dual-Plate (md/json) protocol and execute the 8 handoff tasks via strict local Task-Commit sequence.
+
+## Added & Updated Files:
+- prds/README.md: Dual-plate synchronization governance guide.
+- prds/md/sprint06-prd-260525-v0.1.md: Human-facing Sprint 6 roadmap (milestones & objectives) timestamped at 11:08.
+- prds/json/sprint06-prd-260525-v0.1.json: Machine-facing Sprint 6 micro-task executor steps and references.
+- docs/03-testing-deployment/local-demo-runbook.md: Secure media contexts and direct upload localhost handbook.
+- docs/03-testing-deployment/overseas-vercel-runbook.md: Vercel HTTPS reverse proxy variables and 20MB+ upload bounds documentation.
+- docs/03-testing-deployment/tencent-runbook.md: Tencent direct HTTP IP routes, TAT patch deploy, and config protection guide.
+- .github/workflows/ci.yml: Automated GitHub Actions pipeline for tsc compilation, build, and backend test execution.
+- .agent/workflows/prototype-vibe-coding.md: Screen-first design flow and strict MVP scope guidelines.
+- .agent/workflows/technical-research.md: Alternative spike comparison matrix and repository impact assessment protocol.
+- docs/CONTRIBUTING.md: Unified open source onboarding guidelines, local environment setup, and zero-secrets regulation.
+- docs/03-testing-deployment/env-matrix.md & .env.example: Environment configuration lane matrices and clean commented guide.
+
+[Status] | Sprint 6 dual-plate PRD restructuring and 8 task commits verified completed locally | Done
+
+
+# 2026-05-25 Agent Ops Governance Rules Solidification
+Date: 2026-05-25
+Action: Add dedicated rules file (.agent/rules/agent-ops-governance.md) solidifying the project's strategic layers, requirement dual-plates, and task-commit constraints for global team alignment.
+
+## Added & Updated Files:
+- .agent/rules/agent-ops-governance.md: Canonical rulebook outlining project plates, PRD structures, 5W Root Cause processes, and Git Task-Commit constraints.
+
+[Status] | Agent ops governance rules successfully codified and local task commits logged | Done
+
+
+# 2026-05-25 Production Live Sync Deployment & Smoke Test Complete
+Date: 2026-05-25
+Action: Verify production backend hot-deploy, frontend Vercel deploy, and execute local regression tests to fully validate Presence/Signals APIs and UI logins on the public domain.
+
+## Added & Updated Files:
+- output/playwright/prod-live-sync-smoke-report.md: Production live sync regression smoke report (100% green pass).
+- tests/regression/prod-live-sync-smoke.mjs: Enhanced UI login resilience with adaptive polling loop to handle cross-border Vercel-to-CVM reverse proxy network latency.
+
+[Status] | Backend hot-deploy, Vercel frontend aliased, and full 10-step E2E regression PASSED green! | Done
+
+
+# 2026-05-25 Documentation Lifecycle Restructuring & Academic Skills Integration Complete
+Date: 2026-05-25
+Action: Refactor docs/00-project-docs to strictly follow standard software lifecycle phases (01-FA to 07-UM) with matching file renames and adapted build/setup scripts. Import 4 specialized agent skills for LaTeX/academic writing from GitHub and verify 100% successful batch compilation.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA to 07-UM: Restructured folders and renamed main `.tex` entry files.
+- docs/00-project-docs/build_all.sh, setup_docs.sh, README.md: Adapted directory listings and index.
+- .agent/skills/01_latex_infrastructure to 04_vibe_coding_engineering: Imported specialized agent skills.
+
+[Status] | LaTeX documentation restructured to 01-07 lifecycle and 100% compiled successfully! | Done
+
+
+# 2026-05-25 01-FA TikZ Compilation Error Fixed & Feasibility Study Complete
+Date: 2026-05-25
+Action: Fix Undefined Control Sequence compilation error caused by illegal TikZ draw command nested in tabular node within docs/00-project-docs/01-FA/templates/data/chap01.tex. Successfully verify 100% successful XeLaTeX compile of 01-FA.pdf.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Wrapped legend table cells with baseline-aligned inline \tikz scopes.
+
+[Status] | TikZ legend syntax conflict resolved and 01-FA compiled to 7-page PDF! | Done
+
+
+# 2026-05-25 Document Specifications Localized & Reference Bibliography Built
+Date: 2026-05-25
+Action: Add project localized documentation standard skill (.agent/skills/05_lingobridge_docs_standard/SKILL.md) and update shared BibTeX database (shared/refs.bib) with 6 historical spike technology survey citations (Ref-TeamsTencent to Ref-SpikePlan) for robust citation backing.
+
+## Added & Updated Files:
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Localized academic writing, light-theme charts, and GB/T 7714 bibliography specifications.
+- docs/00-project-docs/shared/refs.bib: Added 6 detailed BibTeX techreport citations referencing the historical spike documents.
+
+[Status] | Project localized document standard established and citation database completed | Done
+
+
+# 2026-05-25 01-FA Restructuring & Light Architecture Integrated
+Date: 2026-05-25
+Action: Completely refactor docs/00-project-docs/01-FA/templates/data/chap01.tex to align with academic and GB/T 8567 standards. Incorporate 6 historical spike reference documents (Ref-TeamsTencent to Ref-SpikePlan) as robust citations. Copy and embed the standard high-DPI vector PDF architecture diagram (architecture.pdf) in figures/ folder, and generate a standardized light-theme architecture SVG (architecture.svg) for flawless Figma integration.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Complete narrative refactoring, removing AI list patterns and injecting standard citation markers.
+- docs/00-project-docs/01-FA/templates/ref/refs.bib: Synchronized BibTeX references database with 6 spike reports.
+- docs/00-project-docs/01-FA/templates/figures/architecture.pdf: Embedded users' vector system architecture diagram.
+- docs/00-project-docs/01-FA/templates/figures/architecture.svg: Scalable, light-background, GBT-compliant system architecture SVG for Figma micro-tuning.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Synced, 100% compiled clean 9-page PDF document.
+
+[Status] | Academic 01-FA feasibility study completely rewritten with 100% clean XeLaTeX output! | Done
+
+
 

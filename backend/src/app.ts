@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { readDb, writeDb } from './db.ts';
 import { initPostgres, healthCheck as pgHealthCheck } from './db/postgres.ts';
-import { saveBase64File, storageRoot } from './storage.ts';
+import { saveBase64File, saveBufferFile, storageRoot } from './storage.ts';
 import { parseExcel, upsertTasks, upsertVocabulary } from './excelParser.ts';
 import type { CoursePage, Exercise, FileMetadata, LiveSession, ClassroomComment, LessonNode, AssignmentNode, UserRole, Course, LiveClassStudent, HomeworkImport } from './types.ts';
 import { ttsFacade } from './providers/ttsFacade.ts';
@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx';
 import { query, queryRow, queryRows, getDbMode } from './db/postgres.ts';
 
 const MAX_COURSEWARE_BYTES = 50 * 1024 * 1024;
+const MAX_MULTIPART_COURSEWARE_BYTES = MAX_COURSEWARE_BYTES + 2 * 1024 * 1024;
 
 function ok(res: Response, data: unknown = null, message = 'success') {
   return res.json({ code: 0, data, message });
@@ -36,6 +37,83 @@ function extensionOf(filename: string) {
   return path.extname(filename).slice(1).toLowerCase();
 }
 
+function parseContentDisposition(value: string) {
+  const out: Record<string, string> = {};
+  for (const part of value.split(';')) {
+    const [rawKey, ...rawValue] = part.trim().split('=');
+    if (!rawKey || rawValue.length === 0) continue;
+    out[rawKey.toLowerCase()] = rawValue.join('=').trim().replace(/^"|"$/g, '');
+  }
+  return out;
+}
+
+async function readRequestBuffer(req: Request, maxBytes: number) {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.byteLength;
+    if (total > maxBytes) {
+      throw new Error(`Request body exceeds ${Math.floor(maxBytes / 1024 / 1024)}MB`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function parseMultipartCourseware(req: Request) {
+  const contentType = req.header('content-type') || '';
+  const boundary = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[1] || contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[2];
+  if (!boundary) throw new Error('Missing multipart boundary');
+
+  const body = await readRequestBuffer(req, MAX_MULTIPART_COURSEWARE_BYTES);
+  const delimiter = Buffer.from(`--${boundary}`);
+  const fields: Record<string, string> = {};
+  let file: { filename: string; mimeType: string; buffer: Buffer } | null = null;
+  let cursor = body.indexOf(delimiter);
+
+  while (cursor !== -1) {
+    let partStart = cursor + delimiter.byteLength;
+    if (body.subarray(partStart, partStart + 2).toString() === '--') break;
+    if (body.subarray(partStart, partStart + 2).toString() === '\r\n') partStart += 2;
+
+    const next = body.indexOf(delimiter, partStart);
+    if (next === -1) break;
+    let part = body.subarray(partStart, next);
+    if (part.subarray(part.length - 2).toString() === '\r\n') {
+      part = part.subarray(0, part.length - 2);
+    }
+
+    const headerEnd = part.indexOf(Buffer.from('\r\n\r\n'));
+    if (headerEnd !== -1) {
+      const rawHeaders = part.subarray(0, headerEnd).toString('latin1');
+      const data = part.subarray(headerEnd + 4);
+      const headers = new Map<string, string>();
+      for (const line of rawHeaders.split('\r\n')) {
+        const idx = line.indexOf(':');
+        if (idx > 0) headers.set(line.slice(0, idx).toLowerCase(), line.slice(idx + 1).trim());
+      }
+      const disposition = parseContentDisposition(headers.get('content-disposition') || '');
+      const name = disposition.name;
+      if (name) {
+        if (disposition.filename !== undefined) {
+          file = {
+            filename: disposition.filename,
+            mimeType: headers.get('content-type') || 'application/octet-stream',
+            buffer: data
+          };
+        } else {
+          fields[name] = data.toString('utf8');
+        }
+      }
+    }
+
+    cursor = next;
+  }
+
+  return { fields, file };
+}
+
 function publicUser(user: import('./types.ts').User) {
   return {
     id: user.id,
@@ -46,6 +124,31 @@ function publicUser(user: import('./types.ts').User) {
     email: user.email || user.username
   };
 }
+
+type LivePresence = {
+  userId: string;
+  displayName: string;
+  username: string;
+  role: string;
+  joinedAt: string;
+  lastSeenAt: string;
+  handRaised: boolean;
+  mediaGranted: boolean;
+  cameraOn: boolean;
+  micOn: boolean;
+};
+
+type LiveSignal = {
+  seq: number;
+  id: string;
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  targetUserId: string | null;
+  type: string;
+  payload: unknown;
+  createdAt: string;
+};
 
 function extractPptxText(absolutePath: string): string[] {
   try {
@@ -128,6 +231,9 @@ function createPagesFromCourseware(courseId: string, filename: string, fileUrl: 
 
 export function createApp() {
   const app = express();
+  const livePresence = new Map<string, Map<string, LivePresence>>();
+  const liveSignals = new Map<string, LiveSignal[]>();
+  let liveSignalSeq = 0;
 
   app.use(express.json({ limit: '90mb' }));
 
@@ -169,6 +275,19 @@ export function createApp() {
       return null;
     }
     return item;
+  }
+
+  function activePresenceFor(sessionId: string) {
+    const now = Date.now();
+    const rows = Array.from(livePresence.get(sessionId)?.values() || []);
+    return rows.filter((row) => now - Date.parse(row.lastSeenAt) < 45_000);
+  }
+
+  function pruneSignals(sessionId: string) {
+    const rows = liveSignals.get(sessionId) || [];
+    const cutoff = Date.now() - 5 * 60_000;
+    const next = rows.filter((row) => Date.parse(row.createdAt) >= cutoff).slice(-500);
+    liveSignals.set(sessionId, next);
   }
 
   function setCachedTranslation(text: string, from: string, to: string, translatedText: string, provider: string) {
@@ -392,14 +511,60 @@ export function createApp() {
   });
 
   app.get('/api/v1/courses/:id/pages', async (req, res) => {
+    if (getDbMode() === 'postgres') {
+      const rows = await queryRows(
+        `SELECT cp.*, f.storage_url
+         FROM course_pages cp
+         LEFT JOIN files f ON f.id = cp.courseware_file_id
+         WHERE cp.course_id = $1
+         ORDER BY cp.page_number ASC`,
+        [req.params.id]
+      );
+      return ok(res, rows.map((page) => ({
+        id: page.id,
+        courseId: page.course_id,
+        lessonNodeId: page.lesson_node_id || undefined,
+        pageNumber: page.page_number,
+        contentHtml: page.content_html || '',
+        audioText: page.audio_text || '',
+        fileUrl: page.storage_url || page.image_url || undefined,
+      })));
+    }
     const db = await readDb();
     ok(res, db.coursePages.filter((page) => page.courseId === req.params.id).sort((a, b) => a.pageNumber - b.pageNumber));
   });
 
   app.post('/api/v1/coursewares', async (req, res) => {
-    const { courseId, lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+    let upload: {
+      courseId?: string;
+      lessonNodeId?: string;
+      filename?: string;
+      mimeType: string;
+      base64?: string;
+      buffer?: Buffer;
+    };
+
+    try {
+      if ((req.header('content-type') || '').includes('multipart/form-data')) {
+        const multipart = await parseMultipartCourseware(req);
+        upload = {
+          courseId: multipart.fields.courseId,
+          lessonNodeId: multipart.fields.lessonNodeId,
+          filename: multipart.file?.filename,
+          mimeType: multipart.file?.mimeType || 'application/octet-stream',
+          buffer: multipart.file?.buffer
+        };
+      } else {
+        const { courseId, lessonNodeId, filename, mimeType = 'application/octet-stream', base64 } = req.body ?? {};
+        upload = { courseId, lessonNodeId, filename, mimeType, base64 };
+      }
+    } catch (err: any) {
+      return fail(res, 413, err?.message || 'Courseware upload is too large');
+    }
+
+    const { courseId, lessonNodeId, filename, mimeType, base64, buffer } = upload;
     if (!courseId) return fail(res, 400, 'courseId is required');
-    if (!filename || !base64) return fail(res, 400, 'filename and base64 are required');
+    if (!filename || (!base64 && !buffer)) return fail(res, 400, 'filename and file are required');
 
     const ext = extensionOf(filename);
     if (!['pptx', 'pdf', 'xlsx'].includes(ext)) return fail(res, 415, 'Only pptx, pdf and xlsx are supported');
@@ -422,7 +587,9 @@ export function createApp() {
 
     const db = await readDb();
 
-    const saved = await saveBase64File({ base64, filename, folder: 'coursewares' });
+    const saved = buffer
+      ? await saveBufferFile({ buffer, filename, folder: 'coursewares' })
+      : await saveBase64File({ base64: base64 || '', filename, folder: 'coursewares' });
     if (saved.sizeBytes > MAX_COURSEWARE_BYTES) return fail(res, 413, 'Courseware file exceeds 50MB');
 
     const fileMeta = await filesRepo.createFile({
@@ -1050,9 +1217,37 @@ export function createApp() {
   });
 
   app.get('/api/v1/coursewares', async (req, res) => {
-    const db = await readDb();
     const courseId = String(req.query.courseId || '');
     const lessonNodeId = String(req.query.lessonNodeId || '');
+    if (getDbMode() === 'postgres') {
+      const clauses: string[] = [];
+      const vals: any[] = [];
+      if (courseId) { vals.push(courseId); clauses.push(`cf.course_id = $${vals.length}`); }
+      if (lessonNodeId) { vals.push(lessonNodeId); clauses.push(`cf.lesson_node_id = $${vals.length}`); }
+      const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const rows = await queryRows(
+        `SELECT cf.*, f.filename, f.mime_type, f.storage_url, ln.title AS live_class_title
+         FROM courseware_files cf
+         JOIN files f ON f.id = cf.id
+         LEFT JOIN lesson_nodes ln ON ln.id = cf.lesson_node_id
+         ${where}
+         ORDER BY cf.created_at DESC`,
+        vals
+      );
+      return ok(res, rows.map((f) => ({
+        id: f.id,
+        filename: f.filename,
+        mimeType: f.mime_type,
+        type: f.kind,
+        lessonNodeId: f.lesson_node_id || '',
+        storageUrl: f.storage_url || '',
+        liveClassTitle: f.live_class_title || '',
+        pageCount: f.page_count || 0,
+        status: f.render_status === 'failed' ? 'error' : f.render_status === 'ready' ? 'ready' : 'processing',
+        createdAt: f.created_at,
+      })));
+    }
+    const db = await readDb();
     let files = db.files;
     if (courseId) files = files.filter((f) => f.courseId === courseId);
     if (lessonNodeId) files = files.filter((f) => f.lessonNodeId === lessonNodeId);
@@ -1665,13 +1860,34 @@ export function createApp() {
 
     const studentId = currentUserId(req);
     if (!studentId) return fail(res, 401, 'Unauthorized');
+    const student = await usersRepo.findById(studentId);
+    if (!student) return fail(res, 401, 'Unauthorized');
 
     const courseMembers = await coursesRepo.findMembers(session.courseId);
     const isCourseMember = courseMembers.some(
       (m) => m.courseId === session.courseId && m.userId === studentId && m.role === 'student'
     );
+    const markJoined = async () => {
+      const now = new Date().toISOString();
+      const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+      const existing = sessionPresence.get(studentId);
+      sessionPresence.set(studentId, {
+        userId: studentId,
+        displayName: student.displayName,
+        username: student.username,
+        role: student.role,
+        joinedAt: existing?.joinedAt || now,
+        lastSeenAt: now,
+        handRaised: existing?.handRaised || false,
+        mediaGranted: existing?.mediaGranted || false,
+        cameraOn: existing?.cameraOn || false,
+        micOn: existing?.micOn || false,
+      });
+      livePresence.set(session.id, sessionPresence);
+    };
     if (isCourseMember) {
       await liveRepo.addClassStudent(session.lessonNodeId, studentId, 'course_member');
+      await markJoined();
       return ok(res, { allowed: true });
     }
 
@@ -1679,7 +1895,10 @@ export function createApp() {
     const isLiveClassStudent = liveClassStudents.some(
       (s) => s.lessonNodeId === session.lessonNodeId && s.studentId === studentId
     );
-    if (isLiveClassStudent) return ok(res, { allowed: true });
+    if (isLiveClassStudent) {
+      await markJoined();
+      return ok(res, { allowed: true });
+    }
 
     return fail(res, 403, 'You are not enrolled in this course');
   });
@@ -1687,20 +1906,123 @@ export function createApp() {
   app.get('/api/v1/live-sessions/:id/participants', async (req, res) => {
     const session = await liveRepo.findById(req.params.id);
     if (!session) return fail(res, 404, 'Live session not found');
-    const rows = await liveRepo.findClassStudents(session.lessonNodeId);
-    const participants = [];
-    for (const row of rows) {
-      const user = await usersRepo.findById(row.studentId);
-      if (!user) continue;
-      participants.push({
-        id: row.id,
-        studentId: row.studentId,
-        displayName: user.displayName,
-        username: user.username,
-        joinedAt: row.joinedAt,
-      });
-    }
-    ok(res, participants);
+    ok(res, activePresenceFor(session.id).filter((row) => row.role === 'student').map((row) => ({
+      id: `${session.id}:${row.userId}`,
+      studentId: row.userId,
+      displayName: row.displayName,
+      username: row.username,
+      joinedAt: row.joinedAt,
+      lastSeenAt: row.lastSeenAt,
+      handRaised: row.handRaised,
+      mediaGranted: row.mediaGranted,
+      cameraOn: row.cameraOn,
+      micOn: row.micOn,
+    })));
+  });
+
+  app.post('/api/v1/live-sessions/:id/presence', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+
+    const now = new Date().toISOString();
+    const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+    const existing = sessionPresence.get(userId);
+    sessionPresence.set(userId, {
+      userId,
+      displayName: user.displayName,
+      username: user.username,
+      role: user.role,
+      joinedAt: existing?.joinedAt || now,
+      lastSeenAt: now,
+      handRaised: req.body?.handRaised !== undefined ? Boolean(req.body.handRaised) : existing?.handRaised || false,
+      mediaGranted: existing?.mediaGranted || false,
+      cameraOn: req.body?.cameraOn !== undefined ? Boolean(req.body.cameraOn) : existing?.cameraOn || false,
+      micOn: req.body?.micOn !== undefined ? Boolean(req.body.micOn) : existing?.micOn || false,
+    });
+    livePresence.set(session.id, sessionPresence);
+    ok(res, sessionPresence.get(userId));
+  });
+
+  app.get('/api/v1/live-sessions/:id/presence', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    ok(res, activePresenceFor(session.id));
+  });
+
+  app.post('/api/v1/live-sessions/:id/permissions', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const user = await usersRepo.findById(userId);
+    if (!user) return fail(res, 401, 'Unauthorized');
+    if (user.role !== 'admin' && session.teacherId !== userId) return fail(res, 403, 'Only the teacher can grant live media');
+
+    const studentId = String(req.body?.studentId || '');
+    if (!studentId) return fail(res, 400, 'studentId is required');
+    const sessionPresence = livePresence.get(session.id) || new Map<string, LivePresence>();
+    const existing = sessionPresence.get(studentId);
+    const student = await usersRepo.findById(studentId);
+    if (!student) return fail(res, 404, 'Student not found');
+    const now = new Date().toISOString();
+    sessionPresence.set(studentId, {
+      userId: studentId,
+      displayName: student.displayName,
+      username: student.username,
+      role: student.role,
+      joinedAt: existing?.joinedAt || now,
+      lastSeenAt: now,
+      handRaised: false,
+      mediaGranted: Boolean(req.body?.mediaGranted ?? true),
+      cameraOn: existing?.cameraOn || false,
+      micOn: existing?.micOn || false,
+    });
+    livePresence.set(session.id, sessionPresence);
+    ok(res, sessionPresence.get(studentId));
+  });
+
+  app.post('/api/v1/live-sessions/:id/signals', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const senderId = currentUserId(req);
+    if (!senderId) return fail(res, 401, 'Unauthorized');
+    const sender = await usersRepo.findById(senderId);
+    if (!sender) return fail(res, 401, 'Unauthorized');
+    const type = String(req.body?.type || '');
+    if (!type) return fail(res, 400, 'type is required');
+    const signal: LiveSignal = {
+      seq: ++liveSignalSeq,
+      id: crypto.randomUUID(),
+      sessionId: session.id,
+      senderId,
+      senderName: sender.displayName,
+      targetUserId: req.body?.targetUserId ? String(req.body.targetUserId) : null,
+      type,
+      payload: req.body?.payload ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    const rows = liveSignals.get(session.id) || [];
+    rows.push(signal);
+    liveSignals.set(session.id, rows);
+    pruneSignals(session.id);
+    ok(res, signal);
+  });
+
+  app.get('/api/v1/live-sessions/:id/signals', async (req, res) => {
+    const session = await liveRepo.findById(req.params.id);
+    if (!session) return fail(res, 404, 'Live session not found');
+    const userId = currentUserId(req);
+    if (!userId) return fail(res, 401, 'Unauthorized');
+    const since = Number(req.query.since || 0);
+    pruneSignals(session.id);
+    const rows = (liveSignals.get(session.id) || []).filter((row) =>
+      row.seq > since && row.senderId !== userId && (!row.targetUserId || row.targetUserId === userId)
+    );
+    ok(res, rows);
   });
 
   app.post('/api/v1/live-sessions/:id/comments', async (req, res) => {

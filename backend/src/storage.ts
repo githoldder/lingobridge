@@ -30,5 +30,25 @@ export async function saveBase64File(params: {
   };
 }
 
-export { storageRoot };
+export async function saveBufferFile(params: {
+  buffer: Buffer;
+  filename: string;
+  folder: string;
+}) {
+  const id = crypto.randomUUID();
+  const safeName = params.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const relativePath = `${params.folder}/${id}-${safeName}`;
+  const absoluteDir = path.join(storageRoot, params.folder);
+  const absolutePath = path.join(storageRoot, relativePath);
+  await mkdir(absoluteDir, { recursive: true });
+  await writeFile(absolutePath, params.buffer);
+  return {
+    id,
+    relativePath,
+    absolutePath,
+    sizeBytes: params.buffer.byteLength,
+    url: publicUrlFor(relativePath)
+  };
+}
 
+export { storageRoot };
