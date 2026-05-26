@@ -765,5 +765,37 @@ Action: Add dedicated project writing rulebook (.agent/rules/latex-writing-disci
 [Status] | Canonical GBT-compliant LaTeX writing rules globally solidified and committed locally | Done
 
 
+# 2026-05-26 Ralph Execution Framework + Adversarial Audit Protocol
+Date: 2026-05-26
+Action: Solidified the Ralph 4-layer decomposition framework (Object→KR→Task→Step) and adversarial dual-agent audit protocol into project rules.
+
+## Added & Updated Files:
+- .agent/rules/ralph-execution-framework.md: Ralph 四层分解模型、单次单问题原则、调研先行原则、脚本注入优先规范。
+- .agent/rules/adversarial-audit.md: 执行-审核双 Agent 对抗环、7 维度扫描矩阵、结构化审核报告格式、强度升级规则。
+- .agent/rules/agent-ops-governance.md: 追加 Section 4 (Ralph) 和 Section 5 (Adversarial Audit) 引用链。
+- Defined latex-auditor subagent: 毒舌论文打假专家人设，接收 LaTeX 产出后按审核矩阵逐条扫描。
+
+## Commit:
+42ac8a0: rules: Ralph 四层分解框架 + 对抗式审核机制落地
+
+[Status] | Ralph + Adversarial Audit rules solidified and committed | Done
+
+
+# 2026-05-26 01-FA Chapter Separation & Ralph JSON Alignment & Auditor Verification
+Date: 2026-05-26
+Action: Physically split chap01.tex into 4 separate files representing Chapter 1 to Chapter 4 to resolve tight coupling. Updated 01-FA.tex to include all 4 files. Re-aligned the target_file paths in sprint07-prd-260526-v0.1.json using the Ralph execution framework. Spawned and ran the latex-auditor subagent to perform a full 7-dimension scan on chap01.tex, successfully verifying the adversarial audit workflow.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Kept Chapter 1 only (Technological Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Created for Chapter 2 (Economic Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Created for Chapter 3 (Operational Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Created for Chapter 4 (Conclusion).
+- docs/00-project-docs/01-FA/templates/01-FA.tex: Linked to all 4 chapter files.
+- prds/json/sprint07-prd-260526-v0.1.json: Updated tasks target_file references.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly into 9 pages.
+
+[Status] | 01-FA chapters split, Ralph JSON updated, and auditor verified successfully | Done
+
+
 
 

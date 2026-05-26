@@ -14,7 +14,7 @@
     {
       "id": "S7-T01",
       "topic": "经济可行性 — 云基础设施成本段落重构",
-      "target_file": "docs/00-project-docs/01-FA/templates/data/chap01.tex",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap02.tex",
       "target_chapter": "chapter{经济可行性}",
       "target_section": "section{云基础设施及运行成本}",
       "target_lines": "34-40",
@@ -49,7 +49,7 @@
     {
       "id": "S7-T02",
       "topic": "经济可行性 — TTS 缓存费用优化段落重构",
-      "target_file": "docs/00-project-docs/01-FA/templates/data/chap01.tex",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap02.tex",
       "target_chapter": "chapter{经济可行性}",
       "target_section": "section{ASR/TTS 费用优化与双层缓存机制}",
       "target_lines": "42-96",
@@ -89,7 +89,7 @@
     {
       "id": "S7-T03",
       "topic": "操作可行性 — 多端响应式与国际化段落重构",
-      "target_file": "docs/00-project-docs/01-FA/templates/data/chap01.tex",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap03.tex",
       "target_chapter": "chapter{操作可行性}",
       "target_section": "section{多端响应式与国际化支持}",
       "target_lines": "100-105",
@@ -123,7 +123,7 @@
     {
       "id": "S7-T04",
       "topic": "操作可行性 — 双角色交互门槛段落重构",
-      "target_file": "docs/00-project-docs/01-FA/templates/data/chap01.tex",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap03.tex",
       "target_chapter": "chapter{操作可行性}",
       "target_section": "section{双角色交互门槛分析}",
       "target_lines": "107-111",
@@ -157,7 +157,7 @@
     {
       "id": "S7-T05",
       "topic": "结论章重构",
-      "target_file": "docs/00-project-docs/01-FA/templates/data/chap01.tex",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap04.tex",
       "target_chapter": "chapter{结论}",
       "target_lines": "113-121",
       "audit_required": true,
