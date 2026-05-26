@@ -797,5 +797,20 @@ Action: Physically split chap01.tex into 4 separate files representing Chapter 1
 [Status] | 01-FA chapters split, Ralph JSON updated, and auditor verified successfully | Done
 
 
+# 2026-05-26 01-FA Feasibility Study Academic Major Revision Completed
+Date: 2026-05-26
+Action: Undertook a comprehensive revision of all 01-FA chapters (chap01-chap04) to resolve the major revision/rejected verdict from the reviewer. Completely removed all residual Markdown code markup, English fragments, self-promoting hype terms, and unverified absolute metrics. Demoted uncompleted intelligent features to future work and aligned metrics to documented facts under GBT software standards.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Removed "In" translation residue, added page size and millisecond targets, demoted ASR/WebRTC to planned future scope.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Replaced 路演 cost hype with realistic, replication-dependent cache economy descriptions.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Replaced pixels and aesthetics with factual task flows and conditional milestones.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Concluded conditional feasibility under small concurrency limits.
+- docs/00-project-docs/01-FA/templates/fonts/Fangsong.ttf: Copied Kaiti.ttf to prevent XeLaTeX windows-local fontspec error for monospace fallback.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Flawlessly compiled into the final 9-page GBT-compliant PDF.
+
+[Status] | Academic 01-FA feasibility study completely revised, compiled, and finalized! | Done
+
+
 
 

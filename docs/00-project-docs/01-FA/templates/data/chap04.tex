@@ -1,9 +1,9 @@
 \chapter{结论}
-综上评估，LingoBridge 平台：
+在三页课件、小班并发、预置课程数据的演示范围内，LingoBridge 平台具备如下可行性条件：
 \begin{itemize}
-  \item \textbf{技术方面}：通过 React 强敏捷前端配合 Node/Postgres 双模持久化，巧妙运用 adaptive polling 保证了跨海实时授课的高稳定性，技术成熟度高；
-  \item \textbf{经济方面}：凭借边缘托管（Vercel Edge）和极致定制的 /tts-cache 双层语音缓存架构，在生产中成功斩断了 90\% 以上 of 云服务计费开销，模型科学长效；
-  \item \textbf{操作方面}：多端响应、极简 Excel 精准白名单去重导入与 Web Audio 跟读多音轨闭环，极大降低了用户使用门槛。
+  \item \textbf{技术方面}：通过 React 前端框架与 Node/Express 后端服务的轻量级架构，辅以自适应状态重连机制，能够支撑跨海小班课堂的基本同步及录制需求，具备基本技术开发条件；
+  \item \textbf{经济方面}：基于边缘静态托管（Vercel）与轻量级计算节点（CVM），配合双层语音缓存策略，在演示及试点阶段能够有效控制基础设施和 TTS 重复生成的费用支出；
+  \item \textbf{操作方面}：教师端排课及课件上传流程、学生端课堂页面同步及麦克风录音提交流程清晰，且系统预留了后续接入外部智能 ASR 评分和多语言翻译的扩展接口。
 \end{itemize}
 
-因此，LingoBridge 平台的开发上线与应用推广具有**极高的可行性**。
+综上所述，LingoBridge 平台在上述演示与试点条件限制下，\textbf{具备有条件的可行性}。
