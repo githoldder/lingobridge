@@ -812,5 +812,16 @@ Action: Undertook a comprehensive revision of all 01-FA chapters (chap01-chap04)
 [Status] | Academic 01-FA feasibility study completely revised, compiled, and finalized! | Done
 
 
+# 2026-05-27 02-SRS Requirements Specification Expansion & Compliance Alignment (Sprint 08)
+Date: 2026-05-27
+Action: Reviewed all four chapters of 02-SRS for GBT-9385 alignment. Fixed LaTeX errors in chap03.tex. Removed all absolute/exaggerated claims (100% progress, perfect compatibility, seamless transitions) and typos. Created UML use-case.puml and classroom-state.puml. Compiled flawlessly into 22 pages.
 
+## Added & Updated Files:
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Replaced "无缝对接" with "集成对接".
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Fixed unescaped percent in row 199. Removed exaggerated claims (100% alignment, perfect i18n/UI compatibility, seamless slide transitions). Fixed a repeated word typo.
+- docs/00-project-docs/02-SRS/templates/uml/use-case.puml: Created PlantUML modeling file for LingoBridge MVP use cases.
+- docs/00-project-docs/02-SRS/templates/uml/classroom-state.puml: Created PlantUML modeling file for online classroom presence states.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled successfully into a flawless 22-page document.
+- prds/json/sprint08-prd-260527-v0.1.json: Marked status as Completed.
 
+[Status] | SRS 02-SRS revised, compiled, finalized | Done

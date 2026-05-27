@@ -1,4 +1,107 @@
 \chapter{附录}
 
-% TODO: 补充附录内容
-% 用例图、数据流图等
+\section{用例模型}
+为了更加直观地表达 LingoBridge 平台的系统边界以及各角色之间的交互逻辑，项目组建立了用例模型。本模型的系统边界为“SaaS 拼音辅助自学系统”，主要涉及教师、学生与管理员三方系统参与者。
+
+具体的用例建模细节及 UML 图源文件保存在项目的 \texttt{docs/00-project-docs/02-SRS/templates/uml/use-case.puml} 路径下，供后续项目维护人员使用 PlantUML 编译工具进行二次修订或图像导出。正文文字对于各主要角色所能执行的用例范围已在第三章功能需求规格中做出了严密的行为定义。
+
+\section{在线课堂状态模型}
+直播在线课堂（Live Classroom）作为教学互动的核心容器，其内部存在着严密的状态生命周期流转逻辑，涉及师生之间对于翻页同步与媒体设备占用的受控协调。系统内部采用了一套状态机机制，定义的状态生命周期包含：
+\begin{itemize}
+  \item \textbf{未开始状态（NotStarted）}：课堂日程已由教师创建，但教师尚未点击“发起授课”。
+  \item \textbf{等待状态（Waiting）}：教师已拉起课堂，但学生尚未成功进入连麦状态。
+  \item \textbf{授课进行中（Ongoing）}：课堂教学活动正在进行，此时教师端翻页操作将广播翻页同步（Presence）信令。
+  \item \textbf{举手申请中（RaisingHand）}：学生点击“举手连麦”，学生端状态置为申请中，向教师控制面板发送状态通知。
+  \item \textbf{授权发言中（Authorized）}：教师同意授权后，状态机切换，学生端激活浏览器麦克风设备，进行实时广播连麦。
+  \item \textbf{已结束状态（Closed）}：教师点击下课或关闭会话，状态机彻底销毁，显式强制调用 \texttt{track.stop()} 切断所有麦克风与摄像头硬件占用。
+\end{itemize}
+
+上述状态机的流转机制与 UML 状态图源码已物理保存在项目路径的 \texttt{docs/00-project-docs/02-SRS/templates/uml/classroom-state.puml} 中。
+
+\section{需求追踪矩阵}
+为保障 LingoBridge 从业务需求到软件开发、集成测试以及演示交付的全生命周期可追溯性，项目组建立了需求追踪矩阵，用于追踪核心功能需求（FR）与非功能需求（NFR）在后续概要设计（HLD）与测试用例（TC）中的对应关系。需求追踪关系如表 4.1 所示。
+
+\begin{longtable}{|l|p{4cm}|l|l|l|}
+\caption{LingoBridge 需求追踪矩阵} \label{tab:traceability} \\
+\hline
+\textbf{需求 ID} & \textbf{需求名称} & \textbf{优先级} & \textbf{设计模块 (HLD)} & \textbf{测试用例 ID (TC)} \\
+\hline
+\endfirsthead
+\multicolumn{5}{r}{续表 4.1} \\
+\hline
+\textbf{需求 ID} & \textbf{需求名称} & \textbf{优先级} & \textbf{设计模块 (HLD)} & \textbf{测试用例 ID (TC)} \\
+\hline
+\endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
+FR-001 & 身份认证模块 & P0 & HLD-MD-AUTH & TC-AUTH-001 \\
+\hline
+FR-002 & 课程管理模块 & P0 & HLD-MD-COURSE & TC-CRS-001 \\
+\hline
+FR-003 & 课件管理模块 & P0 & HLD-MD-MEDIA & TC-CWS-001 \\
+\hline
+FR-004 & 作业管理模块 & P0 & HLD-MD-EXCEL & TC-HW-001 \\
+\hline
+FR-005 & 中文语音朗读模块 & P0 & HLD-MD-TTS & TC-TTS-001 \\
+\hline
+FR-006 & 录音采集模块 & P0 & HLD-MD-RECORD & TC-REC-001 \\
+\hline
+FR-007 & 直播课堂模块 & P1 & HLD-MD-LIVE & TC-LIVE-001 \\
+\hline
+FR-008 & 管理后台模块 & P2 & HLD-MD-ADMIN & TC-ADM-001 \\
+\hline
+FR-009 & 状态反馈模块 & P0 & HLD-MD-UI & TC-UI-001 \\
+\hline
+NFR-001 & 页面加载时延性能 & P0 & HLD-MD-PERF & TC-NFR-001 \\
+\hline
+NFR-002 & 录音音频体积控制 & P0 & HLD-MD-PERF & TC-NFR-002 \\
+\hline
+NFR-003 & 账户与会话安全鉴权 & P0 & HLD-MD-SEC & TC-NFR-003 \\
+\hline
+NFR-004 & 物理硬件设备停用 & P0 & HLD-MD-SEC & TC-NFR-004 \\
+\hline
+NFR-005 & 网络重连自适应恢复 & P0 & HLD-MD-RELI & TC-NFR-005 \\
+\hline
+NFR-006 & 三语热切换一致性 & P0 & HLD-MD-I18N & TC-NFR-006 \\
+\hline
+NFR-007 & 数据合规与删除保护 & P0 & HLD-MD-COMP & TC-NFR-007 \\
+\hline
+\end{longtable}
+
+\section{未决问题清单}
+由于项目目前处于快速迭代试点阶段，对于部分中远期的生产级需求，项目组采取了“审慎记录、有条件搁置、后续解决”的对策，列出的关键未决问题及后续对策如表 4.2 所示。
+
+\begin{table}[H]
+\centering
+\caption{系统关键未决问题清单}
+\begin{tabular}{|l|p{5cm}|p{4.5cm}|}
+\hline
+\textbf{问题编号} & \textbf{问题描述与技术难点} & \textbf{中远期对策与计划} \\
+\hline
+ISS-01 & ASR 口语声调评测的真实端侧 WER/CER 边界测算。 & 暂不在 MVP 引入，后续阶段评估接入第三方成熟 API 接口。 \\
+\hline
+ISS-02 & 跨境大带宽下在线视频录屏的存储容量与性能开销。 & 测试阶段通过限制课件页数以降低存储开销，中远期上线云端清理策略。 \\
+\hline
+ISS-03 & 国际信用卡跨境收单的合规与多机构结算解耦。 & MVP 阶段为 0 元试用，V3.0 商业化阶段独立引入国际支付收单商。 \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{版本变更记录}
+本规格说明书的历史版本记录及本次扩写的修订单如表 4.3 所示。
+
+\begin{table}[H]
+\centering
+\caption{SRS 规格说明书版本变更记录}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{版本号} & \textbf{修订日期} & \textbf{修订人} & \textbf{变更内容概述与状态说明} \\
+\hline
+v0.1 & 2026-05-18 & 曹磊 & 创建初始需求分析大纲骨架，文档以 TODO 结构占位。 \\
+\hline
+v1.0 & 2026-05-27 & 曹磊 & **当前基线**：按照 GB/T 9385 规范完成全文学术级深度扩写，整改 Markdown 表述并完成 XeLaTeX 编译。 \\
+\hline
+\end{tabular}
+\end{table}

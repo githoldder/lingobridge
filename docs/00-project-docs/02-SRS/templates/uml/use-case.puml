@@ -1,0 +1,43 @@
+@startuml LingoBridge Use Case Diagram
+left to right direction
+skinparam packageStyle rectangle
+
+actor "中文教师 (Teacher)" as teacher
+actor "留学生 (Student)" as student
+actor "系统管理员 (Admin)" as admin
+
+rectangle "LingoBridge 中文学习平台 (SaaS MVP)" {
+  (身份认证/登录) as (auth)
+  (课程管理 - 创建与绑定) as (course_manage)
+  (课件管理 - PDF/PPTX上传与翻页) as (slide_manage)
+  (作业管理 - Excel导入与分发) as (homework_manage)
+  (中文语音朗读 - TTS播放) as (tts_play)
+  (发音采集与录音管理) as (audio_record)
+  (自主删除录音) as (audio_delete)
+  (班级积分排行) as (ranking)
+  (直播课堂 - 授课与 Presence 同步) as (live_class)
+  (举手连麦申请) as (hand_raise)
+  (授权发言与媒体物理关闭) as (hand_auth)
+  (演示数据一键注入) as (demo_inject)
+  (系统用户及资源管理) as (sys_manage)
+}
+
+teacher --> auth
+teacher --> course_manage
+teacher --> slide_manage
+teacher --> homework_manage
+teacher --> live_class
+teacher --> hand_auth
+
+student --> auth
+student --> tts_play
+student --> audio_record
+student --> audio_delete
+student --> ranking
+student --> live_class
+student --> hand_raise
+
+admin --> auth
+admin --> demo_inject
+admin --> sys_manage
+@enduml
