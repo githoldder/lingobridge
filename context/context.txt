@@ -845,3 +845,23 @@ Action: Patched rules with two new absolute red lines (three-line table enforcem
 - docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly into 9-page compliant PDF.
 
 [Status] | Standardized three-line tables & decoupled TikZ & built successfully | Done
+
+# 2026-05-27 01-FA 2x Academic Expansion & 02-SRS Professional Reform (Sprint 09)
+Date: 2026-05-27
+Action: Expanded 01-FA to 12 pages with detailed multi-tier budgets, risk matrix, and multi-cloud providers audit. Fixed SRS table overflow bugs. Embedded Use Case & State Diagrams into main chapters. Added DFD & ERD UML modeling files and created detailed Data Dictionaries for 8 SaaS entities. Compiled both flawlessly.
+
+## Added & Updated Files:
+- docs/00-project-docs/02-SRS/templates/data/chap01.tex: Fixed Table 1.1 and 1.2 column widths to prevent text overflow.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Embedded usecase PDF diagram into main product description chapter.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Embedded state transition diagram, embedded Level 1 Data Flow Diagram (DFD), and added detailed Data Dictionary tables for 8 entities.
+- docs/00-project-docs/02-SRS/templates/data/chap04.tex: Cleaned up redundant diagram Appendix sections.
+- docs/00-project-docs/02-SRS/templates/uml/data-flow.puml: Created DFD Level 1 PlantUML file.
+- docs/00-project-docs/02-SRS/templates/uml/erd.puml: Created SaaS Database ER Diagram PlantUML file.
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Expanded ASR/TTS evaluation to 3x, added cloud vendors comparison table.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Added 4-level budget tiers table and 3 standard budget versions table with citations.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Expanded tri-language Context hot-switching and responsive layouts.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Added full academic risk assessment matrix table (emoji-free).
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled flawlessly to 27 pages.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly to 12 pages.
+
+[Status] | 01-FA expanded 2x, SRS tables fixed, diagrams/UML integrated, DFD/ERD & Data Dictionary added! | Done

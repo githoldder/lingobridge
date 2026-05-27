@@ -1,37 +1,5 @@
 \chapter{附录}
 
-\section{用例模型}
-为了更加直观地表达 LingoBridge 平台的系统边界以及各角色之间的交互逻辑，项目组建立了用例模型。本模型的系统边界为“SaaS 拼音辅助自学系统”，主要涉及教师、学生与管理员三方系统参与者。
-
-具体的用例建模细节及 UML 图源文件保存在项目的 \texttt{docs/00-project-docs/02-SRS/templates/uml/use-case.puml} 路径下，供后续项目维护人员使用 PlantUML 编译工具进行二次修订或图像导出。正文文字对于各主要角色所能执行的用例范围已在第三章功能需求规格中做出了严密的行为定义。
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\textwidth]{LingoBridge用例图.pdf}
-\caption{LingoBridge 平台 V1.0 MVP 用例图}
-\label{fig:use_case}
-\end{figure}
-
-\section{在线课堂状态模型}
-直播在线课堂（Live Classroom）作为教学互动的核心容器，其内部存在着严密的状态生命周期流转逻辑，涉及师生之间对于翻页同步与媒体设备占用的受控协调。系统内部采用了一套状态机机制，定义的状态生命周期包含：
-\begin{itemize}
-  \item \textbf{未开始状态（NotStarted）}：课堂日程已由教师创建，但教师尚未点击“发起授课”。
-  \item \textbf{等待状态（Waiting）}：教师已拉起课堂，但学生尚未成功进入连麦状态。
-  \item \textbf{授课进行中（Ongoing）}：课堂教学活动正在进行，此时教师端翻页操作将广播翻页同步（Presence）信令。
-  \item \textbf{举手申请中（RaisingHand）}：学生点击“举手连麦”，学生端状态置为申请中，向教师控制面板发送状态通知。
-  \item \textbf{授权发言中（Authorized）}：教师同意授权后，状态机切换，学生端激活浏览器麦克风设备，进行实时广播连麦。
-  \item \textbf{已结束状态（Closed）}：教师点击下课或关闭会话，状态机彻底销毁，显式强制调用 \texttt{track.stop()} 切断所有麦克风与摄像头硬件占用。
-\end{itemize}
-
-上述状态机的流转机制与 UML 状态图源码已物理保存在项目路径的 \texttt{docs/00-project-docs/02-SRS/templates/uml/classroom-state.puml} 中。
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\textwidth]{LingoBridge状态图.pdf}
-\caption{LingoBridge 在线课堂 Presence 状态机转移图}
-\label{fig:classroom_state}
-\end{figure}
-
 \section{需求追踪矩阵}
 为保障 LingoBridge 从业务需求到软件开发、集成测试以及演示交付的全生命周期可追溯性，项目组建立了需求追踪矩阵，用于追踪核心功能需求（FR）与非功能需求（NFR）在后续概要设计（HLD）与测试用例（TC）中的对应关系。需求追踪关系如表 4.1 所示。
 

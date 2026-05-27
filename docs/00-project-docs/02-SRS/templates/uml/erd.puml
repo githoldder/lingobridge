@@ -1,0 +1,106 @@
+@startuml LingoBridge SaaS ER Diagram
+' Crow's foot notation
+skinparam roundcorner 5
+skinparam Linetype ortho
+
+entity "Institution (合作教育机构)" as inst {
+  * inst_id : UUID <<PK>>
+  --
+  * name : VARCHAR(128)
+  * country : VARCHAR(64)
+  description : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "School (试点高校)" as school {
+  * school_id : UUID <<PK>>
+  * inst_id : UUID <<FK>>
+  --
+  * name : VARCHAR(128)
+  * cjk_localized_name : VARCHAR(128)
+  created_at : TIMESTAMP
+}
+
+entity "Class (试点班级)" as class {
+  * class_id : UUID <<PK>>
+  * school_id : UUID <<FK>>
+  --
+  * name : VARCHAR(64)
+  * semester : VARCHAR(32)
+  * total_students : INT
+  created_at : TIMESTAMP
+}
+
+entity "User (系统用户)" as user {
+  * user_id : UUID <<PK>>
+  * school_id : UUID <<FK>>
+  --
+  * username : VARCHAR(64) <<UQ>>
+  * password_hash : VARCHAR(256)
+  * role : VARCHAR(16) -- 'teacher', 'student', 'admin'
+  * localized_lang : VARCHAR(8) -- 'zh', 'ru', 'kk'
+  created_at : TIMESTAMP
+}
+
+entity "Course (课程)" as course {
+  * course_id : UUID <<PK>>
+  * creator_id : UUID <<FK>>
+  --
+  * name : VARCHAR(128)
+  description : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "CourseClassRelation (课程班级关联)" as ccr {
+  * relation_id : UUID <<PK>>
+  * course_id : UUID <<FK>>
+  * class_id : UUID <<FK>>
+  --
+  assigned_at : TIMESTAMP
+}
+
+entity "Courseware (课件)" as cws {
+  * courseware_id : UUID <<PK>>
+  * course_id : UUID <<FK>>
+  --
+  * file_name : VARCHAR(256)
+  * file_path : VARCHAR(512)
+  * file_size : INT
+  * total_pages : INT
+  created_at : TIMESTAMP
+}
+
+entity "Homework (课后作业节点)" as hw {
+  * homework_id : UUID <<PK>>
+  * course_id : UUID <<FK>>
+  --
+  * lesson_node_id : VARCHAR(64) <<UQ>>
+  * pinyin_text : VARCHAR(128)
+  * russian_translation : VARCHAR(256)
+  * audio_tts_cache_key : VARCHAR(256)
+  created_at : TIMESTAMP
+}
+
+entity "VoiceRecord (学生发音录音)" as vr {
+  * record_id : UUID <<PK>>
+  * homework_id : UUID <<FK>>
+  * student_id : UUID <<FK>>
+  --
+  * file_path : VARCHAR(512)
+  * duration_seconds : DECIMAL(4,2)
+  * status : VARCHAR(16) -- 'submitted', 'deleted'
+  submitted_at : TIMESTAMP
+}
+
+inst ||--o{ school : "拥有多个"
+school ||--o{ class : "划分班级"
+school ||--o{ user : "管理用户"
+class ||--o{ user : "包含学生"
+user ||--o{ course : "教师创建"
+course ||--o{ ccr : "分发至"
+class ||--o{ ccr : "接收课程"
+course ||--o{ cws : "关联课件"
+course ||--o{ hw : "包含作业"
+hw ||--o{ vr : "提交录音"
+user ||--o{ vr : "学生录制"
+@enduml
