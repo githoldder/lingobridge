@@ -52,6 +52,47 @@
 
 ---
 
+## 🚫 【红线五】严格三线表（booktabs 强制）
+所有生命周期文档中的表格**必须**使用学术三线表格式，不得出现任何非标准排版。
+
+1. **列定义禁止竖线**：
+   - 严禁在 `\begin{tabular}` 或 `\begin{longtable}` 的列定义中出现竖线符号 `|`。
+   - 正确：`\begin{tabular}{lll}` 或 `\begin{tabular}{l p{5cm} l}`。
+   - 错误：`\begin{tabular}{|l|l|l|}`。
+2. **禁止 `\hline`，强制 `booktabs` 三宏**：
+   - 严禁使用 `\hline` 画横线。
+   - 表头上方使用 `\toprule`，表头下方使用 `\midrule`，表尾使用 `\bottomrule`。
+   - 数据行之间**不加任何横线**。
+3. **`booktabs` 宏包声明**：
+   - 项目 `thusetup.tex` 或主文件必须包含 `\usepackage{booktabs}`。
+4. **longtable 同规则**：
+   - `longtable` 环境同样适用：列定义无竖线，使用 `\toprule`/`\midrule`/`\bottomrule`/`\endhead`。
+
+---
+
+## 🚫 【红线六】严禁 .tex 正文硬编码绘图代码（图文分离）
+所有图表**必须**以外部矢量文件（PDF/SVG）形式存放于 `figures/` 目录，通过 `\includegraphics` 引入。
+
+1. **绝对禁止在 `.tex` 文件中出现以下环境或代码**：
+   - `\begin{tikzpicture}` / `\end{tikzpicture}`
+   - `\begin{axis}` / `\end{axis}`（pgfplots）
+   - `\begin{mermaid}` 或任何 Mermaid 渲染代码块
+   - Python / matplotlib 代码片段
+2. **唯一合法的图片引入方式**：
+   ```latex
+   \begin{figure}[htbp]
+   \centering
+   \includegraphics[width=0.95\textwidth]{figures/xxxx.pdf}
+   \caption{图题描述}
+   \label{fig:xxxx}
+   \end{figure}
+   ```
+3. **绘图脚本管理**：
+   - Python/matplotlib 绘图脚本存放于 `scripts/` 目录，绝不放在 `templates/` 目录下。
+   - 脚本输出的图文件必须存放到 `templates/figures/` 目录。
+
+---
+
 ## 质量核查 checklist (编译前强制执行)
 - [ ] 源码中 100% 不含 `**`、`*`、`` ` `` 等 Markdown 字符？
 - [ ] 列表是否全部被 `\begin{itemize}` 替换，绝不含 Markdown 的 `-` 残余？
@@ -60,3 +101,6 @@
 - [ ] 正文中的所有关键技术论点是否全部带有 `\cite{}` 引用标记？
 - [ ] 参考文献 `refs.bib` 中是否包含所引用的所有条目？
 - [ ] 运行 `bash build_manual.sh` 后，`.log` 或 `.blg` 中是否存在 `undefined citations` 警告？
+- [ ] 所有表格是否使用 `\toprule`/`\midrule`/`\bottomrule` 三线表？列定义中是否 100% 无竖线 `|`？是否 100% 无 `\hline`？
+- [ ] `.tex` 源码中是否 100% 不含 `\begin{tikzpicture}`、`\begin{axis}` 等硬编码绘图环境？
+- [ ] 所有图片是否通过 `\includegraphics` 从 `figures/` 目录引入？

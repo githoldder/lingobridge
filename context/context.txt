@@ -825,3 +825,23 @@ Action: Reviewed all four chapters of 02-SRS for GBT-9385 alignment. Fixed LaTeX
 - prds/json/sprint08-prd-260527-v0.1.json: Marked status as Completed.
 
 [Status] | SRS 02-SRS revised, compiled, finalized | Done
+
+# 2026-05-27 02-SRS Three-Line Tables & 01-FA TikZ Clean-up & Rule Patching (Sprint 08-R2)
+Date: 2026-05-27
+Action: Patched rules with two new absolute red lines (three-line table enforcement and TikZ/figure decoup). Standardized all 16 tabular/longtable instances in 02-SRS to booktabs format. Cleared inline TikZ from 01-FA, migration of draw_chart.py, and embedded both usecase and state diagram figures in 02-SRS. Compiled both flawlessly.
+
+## Added & Updated Files:
+- .agent/rules/latex-writing-discipline.md: Added Red Line 5 (booktabs three-line table enforcement) and Red Line 6 (TikZ/pgfplots inline drawing decoup ban).
+- docs/00-project-docs/02-SRS/templates/thusetup.tex: Added booktabs and added figure/ directory to graphicspath.
+- docs/00-project-docs/01-FA/templates/thusetup.tex: Added booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap01.tex: Standardized two tables to booktabs three-line tables.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Standardized two tables to booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Standardized 9 tables to booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap04.tex: Standardized three tables (including demand traceability longtable) to booktabs, removed double stars bold residuals, and embedded use-case and classroom-state PDF diagrams.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Replaced 40 lines of inline TikZ with cost_comparison.pdf graphic inclusion.
+- docs/00-project-docs/01-FA/scripts/draw_chart.py: Migrated drawing script from templates to scripts.
+- docs/00-project-docs/01-FA/templates/figures/cost_comparison.pdf: Re-generated using system python matplotlib.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled flawlessly into 23-page compliant PDF.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly into 9-page compliant PDF.
+
+[Status] | Standardized three-line tables & decoupled TikZ & built successfully | Done

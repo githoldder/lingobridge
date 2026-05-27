@@ -21,45 +21,7 @@
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[scale=0.95]
-  % Grid
-  \draw[dotted,color=gray!30,step=1cm] (0,0) grid (8,4.5);
-
-  % Axis
-  \draw[->,color=gray!80,thick] (0,0) -- (8.5,0) node[right,color=black,font=\small] {请求次数 (Requests)};
-  \draw[->,color=gray!80,thick] (0,0) -- (0,5) node[above,color=black,font=\small] {API 累计费用 / 元 (CNY)};
-  
-  % Y ticks
-  \foreach \y/\label in {0/0, 1/10, 2/20, 3/30, 4/40, 5/50} {
-    \draw (0.1,\y) -- (-0.1,\y);
-    \node[left,font=\footnotesize] at (-0.1,\y) {\label};
-  }
-  
-  % X ticks
-  \foreach \x/\label in {0/0, 2/2000, 4/4000, 6/6000, 8/10000} {
-    \draw (\x,0.1) -- (\x,-0.1);
-    \node[below,font=\footnotesize] at (\x,-0.1) {\label};
-  }
-
-  % Shading Saved cost area
-  \fill[color=emerald!12] (0,0) -- plot[domain=0:8] (\x,{0.005*\x*1000*(0.15 + 0.85*exp(-\x/2.0))}) -- (8,4) -- cycle;
-  
-  % Curves
-  % 1. Uncached (Red dotted line): y = 0.5 * x
-  \draw[dashed,color=rose!90!black,line width=1.8pt] (0,0) -- (8,4) node[above,midway,sloped,font=\footnotesize] {无缓存架构 (Linear Cost)};
-  
-  % 2. Cached (Green solid line): y = 0.005 * x * (0.15 + 0.85 * exp(-x/2)) * 1000
-  \draw[color=emerald!80!black,line width=2.3pt] (0,0) .. controls (2.2,0.85) and (5.2,1.15) .. (8,1.4) node[below,midway,sloped,font=\footnotesize] {双层缓存架构 (Cached Cost)};
-  
-  % Legend & Text
-  \node[draw=gray!30,fill=white,rounded corners=2pt,inner sep=4pt] at (3.5,3.2) {
-    \begin{tabular}{l}
-      \tikz[baseline=-0.5ex] \draw[dashed,color=rose!90!black,thick] (0,0) -- (0.4,0); \ \small 无缓存 (Uncached) \\
-      \tikz[baseline=-0.5ex] \draw[color=emerald!80!black,thick] (0,0) -- (0.4,0); \ \small 双层缓存 (L1/L2 Cached)
-    \end{tabular}
-  };
-  
-\end{tikzpicture}
+\includegraphics[width=0.85\textwidth]{cost_comparison.pdf}
 \caption{LingoBridge ASR/TTS 计费开销在双层缓存优化前后的走势对比}
 \label{fig:cost_comparison}
 \end{figure}
