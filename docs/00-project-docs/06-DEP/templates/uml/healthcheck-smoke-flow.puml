@@ -1,0 +1,109 @@
+@startuml healthcheck-smoke-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 健康检查与冒烟验证流程图
+
+start
+
+partition "基础健康检查" {
+  :GET /api/v1/health;
+  note right
+    期望响应: 200 OK
+    {"status": "healthy"}
+  end note
+
+  if (返回 200?) then (是)
+    :健康检查通过;
+  else (否)
+    #F43F5E:服务不可用;
+    :触发告警并回滚;
+    stop
+  endif
+}
+
+partition "认证验证" {
+  :POST /auth/login\n使用 demo 凭证;
+  note right
+    {"username": "demo_teacher",
+     "password": "***"}
+  end note
+
+  if (返回 JWT Token?) then (是)
+    :认证服务正常;
+  else (否)
+    #F43F5E:认证服务异常;
+    :触发告警并回滚;
+    stop
+  endif
+}
+
+partition "业务接口验证" {
+  :GET /courses\n携带 JWT Token;
+  note right
+    Authorization: Bearer <token>
+    期望返回课程列表数组
+  end note
+
+  if (返回课程列表?) then (是)
+    :课程接口正常;
+  else (否)
+    #F43F5E:业务接口异常;
+    :触发告警并回滚;
+    stop
+  endif
+}
+
+partition "文件上传验证" {
+  :POST /coursewares\n上传小型测试 PDF;
+  note right
+    multipart/form-data
+    测试文件 < 1MB
+  end note
+
+  if (文件创建成功?) then (是)
+    :文件服务正常;
+  else (否)
+    #F43F5E:文件服务异常;
+    :触发告警并回滚;
+    stop
+  endif
+}
+
+partition "直播服务验证" {
+  :GET /api/v1/live-sessions;
+  note right
+    验证直播会话接口
+    可用性与响应格式
+  end note
+
+  if (接口响应正常?) then (是)
+    :直播服务正常;
+  else (否)
+    #F43F5E:直播服务异常;
+    :触发告警并回滚;
+    stop
+  endif
+}
+
+#10B981:所有检查通过;
+#10B981:部署验收通过;
+note right
+  记录验收时间戳
+  标记版本为 stable
+end note
+
+stop
+
+@enduml

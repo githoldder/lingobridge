@@ -1,0 +1,129 @@
+@startuml auth-login-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam sequence {
+  ArrowColor #3B82F6
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #F0F9FF
+  GroupBorderColor #3B82F6
+  GroupBackgroundColor #F8FAFC
+  DividerBorderColor #94A3B8
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F43F5E
+}
+skinparam defaultFontName "Microsoft YaHei"
+
+title 用户登录 / 注册 时序图 (Auth Sequence)
+
+actor "用户\n(User)" as User
+participant "LoginView\n登录视图" as LoginView #E0F2FE
+participant "apiClient\nHTTP 客户端" as apiClient #E0F2FE
+participant "Express Router\n路由层" as Router #DBEAFE
+participant "usersRepo\n用户仓储" as usersRepo #D1FAE5
+database "PostgreSQL" as DB #D1FAE5
+
+== 登录流程 (Login Flow) ==
+
+User -> LoginView : 输入用户名 + 密码
+activate LoginView
+LoginView -> apiClient : POST /auth/login\n{username, password}
+activate apiClient
+apiClient -> Router : HTTP POST /auth/login
+activate Router
+Router -> usersRepo : findByUsername(username)
+activate usersRepo
+usersRepo -> DB : SELECT * FROM users\nWHERE username = ?
+activate DB
+DB --> usersRepo : 用户记录 (User Record)
+deactivate DB
+
+alt #FEE2E2 用户不存在或密码错误
+  usersRepo --> Router : null / 用户记录
+  Router -> Router : bcrypt.compare(password, hash)
+  Router --> apiClient : 401 {error: "用户名或密码错误"}
+  apiClient --> LoginView : 抛出错误
+  LoginView --> User : 显示错误提示\n"用户名或密码错误"
+else #D1FAE5 验证通过
+  usersRepo --> Router : 用户记录 (含 password_hash)
+  deactivate usersRepo
+  Router -> Router : bcrypt.compare(password,\npassword_hash) ✓
+  Router -> Router : jwt.sign({userId, role},\nsecret, {expiresIn: '24h'})
+  Router --> apiClient : 200 {token, user:\n{id, username, role, displayName}}
+  deactivate Router
+  apiClient --> LoginView : 返回 {token, user}
+  deactivate apiClient
+
+  LoginView -> LoginView : localStorage.setItem(\n'token', token)
+  LoginView -> LoginView : AuthContext.setUser(user)
+
+  alt 角色路由 (Role-based Redirect)
+    LoginView --> User : role=teacher → /teacher/courses
+    LoginView --> User : role=student → /dashboard
+    LoginView --> User : role=admin → /admin
+  end
+end
+deactivate LoginView
+
+== 注册流程 (Register Flow) ==
+
+User -> LoginView : 切换到注册模式\n输入 username / password /\ndisplayName / email
+activate LoginView
+LoginView -> apiClient : POST /auth/register\n{username, password,\ndisplayName, email}
+activate apiClient
+apiClient -> Router : HTTP POST /auth/register
+activate Router
+
+Router -> usersRepo : findByUsername(username)
+activate usersRepo
+usersRepo -> DB : SELECT * FROM users\nWHERE username = ?
+activate DB
+DB --> usersRepo : 查询结果
+deactivate DB
+
+alt #FEE2E2 用户名已存在
+  usersRepo --> Router : 已存在的用户记录
+  deactivate usersRepo
+  Router --> apiClient : 409 {error: "用户名已被注册"}
+  apiClient --> LoginView : 抛出错误
+  LoginView --> User : 显示错误提示\n"用户名已被注册"
+else #D1FAE5 用户名可用
+  usersRepo --> Router : null (不存在)
+  Router -> Router : bcrypt.hash(password, 10)
+  Router -> usersRepo : create({username,\npassword_hash, role: 'student',\ndisplayName, email})
+  activate usersRepo
+  usersRepo -> DB : INSERT INTO users\n(...) RETURNING *
+  activate DB
+  DB --> usersRepo : 新用户记录
+  deactivate DB
+  usersRepo --> Router : 新用户 (newUser)
+  deactivate usersRepo
+
+  Router -> usersRepo : addTeacherStudentLink(\ndefaultTeacherId,\nnewUser.id)
+  activate usersRepo
+  usersRepo -> DB : INSERT INTO\nteacher_student_links\n(teacher_id, student_id)
+  activate DB
+  DB --> usersRepo : 绑定记录
+  deactivate DB
+  usersRepo --> Router : 绑定成功
+  deactivate usersRepo
+
+  Router -> Router : jwt.sign({userId: newUser.id,\nrole: 'student'},\nsecret, {expiresIn: '24h'})
+  Router --> apiClient : 201 {token, user}
+  deactivate Router
+  apiClient --> LoginView : 返回 {token, user}
+  deactivate apiClient
+
+  LoginView -> LoginView : localStorage.setItem(\n'token', token)
+  LoginView -> LoginView : AuthContext.setUser(user)
+  LoginView --> User : 自动登录 → 跳转 /dashboard
+end
+deactivate LoginView
+
+@enduml

@@ -1,0 +1,204 @@
+@startuml homework-recording-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam sequence {
+  ArrowColor #3B82F6
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #F0F9FF
+  GroupBorderColor #3B82F6
+  GroupBackgroundColor #F8FAFC
+  DividerBorderColor #94A3B8
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F43F5E
+}
+skinparam defaultFontName "Microsoft YaHei"
+
+title 作业录音与提交时序图 (Homework Recording & Submission)
+
+actor "学生\n(Student)" as Student
+participant "HomeworkView\n作业页面" as HWView #E0F2FE
+participant "MediaRecorder\n浏览器录音 API" as MR #FEF3C7
+participant "apiClient\nHTTP 客户端" as apiClient #E0F2FE
+participant "Express Router\n路由层" as Router #DBEAFE
+participant "recordingsRepo\n录音仓储" as recRepo #D1FAE5
+participant "assignmentsRepo\n作业仓储" as assignRepo #D1FAE5
+participant "learningRecordsRepo\n学习记录仓储" as lrRepo #D1FAE5
+database "PostgreSQL" as DB #D1FAE5
+
+== 加载作业任务列表 ==
+
+Student -> HWView : 进入作业页面\n(lessonNodeId, assignmentNodeId)
+activate HWView
+HWView -> apiClient : GET /learning-tasks\n?lessonNodeId=xxx\n&assignmentNodeId=xxx
+activate apiClient
+apiClient -> Router : HTTP GET
+activate Router
+Router -> assignRepo : findTasksByAssignment(\nassignmentNodeId)
+activate assignRepo
+assignRepo -> DB : SELECT * FROM learning_tasks\nWHERE assignment_node_id = ?\nORDER BY sort_order
+activate DB
+DB --> assignRepo : 任务列表 [task1, task2, ...]
+deactivate DB
+assignRepo --> Router : 任务列表
+deactivate assignRepo
+
+Router -> recRepo : findAttemptsByStudent(\nstudentId, taskIds)
+activate recRepo
+recRepo -> DB : SELECT * FROM\nhomework_recording_attempts\nWHERE student_id = ?\nAND task_id IN (...)
+activate DB
+DB --> recRepo : 已有录音记录
+deactivate DB
+recRepo --> Router : 录音记录列表
+deactivate recRepo
+
+Router --> apiClient : 200 {tasks, existingAttempts}
+deactivate Router
+apiClient --> HWView : 返回任务 + 已有录音
+deactivate apiClient
+HWView -> HWView : 渲染任务卡片列表\n标记已完成/未完成状态
+HWView --> Student : 显示作业任务列表
+
+== 录音流程 (3 槽位机制) ==
+
+Student -> HWView : 选择任务 (taskId)\n点击录音槽位 (slot 1)
+activate HWView
+
+note over MR #FEF3C7
+  3 个录音槽位 (slot_index 1/2/3)
+  学生最多录制 3 次
+  选择最佳录音提交
+end note
+
+HWView -> MR : navigator.mediaDevices\n.getUserMedia({audio: true})
+activate MR
+MR --> HWView : MediaStream 获取成功
+HWView -> MR : new MediaRecorder(stream)\nrecorder.start()
+MR -> MR : 持续录制音频...\n收集 audio chunks
+HWView --> Student : 显示录音中状态 🔴\n计时器运行
+
+Student -> HWView : 点击"停止录音"
+HWView -> MR : recorder.stop()
+MR -> MR : ondataavailable →\nnew Blob(chunks,\n{type:'audio/webm'})
+MR --> HWView : 返回音频 Blob
+deactivate MR
+
+HWView -> HWView : 本地预览播放\n(URL.createObjectURL)
+HWView --> Student : 可预览录音 ▶️
+
+Student -> HWView : 确认上传此录音
+HWView -> apiClient : POST /recordings\nFormData: {audio: Blob,\ntaskId, slotIndex: 1}
+activate apiClient
+apiClient -> Router : HTTP POST /recordings
+activate Router
+
+Router -> recRepo : createAttempt({\nstudentId, taskId,\nslot_index: 1,\naudioPath, duration})
+activate recRepo
+recRepo -> DB : INSERT INTO\nhomework_recording_attempts\n(student_id, task_id,\nslot_index, audio_file_path,\nduration, score)\nON CONFLICT (student_id,\ntask_id, slot_index)\nDO UPDATE SET ...
+activate DB
+DB --> recRepo : 录音记录
+deactivate DB
+recRepo --> Router : attempt 记录
+deactivate recRepo
+
+Router --> apiClient : 201 {attempt:\nid, slotIndex, duration,\naudioUrl}
+deactivate Router
+apiClient --> HWView : 返回录音记录
+deactivate apiClient
+HWView -> HWView : 更新 slot 1 状态 ✅\nslot 2/3 可用
+
+== 重复录音 (Slot 2 & 3) ==
+
+loop 槽位 2 和 3 (可选)
+  Student -> HWView : 点击 slot 2 或 slot 3 录音
+  HWView -> MR : getUserMedia → start → stop
+  activate MR
+  MR --> HWView : 音频 Blob
+  deactivate MR
+  HWView -> apiClient : POST /recordings\n{taskId, slotIndex: 2|3}
+  activate apiClient
+  apiClient -> Router : 存储录音
+  activate Router
+  Router -> recRepo : createAttempt(slotIndex)
+  activate recRepo
+  recRepo -> DB : UPSERT 录音记录
+  activate DB
+  DB --> recRepo : 录音记录
+  deactivate DB
+  recRepo --> Router : attempt
+  deactivate recRepo
+  Router --> apiClient : 201
+  deactivate Router
+  apiClient --> HWView : 成功
+  deactivate apiClient
+  HWView --> Student : 槽位已填充 ✅
+end
+
+== 选择最佳录音并跳转下一任务 ==
+
+Student -> HWView : 选择最佳录音\n(如 slot 2) ⭐
+HWView -> apiClient : PATCH /recordings/\nbest-selection\n{taskId, bestSlotIndex: 2}
+activate apiClient
+apiClient -> Router : HTTP PATCH
+activate Router
+Router -> recRepo : markBest(studentId,\ntaskId, slotIndex: 2)
+activate recRepo
+recRepo -> DB : UPDATE\nhomework_recording_attempts\nSET is_best = true\nWHERE student_id = ?\nAND task_id = ?\nAND slot_index = 2
+activate DB
+DB --> recRepo : 更新成功
+deactivate DB
+recRepo --> Router : 确认
+deactivate recRepo
+Router --> apiClient : 200
+deactivate Router
+apiClient --> HWView : 成功
+deactivate apiClient
+
+HWView -> HWView : 导航至下一个任务\n(taskIndex + 1)
+HWView --> Student : 显示下一任务卡片
+
+== 全部完成 → 提交作业 ==
+
+Student -> HWView : 全部任务录音完成\n点击"提交作业"
+HWView -> apiClient : PUT /homework-submissions\n{assignmentNodeId,\nstatus: 'submitted'}
+activate apiClient
+apiClient -> Router : HTTP PUT
+activate Router
+
+Router -> assignRepo : upsertSubmission({\nstudentId,\nassignmentNodeId,\nstatus: 'submitted',\nsubmittedAt: now()})
+activate assignRepo
+assignRepo -> DB : INSERT INTO\nhomework_submissions\n(student_id,\nassignment_node_id,\nstatus, submitted_at)\nON CONFLICT DO UPDATE
+activate DB
+DB --> assignRepo : 提交记录
+deactivate DB
+assignRepo --> Router : submission
+deactivate assignRepo
+
+Router -> lrRepo : batchUpsertRecords(\nstudentId, tasks,\nbestAttempts)
+activate lrRepo
+note right of lrRepo #D1FAE5
+  批量写入 learning_records
+  每个 task 取 best 录音的
+  score 作为成绩
+end note
+lrRepo -> DB : INSERT INTO learning_records\n(student_id, lesson_node_id,\ntask_id, score, status)\nON CONFLICT DO UPDATE\n-- 批量 N 条
+activate DB
+DB --> lrRepo : 批量写入成功
+deactivate DB
+lrRepo --> Router : 学习记录列表
+deactivate lrRepo
+
+Router --> apiClient : 200 {submission,\nlearningRecords}
+deactivate Router
+apiClient --> HWView : 提交成功
+deactivate apiClient
+HWView --> Student : 🎉 作业已提交\n显示成绩汇总
+deactivate HWView
+
+@enduml

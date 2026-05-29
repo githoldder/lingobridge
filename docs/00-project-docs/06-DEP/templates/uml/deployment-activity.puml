@@ -1,0 +1,101 @@
+@startuml deployment-activity
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 部署流程活动图
+
+start
+
+partition "代码准备" {
+  :拉取最新代码;
+  note right
+    git pull origin main
+    确认版本标签
+  end note
+}
+
+partition "前端部署" {
+  :构建前端;
+  note right
+    npm run build
+    输出 dist/ 目录
+  end note
+
+  :部署前端至 Vercel;
+  note right
+    vercel --prod
+    自动关联域名
+    CDN 缓存刷新
+  end note
+}
+
+partition "后端部署" {
+  :准备后端补丁;
+  note right
+    base64 编码 patch 文件
+    tar czf backend-patch.tar.gz
+  end note
+
+  :通过 TAT 推送补丁至 CVM;
+  note right
+    腾讯云 TAT (TencentCloud
+    Automation Tools) 远程执行
+  end note
+
+  :CVM 解压并覆盖 backend/;
+  note right
+    tar xzf backend-patch.tar.gz
+    覆盖目标目录
+  end note
+
+  :PM2 restart backend;
+  note right
+    pm2 restart lingoBridge
+    零停机重启
+  end note
+}
+
+partition "数据库迁移" {
+  :运行数据库迁移;
+  note right
+    psql < schema.sql
+    执行增量 DDL 变更
+  end note
+}
+
+partition "冒烟验证" {
+  :执行冒烟测试;
+  note right
+    GET /api/v1/health
+    POST /auth/login
+  end note
+
+  if (冒烟测试通过?) then (是)
+    #10B981:部署完成;
+    note right
+      记录部署版本
+      更新变更日志
+    end note
+  else (否)
+    #F43F5E:触发回滚;
+    :Vercel 回退至上一版本;
+    :TAT 推送上一快照至 CVM;
+    :PM2 restart backend;
+    :确认回滚成功;
+  endif
+}
+
+stop
+
+@enduml

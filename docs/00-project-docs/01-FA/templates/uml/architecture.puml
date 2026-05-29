@@ -1,0 +1,70 @@
+@startuml
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam node {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam cloud {
+  BackgroundColor #F0FDF4
+  BorderColor #10B981
+  FontColor #1E293B
+}
+skinparam database {
+  BackgroundColor #FFF7ED
+  BorderColor #F97316
+  FontColor #1E293B
+}
+skinparam rectangle {
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam artifact {
+  BackgroundColor #F5F3FF
+  BorderColor #8B5CF6
+  FontColor #1E293B
+}
+skinparam arrow {
+  Color #3B82F6
+  FontColor #64748B
+}
+
+title LingoBridge 双通道流量架构 (Dual-Channel Traffic Architecture)
+
+actor "用户浏览器\n(User Browser)" as browser #E2E8F0
+
+cloud "Vercel Edge\n(全球 CDN)" as vercel {
+  artifact "React 19 SPA\n静态资源\n(HTML/JS/CSS)" as spa
+}
+
+node "腾讯云 CVM\n(Tencent Cloud CVM)" as cvm {
+  rectangle "Docker 容器组" as docker #F8FAFC {
+    node "Caddy 反向代理\n(HTTPS 终端 / 自动证书)" as caddy #DBEAFE
+    node "Node.js Express\n后端 API 服务\n(JWT 鉴权)" as backend #D1FAE5
+    database "PostgreSQL\n数据持久层" as pg
+    artifact "本地文件存储\n(音频/课件)" as localstorage #FEF3C7
+  }
+}
+
+cloud "Azure Speech\nTTS 服务\n(F0 免费层)" as azure #FCE7F3
+cloud "对象存储\n(Object Storage)\n课件/录音归档" as oss #FEF9C3
+
+browser -[#10B981,bold]-> vercel : <color:#10B981><b>通道① HTTPS\n(静态资源分发)</b></color>
+browser -[#3B82F6,bold]-> caddy : <color:#3B82F6><b>通道② API 请求\n(HTTPS 反向代理)</b></color>
+
+caddy -[#3B82F6]-> backend : 转发 /api/*
+backend -[#3B82F6]-> pg : SQL 查询\n(Repository 模式)
+backend -[#3B82F6]-> localstorage : 读写文件
+backend -[#F43F5E]-> azure : TTS 合成请求\n(REST API)
+backend -[#F97316]-> oss : 课件/录音上传下载
+
+legend right
+  |= 通道 |= 说明 |
+  | <color:#10B981><b>通道① Vercel HTTPS</b></color> | 前端静态资源全球加速分发 |
+  | <color:#3B82F6><b>通道② CVM API</b></color> | 后端 API 经 Caddy 反向代理 |
+  | <color:#F43F5E>外部服务</color> | Azure TTS / 对象存储 |
+end legend
+
+@enduml

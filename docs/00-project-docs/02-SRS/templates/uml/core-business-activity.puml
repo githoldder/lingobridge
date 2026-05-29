@@ -1,0 +1,166 @@
+@startuml
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam activity {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam activityDiamond {
+  BackgroundColor #FEF3C7
+  BorderColor #F97316
+  FontColor #1E293B
+}
+skinparam arrow {
+  Color #3B82F6
+  FontColor #64748B
+}
+skinparam partition {
+  BorderColor #10B981
+  FontColor #1E293B
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F97316
+  FontColor #1E293B
+}
+
+title LingoBridge 核心业务活动图 (Core Business Activity Diagram)
+
+start
+
+:用户访问系统\n(浏览器 → Vercel SPA);
+
+partition "身份认证 (Authentication)" #F5F3FF {
+  :输入凭证\n(用户名/密码);
+  :JWT 令牌签发\n(users 表验证);
+
+  if (用户角色？\n(Role-Based Routing)) then
+  else
+  endif
+}
+
+if (角色判定) then (<color:#10B981>教师 (teacher)</color>)
+
+  partition "教师工作流 (Teacher Workflow)" #F0FDF4 {
+    :管理课程\n(CRUD courses 表);
+    note right
+      数据持久化
+      ──────────
+      courses
+      classes
+      class_members
+    end note
+
+    :上传课件\n(PDF/PPTX → courseware_files);
+    note right
+      文件存储
+      ──────────
+      files 表记录元数据
+      本地/对象存储保存文件
+    end note
+
+    :导入作业任务\n(Excel 解析 → assignment_nodes);
+    note right
+      数据持久化
+      ──────────
+      assignment_nodes
+      learning_tasks
+      vocabulary_items
+    end note
+
+    :开启直播课堂\n(live_sessions);
+
+    fork
+      :Presence 状态同步\n(实时在线检测);
+    fork again
+      :课堂评论互动\n(classroom_comments);
+    fork again
+      :课件翻页广播\n(course_pages 同步);
+    end fork
+
+    :查看学生提交\n(homework_submissions);
+    :试听录音 & 评分\n(recordings → learning_records);
+    note right
+      数据持久化
+      ──────────
+      learning_records
+      (成绩 + 反馈)
+    end note
+  }
+
+else (<color:#3B82F6>学生 (student)</color>)
+
+  partition "学生工作流 (Student Workflow)" #E0F2FE {
+    :浏览可用课程\n(course_members 关联查询);
+    :进入课堂\n(Presence 上线通知);
+
+    :查看课件内容\n(course_pages 渲染);
+
+    partition "TTS 听读练习" #DBEAFE {
+      :选择词汇/句子\n(vocabulary_items);
+      :TTS 语音合成播放\n(Azure Speech F0);
+      :跟读模仿练习;
+    }
+
+    partition "录音练习 (3 槽位机制)" #D1FAE5 {
+      :开始录音\n(MediaRecorder API);
+
+      repeat
+        :录制语音片段;
+        :保存至当前槽位\n(recordings 表\nslot_index: 0/1/2);
+        if (对录音满意？) then (满意)
+        else (不满意)
+          if (还有空槽位？) then (有)
+            :切换下一槽位;
+          else (已满)
+            :覆盖最早槽位;
+          endif
+        endif
+      repeat while (继续练习？) is (是)
+      -> 否;
+
+      note right
+        数据持久化
+        ──────────
+        recordings
+        (最多 3 条/任务)
+      end note
+    }
+
+    :选择最佳录音提交作业;
+    :创建提交记录\n(homework_submissions);
+    :关联录音尝试\n(homework_recording_attempts);
+    note right
+      数据持久化
+      ──────────
+      homework_submissions
+      homework_recording_attempts
+    end note
+
+    :查看成绩与反馈\n(learning_records);
+  }
+
+endif
+
+if (用户角色 == admin？) then (是)
+  partition "管理员仪表盘 (Admin Dashboard)" #FEF3C7 {
+    :用户管理\n(users CRUD);
+    :数据统计概览\n(全局学习数据聚合);
+    :系统配置\n(live_sessions / 存储策略);
+  }
+else (否)
+endif
+
+stop
+
+legend right
+  |= 角色 |= 颜色 |= 核心数据表 |
+  | <back:#D1FAE5>教师</back> | 绿色 | courses, files, assignment_nodes |
+  | <back:#93C5FD>学生</back> | 蓝色 | recordings, homework_submissions |
+  | <back:#FBBF24>管理员</back> | 橙色 | users, live_sessions |
+  | <back:#FFF7ED>持久化</back> | 注释 | learning_records (共享) |
+end legend
+
+@enduml

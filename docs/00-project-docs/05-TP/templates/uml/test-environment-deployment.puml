@@ -1,0 +1,81 @@
+@startuml test-environment-deployment
+
+skinparam backgroundColor #FFFFFF
+skinparam NodeBackgroundColor #EFF6FF
+skinparam NodeBorderColor #3B82F6
+skinparam NodeFontColor #1E3A5F
+skinparam ComponentBackgroundColor #3B82F6
+skinparam ComponentBorderColor #2563EB
+skinparam ComponentFontColor #FFFFFF
+skinparam DatabaseBackgroundColor #10B981
+skinparam DatabaseBorderColor #059669
+skinparam DatabaseFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam ArtifactBackgroundColor #F0FDF4
+skinparam ArtifactBorderColor #10B981
+skinparam CloudBackgroundColor #FFF1F2
+skinparam CloudBorderColor #F43F5E
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+
+title 测试环境部署图
+
+node "本地开发环境 (Local Dev)" as local {
+  component "Node.js 开发服务器\n:3001" as nodedev
+  component "Vite 开发服务器\n:5173" as vitedev
+  database "PostgreSQL 容器\n:5432" as pglocal
+  vitedev -down-> nodedev : API 代理\n/api/*
+  nodedev -down-> pglocal : SQL 查询
+}
+
+node "持续集成环境 (CI)" as ci {
+  component "GitHub Actions\nRunner" as runner
+  artifact "tsc 编译检查" as tsc
+  artifact "npm run build\n前端构建" as build
+  artifact "npm run backend:test\n28 个测试用例" as test
+  runner -down-> tsc : 步骤 1
+  tsc -down-> build : 步骤 2
+  build -down-> test : 步骤 3
+}
+
+node "E2E 沙箱环境 (Sandbox)" as sandbox {
+  component "Playwright\n浏览器实例" as pw
+  component "PM2 托管后端\n:3001" as pm2
+  database "JSON 种子数据库\ndata/db.json" as jsondb
+  pw -down-> pm2 : HTTP 请求
+  pm2 -down-> jsondb : 文件读写
+}
+
+cloud "生产冒烟环境 (Production Smoke)" as prod {
+  component "Vercel 前端\nSPA 静态托管" as vercel
+  component "腾讯云 CVM 后端\n101.34.72.227:3001" as cvm
+  database "PostgreSQL\n生产数据库" as pgprod
+  vercel -down-> cvm : HTTPS\n/api/* 转发
+  cvm -down-> pgprod : SQL 查询
+}
+
+note bottom of local
+  开发者日常编码调试
+  热重载 + 实时反馈
+end note
+
+note bottom of ci
+  每次 Push / PR 触发
+  自动化构建与测试
+end note
+
+note bottom of sandbox
+  Playwright E2E 测试专用
+  隔离环境 + 可重置数据
+end note
+
+note bottom of prod
+  部署后冒烟验证
+  关键接口可用性检查
+end note
+
+local -[hidden]right-> ci
+ci -[hidden]right-> sandbox
+sandbox -[hidden]right-> prod
+
+@enduml

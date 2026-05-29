@@ -1,0 +1,143 @@
+@startuml live-presence-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam sequence {
+  ArrowColor #3B82F6
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #F0F9FF
+  GroupBorderColor #3B82F6
+  GroupBackgroundColor #F8FAFC
+  DividerBorderColor #94A3B8
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F43F5E
+}
+skinparam defaultFontName "Microsoft YaHei"
+
+title 直播课堂 Presence 同步时序图 (Live Classroom Presence)
+
+actor "教师浏览器\n(Teacher Browser)" as TB
+participant "TeacherClassroomView\n教师课堂视图" as TCV #E0F2FE
+participant "Express Backend\n后端服务" as Backend #DBEAFE
+participant "StudentClassroomView\n学生课堂视图" as SCV #E0F2FE
+actor "学生浏览器\n(Student Browser)" as SB
+
+== 教师开启直播课堂 ==
+
+TB -> TCV : 点击"开始直播"
+activate TCV
+TCV -> Backend : POST /live-sessions\n{courseId, lessonNodeId,\nteacherId, status: 'active'}
+activate Backend
+Backend -> Backend : 创建 live_sessions 记录\nstatus = 'active'\nstarted_at = now()
+Backend --> TCV : 201 {liveSession:\nid, status, coursewareFileId}
+deactivate Backend
+
+TCV -> TCV : PDF.js 加载课件\n渲染第 1 页
+TCV --> TB : 显示直播课堂界面\nPDF 第 1 页
+
+== 学生加入课堂 ==
+
+SB -> SCV : 打开直播课堂链接
+activate SCV
+SCV -> Backend : GET /live-sessions/:id
+activate Backend
+Backend --> SCV : 200 {liveSession,\ncoursewareFileId,\ncurrentPage: 1}
+deactivate Backend
+SCV -> SCV : PDF.js 加载同一课件\n渲染第 1 页
+SCV --> SB : 显示课堂，同步到第 1 页
+
+== 教师翻页 → 学生同步 ==
+
+TB -> TCV : 教师点击"下一页"\n(page 1 → page 2)
+TCV -> Backend : POST /live-sessions/:id/signals\n{type: 'page_change',\npayload: {page: 2}}
+activate Backend
+Backend -> Backend : 存储信号记录\n更新 currentPage = 2
+Backend --> TCV : 200 {signal: confirmed}
+deactivate Backend
+TCV -> TCV : PDF.js 渲染第 2 页
+TCV --> TB : 教师看到第 2 页
+
+note over SCV #FEF3C7
+  学生端轮询机制
+  setInterval 每 2 秒拉取信号
+end note
+
+SCV -> Backend : GET /live-sessions/:id/signals\n?since=lastTimestamp
+activate Backend
+Backend --> SCV : 200 {signals: [\n{type: 'page_change',\npayload: {page: 2}}]}
+deactivate Backend
+SCV -> SCV : 检测到 page_change\nPDF.js 翻到第 2 页
+SCV --> SB : 学生页面同步到第 2 页
+
+...教师继续翻页，学生持续轮询同步...
+
+== 举手互动流程 (Hand-Raise) ==
+
+SB -> SCV : 学生点击"举手 ✋"
+activate SCV
+SCV -> Backend : POST /live-sessions/:id/signals\n{type: 'hand_raise',\npayload: {studentId,\ndisplayName: '张三'}}
+activate Backend
+Backend -> Backend : 存储举手信号
+Backend --> SCV : 200 {signal: confirmed}
+deactivate Backend
+SCV --> SB : 显示"已举手，等待老师授权"
+
+TCV -> Backend : GET /live-sessions/:id/signals\n?since=lastTimestamp
+activate Backend
+Backend --> TCV : 200 {signals: [\n{type: 'hand_raise',\npayload: {studentId,\ndisplayName: '张三'}}]}
+deactivate Backend
+
+TCV --> TB : 🔔 通知: "张三 举手了"
+TB -> TCV : 教师点击"授权发言"
+
+TCV -> Backend : POST /live-sessions/:id/signals\n{type: 'authorize_mic',\npayload: {studentId,\nauthorized: true}}
+activate Backend
+Backend -> Backend : 存储授权信号
+Backend --> TCV : 200 {signal: confirmed}
+deactivate Backend
+TCV --> TB : 显示"已授权 张三 发言"
+
+SCV -> Backend : GET /live-sessions/:id/signals\n?since=lastTimestamp
+activate Backend
+Backend --> SCV : 200 {signals: [\n{type: 'authorize_mic',\npayload: {studentId,\nauthorized: true}}]}
+deactivate Backend
+
+SCV -> SCV : 检测到 authorize_mic\n匹配当前 studentId
+SCV -> SB : navigator.mediaDevices\n.getUserMedia({audio: true})
+activate SB
+SB --> SCV : MediaStream 获取成功
+deactivate SB
+SCV -> SCV : 开始采集音频\n显示"发言中 🎙️"
+SCV --> SB : 学生可以发言
+deactivate SCV
+
+== 教师结束直播 ==
+
+TB -> TCV : 教师点击"结束直播"
+TCV -> Backend : POST /live-sessions/:id/signals\n{type: 'end',\npayload: {reason: 'teacher_ended'}}
+activate Backend
+Backend -> Backend : 存储结束信号\nUPDATE live_sessions\nSET status = 'ended',\nended_at = now()
+Backend --> TCV : 200 {signal: confirmed}
+deactivate Backend
+TCV -> TCV : 关闭本地资源\n停止录制(如有)
+TCV --> TB : 显示"直播已结束"\n跳转课程详情
+
+SCV -> Backend : GET /live-sessions/:id/signals\n?since=lastTimestamp
+activate Backend
+Backend --> SCV : 200 {signals: [\n{type: 'end',\npayload: {reason:\n'teacher_ended'}}]}
+deactivate Backend
+
+SCV -> SCV : 检测到 end 信号
+SCV -> SB : MediaStream.getTracks()\n.forEach(track => track.stop())
+SCV -> SCV : 清理所有音频/视频资源\n停止轮询
+SCV --> SB : 显示"直播已结束"\n返回课程页面
+
+deactivate TCV
+
+@enduml

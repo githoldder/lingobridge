@@ -64,7 +64,7 @@ To prevent massive breaking code leaks and regression in critical features (such
 
 ## 4. Ralph Execution Framework (四层分解约束)
 
-所有文档生产和工程开发活动必须遵循 Ralph 四层分解模型：**Object → Key-Result → Task → Step**。详细规则参见 [ralph-execution-framework.md](file:///Users/caolei/Desktop/LingoBridge/.agent/rules/ralph-execution-framework.md)。
+所有文档生产和工程开发活动必须遵循 Ralph 四层分解模型：**Object → Key-Result → Task → Step**。详细规则参见 [ralph-execution-framework.md](./ralph-execution-framework.md)。
 
 核心执行纪律：
 * **单次单问题**：Agent 每次只处理一个 Step，禁止跨 Step 混合执行。
@@ -75,7 +75,7 @@ To prevent massive breaking code leaks and regression in critical features (such
 
 ## 5. Adversarial Audit Protocol (对抗式审核)
 
-所有生命周期文档（01-FA 至 07-UM）的内容产出必须经过执行-审核双 Agent 对抗环。详细规则参见 [adversarial-audit.md](file:///Users/caolei/Desktop/LingoBridge/.agent/rules/adversarial-audit.md)。
+所有生命周期文档（01-FA 至 07-UM）的内容产出必须经过执行-审核双 Agent 对抗环。详细规则参见 [adversarial-audit.md](./adversarial-audit.md)。
 
 核心机制：
 * **Executor** 按原子任务产出 LaTeX 内容。

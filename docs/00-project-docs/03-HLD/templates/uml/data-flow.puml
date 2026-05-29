@@ -1,0 +1,107 @@
+@startuml data-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam rectangle {
+  BorderColor #3B82F6
+  FontColor #1E293B
+  BackgroundColor #E0F2FE
+}
+skinparam agent {
+  BorderColor #10B981
+  FontColor #1E293B
+  BackgroundColor #F0FDF4
+}
+skinparam database {
+  BorderColor #F97316
+  FontColor #1E293B
+  BackgroundColor #FFF7ED
+}
+skinparam ArrowColor #3B82F6
+skinparam ArrowFontColor #64748B
+skinparam ArrowFontSize 11
+
+title LingoBridge 数据流图 — 第一层 (Level 1 DFD)
+
+agent "教师\n(Teacher)" as teacher
+agent "学生\n(Student)" as student
+agent "管理员\n(Admin)" as admin
+agent "Azure TTS API\n(外部服务)" as azure #FDF2F8
+
+rectangle "P1\n身份认证" as P1
+rectangle "P2\n课程与班级管理" as P2
+rectangle "P3\n课件处理" as P3
+rectangle "P4\n作业管理" as P4
+rectangle "P5\n录音采集与评测" as P5
+rectangle "P6\n直播课堂\nPresence" as P6
+rectangle "P7\n学习记录统计" as P7
+
+database "D1 用户库\n(users)" as D1
+database "D2 课程库\n(courses/lessons/tasks)" as D2
+database "D3 文件存储\n(files/storage)" as D3
+database "D4 学习记录库\n(learning_records/\nrecordings)" as D4
+database "D5 直播会话库\n(live_sessions)" as D5
+
+' === 外部实体 → 过程 ===
+teacher --> P1 : 登录凭证
+student --> P1 : 登录凭证
+admin --> P1 : 登录凭证
+
+teacher --> P2 : 创建/编辑课程、班级
+admin --> P2 : 管理用户与课程
+
+teacher --> P3 : 上传 PDF/PPTX 课件
+student --> P3 : 请求课件页面
+
+teacher --> P4 : 发布作业、评分反馈
+student --> P4 : 提交作业
+
+student --> P5 : 上传录音 (3-slot)
+P5 --> azure : 请求 TTS 合成音频
+azure --> P5 : 返回合成语音
+
+teacher --> P6 : 开启/结束直播课堂
+student --> P6 : 加入直播、举手连麦
+
+teacher --> P7 : 查询班级学习报表
+student --> P7 : 查看个人学习进度
+admin --> P7 : 查看全局统计面板
+
+' === 过程 → 外部实体 ===
+P1 --> teacher : JWT Token
+P1 --> student : JWT Token
+P1 --> admin : JWT Token
+
+P7 --> teacher : 学习报表数据
+P7 --> student : 个人进度数据
+P7 --> admin : 全局统计数据
+
+' === 过程 ↔ 数据存储 ===
+P1 --> D1 : 验证/查询用户
+D1 --> P1 : 用户记录
+
+P2 --> D1 : 查询角色权限
+P2 --> D2 : 读写课程/班级/课时
+D2 --> P2 : 课程数据
+
+P3 --> D2 : 关联课件到课时
+P3 --> D3 : 存储/读取课件文件
+D3 --> P3 : 课件文件
+
+P4 --> D2 : 读取作业节点配置
+P4 --> D4 : 存储作业提交记录
+D4 --> P4 : 提交状态
+
+P5 --> D3 : 存储录音文件
+P5 --> D4 : 写入录音与评分记录
+D4 --> P5 : 历史录音记录
+
+P6 --> D5 : 创建/更新直播会话
+D5 --> P6 : 会话状态
+P6 --> D2 : 读取课时内容
+
+P7 --> D4 : 聚合学习记录
+D4 --> P7 : 统计原始数据
+P7 --> D2 : 读取课程结构
+
+@enduml

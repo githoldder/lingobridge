@@ -1,0 +1,33 @@
+@startuml runtime-activity
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBorderColor #10B981
+skinparam ArrowColor #3B82F6
+
+start
+:教师在排课日历中创建课时并绑定默认课件;
+:学生在 Dashboard 点击“进入教室”;
+if (教师是否已进入并开启信道?) then (未开启)
+    :学生端界面自动触发等待状态;
+    :学生端后台开启自适应指数退避轮询;
+    while (轮询重试次数 < 10?) is (是)
+        :等待指数递增的等待时间 (T_wait);
+        :在后台静默轮询 Presence 接口;
+        if (检测到教师已在线?) then (已在线)
+            :打破等待状态并跳出循环;
+            break
+        else (未在线)
+            :递增重试计数并继续等待;
+        endif
+    endwhile
+    if (轮询重试次数 == 10?) then (是)
+        :触发连接超时警告;
+        :优雅重定向回系统主页;
+        stop
+    endif
+else (已开启)
+endif
+:接收后端广播的默认课件标识 (defaultCoursewareFileId);
+:前端调用 PDF.js 分页解析并用 Canvas 高保真渲染;
+:进入实时 Presence 状态同步与白板翻页跟随阶段;
+stop
+@endum

@@ -1,0 +1,145 @@
+@startuml courseware-upload-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam participant {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam sequence {
+  ArrowColor #3B82F6
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #F0F9FF
+  GroupBorderColor #3B82F6
+  GroupBackgroundColor #F8FAFC
+  DividerBorderColor #94A3B8
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F43F5E
+}
+skinparam defaultFontName "Microsoft YaHei"
+
+title 课件上传时序图 (Courseware Upload Sequence)
+
+actor "教师\n(Teacher)" as Teacher
+participant "CoursewareTab\n课件管理标签页" as CWTab #E0F2FE
+participant "apiClient\nHTTP 客户端" as apiClient #E0F2FE
+participant "Express Router\n路由层" as Router #DBEAFE
+participant "Auth Middleware\nJWT 中间件" as AuthMW #FEE2E2
+participant "filesRepo\n文件仓储" as filesRepo #D1FAE5
+participant "coursesRepo\n课程仓储" as coursesRepo #D1FAE5
+database "PostgreSQL" as DB #D1FAE5
+collections "Local Storage\n本地磁盘" as Disk #FEF3C7
+
+== 课件上传流程 ==
+
+Teacher -> CWTab : 点击"上传课件"按钮\n选择 PDF / PPTX 文件
+activate CWTab
+
+CWTab -> CWTab : FileReader.readAsDataURL(file)\n转换为 base64 编码
+
+CWTab -> apiClient : 检查当前课程\nlessonNodeId 是否存在
+activate apiClient
+
+alt #FEF3C7 lessonNodeId 不存在 (首次上传)
+  apiClient -> Router : POST /lesson-nodes\n{courseId, title: "默认课时"}
+  activate Router
+  Router -> AuthMW : 验证 JWT Token
+  activate AuthMW
+  AuthMW --> Router : 验证通过 (teacherId)
+  deactivate AuthMW
+  Router -> DB : INSERT INTO lesson_nodes\n(course_id, title, sort_order)
+  activate DB
+  DB --> Router : 新 lessonNode 记录
+  deactivate DB
+  Router --> apiClient : 201 {lessonNode}
+  deactivate Router
+  apiClient --> CWTab : 返回 lessonNodeId
+end
+
+CWTab -> apiClient : POST /coursewares\n{courseId, lessonNodeId,\nfileName, mimeType,\nbase64Data}
+apiClient -> Router : HTTP POST /coursewares
+activate Router
+Router -> AuthMW : 验证 JWT Token
+activate AuthMW
+AuthMW --> Router : 验证通过 (teacherId)
+deactivate AuthMW
+
+Router -> DB : SELECT * FROM lesson_nodes\nWHERE id = ? AND course_id = ?
+activate DB
+DB --> Router : lessonNode 记录
+deactivate DB
+
+alt #FEE2E2 lessonNodeId 不属于该课程
+  Router --> apiClient : 400 {error:\n"课时不属于该课程"}
+  apiClient --> CWTab : 显示错误
+  CWTab --> Teacher : 提示错误信息
+else #D1FAE5 验证通过
+  Router -> Router : 解码 base64 数据
+  Router -> filesRepo : createFile({ownerId,\ncourseId, lessonNodeId,\nfileName, mimeType, buffer})
+  activate filesRepo
+
+  filesRepo -> Disk : fs.writeFile(\nuploadDir/courseId/fileName,\nbuffer)
+  activate Disk
+  Disk --> filesRepo : 文件写入成功
+  deactivate Disk
+
+  filesRepo -> DB : INSERT INTO files\n(owner_id, course_id,\nlesson_node_id, file_name,\nmime_type, file_path, size)
+  activate DB
+  DB --> filesRepo : files 记录 (fileId)
+  deactivate DB
+  filesRepo --> Router : file 记录
+  deactivate filesRepo
+
+  Router -> DB : INSERT INTO courseware_files\n(id, course_id, lesson_node_id,\nfile_name, file_path, mime_type)
+  activate DB
+  DB --> Router : courseware_files 记录\n(coursewareFileId)
+  deactivate DB
+
+  Router -> Router : 解析 PDF/PPTX 页面\n生成每页元数据
+
+  loop 每一页 (page 1..N)
+    Router -> DB : INSERT INTO course_pages\n(courseware_file_id, course_id,\npage_number, content_snapshot)
+    activate DB
+    DB --> Router : course_pages 记录
+    deactivate DB
+  end
+
+  Router --> apiClient : 201 {CoursewareDto:\nid, fileName, pageCount,\ncreatedAt}
+  deactivate Router
+  apiClient --> CWTab : 返回 CoursewareDto
+  deactivate apiClient
+end
+
+CWTab -> CWTab : 更新课件列表 UI\n显示新上传的课件
+
+== 设置默认课件 (星标选择) ==
+
+Teacher -> CWTab : 点击课件项的 ★ 星标
+activate CWTab
+CWTab -> apiClient : PATCH /courses/:courseId\n{defaultCoursewareFileId:\ncoursewareFileId}
+activate apiClient
+apiClient -> Router : HTTP PATCH
+activate Router
+Router -> AuthMW : 验证 JWT Token
+activate AuthMW
+AuthMW --> Router : 验证通过
+deactivate AuthMW
+Router -> coursesRepo : update(courseId,\n{default_courseware_file_id})
+activate coursesRepo
+coursesRepo -> DB : UPDATE courses\nSET default_courseware_file_id = ?\nWHERE id = ?
+activate DB
+DB --> coursesRepo : 更新成功
+deactivate DB
+coursesRepo --> Router : 更新后的课程记录
+deactivate coursesRepo
+Router --> apiClient : 200 {course}
+deactivate Router
+apiClient --> CWTab : 更新成功
+deactivate apiClient
+CWTab -> CWTab : UI 高亮 ★ 标记\n其他课件取消高亮
+CWTab --> Teacher : 默认课件已设置
+deactivate CWTab
+
+@enduml

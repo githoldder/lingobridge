@@ -1,0 +1,134 @@
+@startuml student-operation-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 学生操作流程图
+
+start
+
+:注册/登录系统;
+note right
+  新用户注册账号
+  或已有账号登录
+end note
+
+:查看已加入课程;
+note right
+  课程列表页面
+  显示所有关联课程
+end note
+
+:进入课程详情;
+
+fork
+
+  partition "课堂路径" #EFF6FF {
+    :进入直播教室;
+
+    :等待教师开课;
+    note right
+      脉冲等待动画
+      轮询 live_sessions 状态
+    end note
+
+    :同步翻页查看课件;
+    note right
+      接收教师 Presence 广播
+      自动翻到当前页码
+    end note
+
+    :发送弹幕消息;
+    note right
+      classroom_comments
+      实时文字互动
+    end note
+
+    :举手申请连麦;
+    note right
+      发送举手请求
+      等待教师批准
+    end note
+
+    :退出课堂;
+  }
+
+fork again
+
+  partition "作业路径" #F0FDF4 {
+    :进入作业页;
+
+    :选择课时;
+    note right
+      按 lesson_node
+      筛选作业内容
+    end note
+
+    :查看任务列表;
+    note right
+      learning_tasks
+      每个任务含目标词汇
+    end note
+
+    :播放 TTS 示范发音;
+    note right
+      点击喇叭图标
+      播放标准发音音频
+    end note
+
+    while (还有录音插槽?) is (是)
+      :录制跟读音频;
+      note right
+        3 个录音插槽
+        MediaRecorder API
+      end note
+
+      :回放对比;
+      note right
+        与 TTS 示范对比
+        选择最佳录音
+      end note
+    endwhile (否)
+
+    :确认最佳录音;
+
+    :提交全部作业;
+    note right
+      POST /homework/submit
+      批量提交所有任务
+    end note
+  }
+
+fork again
+
+  partition "词汇路径" #FFF7ED {
+    :进入词汇练习;
+
+    :翻卡学习;
+    note right
+      正面: 目标语言词汇
+      背面: 释义与例句
+    end note
+
+    :记录掌握进度;
+    note right
+      更新 learning_records
+      标记已掌握/待复习
+    end note
+  }
+
+end fork
+
+stop
+
+@enduml
