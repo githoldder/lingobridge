@@ -754,4 +754,114 @@ Action: Completely refactor docs/00-project-docs/01-FA/templates/data/chap01.tex
 [Status] | Academic 01-FA feasibility study completely rewritten with 100% clean XeLaTeX output! | Done
 
 
+# 2026-05-25 Anti-AI & Anti-Markdown LaTeX Writing Rules Solidified
+Date: 2026-05-25
+Action: Add dedicated project writing rulebook (.agent/rules/latex-writing-discipline.md) and upgrade document standard skill (.agent/skills/05_lingobridge_docs_standard/SKILL.md) to strictly defensive Markdown syntax leakage and AI narratives in LaTeX.
 
+## Added & Updated Files:
+- .agent/rules/latex-writing-discipline.md: Canon rules outlining the 4 absolute high-voltage defense lines and checklist.
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Upgraded standard skill locking academic style and preventing AI phrasing.
+
+[Status] | Canonical GBT-compliant LaTeX writing rules globally solidified and committed locally | Done
+
+
+# 2026-05-26 Ralph Execution Framework + Adversarial Audit Protocol
+Date: 2026-05-26
+Action: Solidified the Ralph 4-layer decomposition framework (Object→KR→Task→Step) and adversarial dual-agent audit protocol into project rules.
+
+## Added & Updated Files:
+- .agent/rules/ralph-execution-framework.md: Ralph 四层分解模型、单次单问题原则、调研先行原则、脚本注入优先规范。
+- .agent/rules/adversarial-audit.md: 执行-审核双 Agent 对抗环、7 维度扫描矩阵、结构化审核报告格式、强度升级规则。
+- .agent/rules/agent-ops-governance.md: 追加 Section 4 (Ralph) 和 Section 5 (Adversarial Audit) 引用链。
+- Defined latex-auditor subagent: 毒舌论文打假专家人设，接收 LaTeX 产出后按审核矩阵逐条扫描。
+
+## Commit:
+42ac8a0: rules: Ralph 四层分解框架 + 对抗式审核机制落地
+
+[Status] | Ralph + Adversarial Audit rules solidified and committed | Done
+
+
+# 2026-05-26 01-FA Chapter Separation & Ralph JSON Alignment & Auditor Verification
+Date: 2026-05-26
+Action: Physically split chap01.tex into 4 separate files representing Chapter 1 to Chapter 4 to resolve tight coupling. Updated 01-FA.tex to include all 4 files. Re-aligned the target_file paths in sprint07-prd-260526-v0.1.json using the Ralph execution framework. Spawned and ran the latex-auditor subagent to perform a full 7-dimension scan on chap01.tex, successfully verifying the adversarial audit workflow.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Kept Chapter 1 only (Technological Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Created for Chapter 2 (Economic Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Created for Chapter 3 (Operational Feasibility).
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Created for Chapter 4 (Conclusion).
+- docs/00-project-docs/01-FA/templates/01-FA.tex: Linked to all 4 chapter files.
+- prds/json/sprint07-prd-260526-v0.1.json: Updated tasks target_file references.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly into 9 pages.
+
+[Status] | 01-FA chapters split, Ralph JSON updated, and auditor verified successfully | Done
+
+
+# 2026-05-26 01-FA Feasibility Study Academic Major Revision Completed
+Date: 2026-05-26
+Action: Undertook a comprehensive revision of all 01-FA chapters (chap01-chap04) to resolve the major revision/rejected verdict from the reviewer. Completely removed all residual Markdown code markup, English fragments, self-promoting hype terms, and unverified absolute metrics. Demoted uncompleted intelligent features to future work and aligned metrics to documented facts under GBT software standards.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Removed "In" translation residue, added page size and millisecond targets, demoted ASR/WebRTC to planned future scope.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Replaced 路演 cost hype with realistic, replication-dependent cache economy descriptions.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Replaced pixels and aesthetics with factual task flows and conditional milestones.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Concluded conditional feasibility under small concurrency limits.
+- docs/00-project-docs/01-FA/templates/fonts/Fangsong.ttf: Copied Kaiti.ttf to prevent XeLaTeX windows-local fontspec error for monospace fallback.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Flawlessly compiled into the final 9-page GBT-compliant PDF.
+
+[Status] | Academic 01-FA feasibility study completely revised, compiled, and finalized! | Done
+
+
+# 2026-05-27 02-SRS Requirements Specification Expansion & Compliance Alignment (Sprint 08)
+Date: 2026-05-27
+Action: Reviewed all four chapters of 02-SRS for GBT-9385 alignment. Fixed LaTeX errors in chap03.tex. Removed all absolute/exaggerated claims (100% progress, perfect compatibility, seamless transitions) and typos. Created UML use-case.puml and classroom-state.puml. Compiled flawlessly into 22 pages.
+
+## Added & Updated Files:
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Replaced "无缝对接" with "集成对接".
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Fixed unescaped percent in row 199. Removed exaggerated claims (100% alignment, perfect i18n/UI compatibility, seamless slide transitions). Fixed a repeated word typo.
+- docs/00-project-docs/02-SRS/templates/uml/use-case.puml: Created PlantUML modeling file for LingoBridge MVP use cases.
+- docs/00-project-docs/02-SRS/templates/uml/classroom-state.puml: Created PlantUML modeling file for online classroom presence states.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled successfully into a flawless 22-page document.
+- prds/json/sprint08-prd-260527-v0.1.json: Marked status as Completed.
+
+[Status] | SRS 02-SRS revised, compiled, finalized | Done
+
+# 2026-05-27 02-SRS Three-Line Tables & 01-FA TikZ Clean-up & Rule Patching (Sprint 08-R2)
+Date: 2026-05-27
+Action: Patched rules with two new absolute red lines (three-line table enforcement and TikZ/figure decoup). Standardized all 16 tabular/longtable instances in 02-SRS to booktabs format. Cleared inline TikZ from 01-FA, migration of draw_chart.py, and embedded both usecase and state diagram figures in 02-SRS. Compiled both flawlessly.
+
+## Added & Updated Files:
+- .agent/rules/latex-writing-discipline.md: Added Red Line 5 (booktabs three-line table enforcement) and Red Line 6 (TikZ/pgfplots inline drawing decoup ban).
+- docs/00-project-docs/02-SRS/templates/thusetup.tex: Added booktabs and added figure/ directory to graphicspath.
+- docs/00-project-docs/01-FA/templates/thusetup.tex: Added booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap01.tex: Standardized two tables to booktabs three-line tables.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Standardized two tables to booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Standardized 9 tables to booktabs.
+- docs/00-project-docs/02-SRS/templates/data/chap04.tex: Standardized three tables (including demand traceability longtable) to booktabs, removed double stars bold residuals, and embedded use-case and classroom-state PDF diagrams.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Replaced 40 lines of inline TikZ with cost_comparison.pdf graphic inclusion.
+- docs/00-project-docs/01-FA/scripts/draw_chart.py: Migrated drawing script from templates to scripts.
+- docs/00-project-docs/01-FA/templates/figures/cost_comparison.pdf: Re-generated using system python matplotlib.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled flawlessly into 23-page compliant PDF.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly into 9-page compliant PDF.
+
+[Status] | Standardized three-line tables & decoupled TikZ & built successfully | Done
+
+# 2026-05-27 01-FA 2x Academic Expansion & 02-SRS Professional Reform (Sprint 09)
+Date: 2026-05-27
+Action: Expanded 01-FA to 12 pages with detailed multi-tier budgets, risk matrix, and multi-cloud providers audit. Fixed SRS table overflow bugs. Embedded Use Case & State Diagrams into main chapters. Added DFD & ERD UML modeling files and created detailed Data Dictionaries for 8 SaaS entities. Compiled both flawlessly.
+
+## Added & Updated Files:
+- docs/00-project-docs/02-SRS/templates/data/chap01.tex: Fixed Table 1.1 and 1.2 column widths to prevent text overflow.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Embedded usecase PDF diagram into main product description chapter.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Embedded state transition diagram, embedded Level 1 Data Flow Diagram (DFD), and added detailed Data Dictionary tables for 8 entities.
+- docs/00-project-docs/02-SRS/templates/data/chap04.tex: Cleaned up redundant diagram Appendix sections.
+- docs/00-project-docs/02-SRS/templates/uml/data-flow.puml: Created DFD Level 1 PlantUML file.
+- docs/00-project-docs/02-SRS/templates/uml/erd.puml: Created SaaS Database ER Diagram PlantUML file.
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Expanded ASR/TTS evaluation to 3x, added cloud vendors comparison table.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Added 4-level budget tiers table and 3 standard budget versions table with citations.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Expanded tri-language Context hot-switching and responsive layouts.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Added full academic risk assessment matrix table (emoji-free).
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Re-compiled flawlessly to 27 pages.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly to 12 pages.
+
+[Status] | 01-FA expanded 2x, SRS tables fixed, diagrams/UML integrated, DFD/ERD & Data Dictionary added! | Done

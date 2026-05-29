@@ -1,0 +1,116 @@
+@startuml api-interaction-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam sequence {
+  ArrowColor #3B82F6
+  ArrowFontColor #64748B
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #E0F2FE
+  ParticipantBorderColor #3B82F6
+  ParticipantBackgroundColor #E0F2FE
+  ParticipantFontColor #1E293B
+  ActorBorderColor #10B981
+  ActorBackgroundColor #F0FDF4
+  ActorFontColor #1E293B
+  GroupBorderColor #3B82F6
+  DividerBorderColor #94A3B8
+  DividerFontColor #64748B
+}
+skinparam note {
+  BackgroundColor #FEF3C7
+  BorderColor #F59E0B
+  FontColor #1E293B
+}
+
+title LingoBridge API 交互时序图
+
+actor "用户\n(浏览器)" as user
+participant "前端 SPA\n(React)" as spa
+participant "apiClient.ts\n(Axios)" as api_client
+participant "Vercel Proxy\n(Edge Function)" as vercel
+participant "Express Router\n(:3001)" as express
+participant "JWT 认证\n中间件" as jwt_mw
+participant "Repository 层" as repo
+database "PostgreSQL" as pg
+
+== 正常请求流程 (Happy Path) ==
+
+user -> spa : 触发操作\n(如: 查看课程列表)
+activate spa #E0F2FE
+
+spa -> api_client : 调用 API 方法\ngetCourses()
+activate api_client #E0F2FE
+
+api_client -> api_client : 从 localStorage\n读取 JWT Token
+api_client -> vercel : GET /api/courses\nAuthorization: Bearer <token>
+activate vercel #F0FDF4
+
+vercel -> express : 路由重写转发\nGET /api/courses
+activate express #E0F2FE
+
+express -> jwt_mw : 进入认证中间件
+activate jwt_mw #E0F2FE
+
+jwt_mw -> jwt_mw : 提取 Bearer Token\njwt.verify(token, secret)
+jwt_mw -> express : 验证通过\nreq.user = { id, role }
+deactivate jwt_mw
+
+express -> repo : coursesRepo.findAll(\n{ teacherId | studentId })
+activate repo #E0F2FE
+
+repo -> pg : SELECT * FROM courses\nWHERE ...
+activate pg #FFF7ED
+pg --> repo : 查询结果集 (rows)
+deactivate pg
+
+repo --> express : 课程 DTO 数组
+deactivate repo
+
+express --> vercel : 200 OK\n{ data: [...courses] }
+deactivate express
+
+vercel --> api_client : JSON 响应
+deactivate vercel
+
+api_client --> spa : 解析后的数据
+deactivate api_client
+
+spa --> user : 渲染课程列表 UI
+deactivate spa
+
+== 异常路径: Token 过期 (401 Unauthorized) ==
+
+user -> spa : 触发操作
+activate spa #FDF2F8
+
+spa -> api_client : 调用 API 方法
+activate api_client #FDF2F8
+
+api_client -> vercel : GET /api/courses\nAuthorization: Bearer <expired_token>
+activate vercel #F0FDF4
+
+vercel -> express : 转发请求
+activate express #FDF2F8
+
+express -> jwt_mw : 进入认证中间件
+activate jwt_mw #FDF2F8
+
+jwt_mw -> jwt_mw : jwt.verify() 失败\nTokenExpiredError
+jwt_mw --> express : 拒绝请求
+deactivate jwt_mw
+
+express --> vercel : **401 Unauthorized**\n{ error: "令牌已过期" }
+deactivate express
+
+vercel --> api_client : 401 响应
+deactivate vercel
+
+api_client -> api_client : Axios 拦截器捕获 401\n清除本地 Token
+api_client --> spa : 抛出认证错误
+deactivate api_client
+
+spa --> user : 重定向至登录页\n显示 "会话已过期，请重新登录"
+deactivate spa
+
+@enduml

@@ -1,4 +1,56 @@
-\chapter{数据库设计（概要）}
+\chapter{系统结构设计}
 
-% TODO: ER 图、主要实体关系
-% users, sessions, courses, live_class, courseware_file, homework, learning_record
+\section{系统功能模块划分}
+为了贯彻软件工程中高内聚、低耦合的模块化设计思想，LingoBridge 平台在逻辑与物理结构上进行了严格的子系统解耦。系统主要划分为用户与鉴权子系统、班级与课程子系统、在线互动课堂子系统、作业与词汇子系统以及语音与合成子系统。各子系统之间职责边界分明，均通过预先定义的数据传输对象（DTO）和标准 RESTful API 路由进行安全通信，任何子系统内部的重构均不会影响其他兄弟模块的稳定运行。
+
+LingoBridge 系统组件与核心模块物理结构关系如图 3.1 所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/module-component.pdf}
+\caption{LingoBridge 系统核心组件与模块物理结构关系图}
+\label{fig:module_component}
+\end{figure}
+
+
+\section{各模块功能说明}
+为了使系统各层级开发工程师能够明确所负责模块的输入输出约束与核心处理边界，特制定表 3.1 所示的系统功能模块与核心职责规格定义表。表 3.1 中的每一项定义都是后续详细设计（LLD）以及代码物理开发的重要技术约束。
+
+\begin{table}[H]
+\centering
+\caption{LingoBridge 系统核心功能模块与功能职责规格定义表}
+\label{tab:module_def}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{模块名称} & \textbf{对应核心文件/服务} & \textbf{核心职责与核心处理边界说明} \\
+\midrule
+用户与鉴权模块 & \texttt{users.ts / AuthContext} & 负责实现用户多语种注册、密码散列化校验、基于 JWT 的鉴权令牌签发，以及学生和教师基础名册的管理维护。 \\
+班级与课程模块 & \texttt{classes.ts / courses.ts} & 负责班级 CRUD 维护、学员绑定映射、课程大纲管理，以及 PDF/XLSX 课件作业包与特定课时节点的上传关联。 \\
+在线互动课堂模块 & \texttt{app.ts / TeacherClassroom} & 负责在线状态机（Presence）同步、WebSocket 翻页控制信令流转分发、学生等待室渲染，以及候选 WebRTC 画笔画板数据传输协商。 \\
+作业与词汇模块 & \texttt{assignments.ts / HomeworkView} & 负责解析 Excel 导入作业、执行白名单无损字段更新、通过唯一键去重机制防重防刷，以及学生作答录音的多插槽持久化上报。 \\
+语音与合成模块 & \texttt{app.ts / ttsService.ts} & 调度云端 TTS 引擎进行标准拼音发音流式合成，控制 L1 内存与 L2 磁盘双层缓存的高效置换，并提供后续演进 ASR 语音评测通道的占位符对接。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{模块间调用关系}
+系统在运行时，前端 UI 展示组件并不直接处理任何底层业务逻辑或物理存储。当用户在客户端发起操作（例如教师在交互课堂中执行 PDF 课件翻页、学生在作业面板点击确认提交录音等）时，前端组件首选调用 \texttt{apiClient.ts} 中封装 of 无状态客户端 API 方法。该方法会在 HTTP 请求头中自动附加当前用户的 Authorization JWT 鉴权令牌，并将数据流以标准的 JSON 或 multipart 数据格式推送到后端的 Express.js 控制路由。
+
+后端路由层接收请求后，首选通过身份鉴权拦截器提取 JWT，校验用户角色是否符合该接口的权限白名单（如教师权限或管理员权限）。校验通过后，控制器将请求参数传递给专门的 Repository 仓库层（例如 \texttt{coursesRepo} 或 \texttt{assignmentsRepo}）。仓库层通过统一的数据传输对象实现双模（JSON 文件和 PostgreSQL 物理数据库连接池）底座缩放，在不影响上层控制器逻辑的前提下，完成元数据的持久化读写。最终，处理结果沿着原调用链层层返回，由前端页面接收 DTO 进行状态刷新并渲染给用户。
+
+系统核心组件调用与 API 握手时序交互如图 3.2 所示。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/module-call-sequence.pdf}
+\caption{LingoBridge 系统核心组件调用与 API 握手时序图}
+\label{fig:module_call_sequence}
+\end{figure}
+
+
+\section{子系统划分说明}
+本系统在物理结构上清晰地被划分为前端单页面展示子系统与后端信令控制子系统。
+
+前端子系统在浏览器环境中执行，主要基于 React 19 强类型组件体系构建，其内部通过 Context 状态机制管理用户鉴权（AuthContext）与国际化多语言（LanguageContext）上下文。前端子系统在渲染上推行轻量原则，如 PDF 课件的分页解析与 Canvas 绘制均全部下推至学生和教师端本地浏览器执行，从而杜绝了向服务器端发起渲染请求的必要性。
+
+后端子系统则运行于 Node.js 服务端沙盒中，其内部划分为 Express 控制路由层、Repository 仓库持久化层、文件 I/O 缓冲区以及外部云引擎对接网关。这种严格的子系统隔离设计，不仅降低了服务器端高昂的计算和网络费用，也极大地提升了系统在遇到高并发、跨海长连接抖动等复杂网络情境下的弹性与稳定性能。

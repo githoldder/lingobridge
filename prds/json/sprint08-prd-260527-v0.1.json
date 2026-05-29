@@ -1,0 +1,531 @@
+{
+  "sprint": "08",
+  "version": "0.1",
+  "status": "Completed",
+  "lastUpdated": "2026-05-27 00:00",
+  "objective": "基于 reference 材料与 GB/T 9385 风格完成 02-SRS 软件需求规格说明书的出版级扩写，目标成稿约 20 页",
+  "target_document": {
+    "name": "LingoBridge 软件需求规格说明书",
+    "main_file": "docs/00-project-docs/02-SRS/templates/02-SRS.tex",
+    "chapter_files": [
+      "docs/00-project-docs/02-SRS/templates/data/chap01.tex",
+      "docs/00-project-docs/02-SRS/templates/data/chap02.tex",
+      "docs/00-project-docs/02-SRS/templates/data/chap03.tex",
+      "docs/00-project-docs/02-SRS/templates/data/chap04.tex"
+    ],
+    "target_length": "约 20 页，正文约 14000-16000 中文字，不含封面、目录、参考文献",
+    "writing_style": "自然、连贯、像写书一样写论文；除非任务明确要求表格、编号或验收清单，否则正文采用段落式文章，不写提纲式短句"
+  },
+  "ralph_mechanism": {
+    "role_definition": "Ralph 是本轮文档扩写的任务调度框架。每个 agent 只处理自己负责的章节、自然段和图表工件，不跨文件重构，不改动未分配章节。",
+    "execution_loop": [
+      "读取 input_refs 与目标章节现状",
+      "按 paragraph_plan 逐自然段扩写",
+      "每完成一个自然段，检查字数、语气、事实依据和 LaTeX 合法性",
+      "每完成一个章节，运行 latex-auditor 进行 7 维度审核",
+      "根据审核结果只修正文档问题，不引入未验证的新功能承诺",
+      "全文 4-pass XeLaTeX 编译回归"
+    ],
+    "global_hard_rules": [
+      "严禁在 .tex 正文中出现 Markdown 语法，包括但不限于 #、##、```、- [ ]、**粗体**、表情符号、Obsidian 双链、HTML 标签。",
+      "严禁使用 Markdown 表格。需要表格时必须使用 LaTeX table、tabular、tabularx 或 longtable 环境。",
+      "严禁使用 Mermaid、Graphviz、TikZ、ASCII art 等代码直接在正文里画图。",
+      "所有图如果必须进入 PDF，必须由 Python 脚本生成 SVG/PDF/PNG 后用 \\includegraphics 引入；如果暂不生成图片，则只保留 PlantUML 或 Mermaid 源文件到独立 .puml/.mmd 文件，供人类后续修改，不得嵌入正文。",
+      "除非任务明确要求分点，否则正文必须以完整自然段写作，不得堆列表。",
+      "不得写无法验证的绝对化结论，例如 100% 成功、完全解决、极高可行、无感无偏、像素级适配。",
+      "不得把未实现功能写成已完成能力。实时双语字幕、ASR 云评分、3B 模型、跨境支付、学校认证等如未真实闭环，只能写为规划、约束、扩展需求或待确认项。",
+      "需求规格章节只写系统应当做什么、用户能完成什么、验收时如何判断，不写数据库表、函数名、类名、算法实现和部署细节。",
+      "引用 reference 材料时必须转述为学术化正文，不复制 Markdown 原文格式。",
+      "中文与英文术语需统一。首次出现时给出中文名称和括号内英文缩写，后文优先使用中文名称或缩写。"
+    ]
+  },
+  "source_references": [
+    "docs/00-project-docs/standards/templates/软件工程类/软件需求规格说明书SRS模板.md",
+    "docs/00-project-docs/standards/checklists/SRS检查清单.md",
+    "docs/00-project-docs/standards/04_软件工程文档规范.md",
+    "docs/00-project-docs/standards/06_图表与建模规范.md",
+    "docs/01-reference/ob-vault/refined/01-需求分析文档.md",
+    "docs/01-reference/ob-vault/refined/04-功能需求文档-PRD.md",
+    "docs/01-reference/ob-vault/references/00-root/01-需求分析文档.md",
+    "docs/01-reference/ob-vault/references/01-discovery/01-LingoBridge 初次需求访谈.md",
+    "docs/01-reference/ob-vault/references/01-discovery/03-01-LingoBridge 二次需求访谈.md",
+    "docs/01-reference/ob-vault/references/02-specification/03-02-LingoBridge MVP PRD v2.0.md",
+    "docs/01-reference/ob-vault/references/05-delivery/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md",
+    "docs/01-reference/ob-vault/references/05-delivery/07-03-LingoBridge MVP 预算总表及拆解.md",
+    "docs/01-reference/ob-vault/references/06-operations/10-演示策略和注意事项.md"
+  ],
+  "key_results": [
+    "KR-1: 02-SRS 四个章节全部由 TODO 骨架扩写为完整 LaTeX 正文，正文约 14000-16000 中文字。",
+    "KR-2: 每个核心功能需求包含需求编号、自然段说明、用户故事、验收标准和优先级。",
+    "KR-3: 非功能需求全部可测试，至少覆盖性能、安全、可靠性、易用性、兼容性、可维护性和数据合规。",
+    "KR-4: 至少生成或预留 3 类图表工件：用例图、课堂状态图、需求追踪矩阵；正文不嵌入任何代码画图语法。",
+    "KR-5: latex-auditor 对 chap01-chap04 均给出 ACCEPTED 或 ACCEPTED_WITH_MINOR_FIXES。",
+    "KR-6: 02-SRS.pdf 4-pass XeLaTeX 编译通过，无 undefined reference、undefined citation、Markdown 残留或明显 overfull 警告。"
+  ],
+  "tasks": [
+    {
+      "id": "S8-T01",
+      "topic": "引言章扩写：目的、范围、术语与参考资料",
+      "owner_hint": "srs-chap01-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap01.tex",
+      "target_chapter": "chapter{引言}",
+      "target_length": "2200-2600 中文字",
+      "audit_required": true,
+      "input_refs": [
+        "docs/01-reference/ob-vault/refined/01-需求分析文档.md",
+        "docs/01-reference/ob-vault/references/00-root/01-需求分析文档.md",
+        "docs/00-project-docs/standards/templates/软件工程类/软件需求规格说明书SRS模板.md"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T01-P01",
+          "section": "section{目的}",
+          "target_words": "350-450 中文字",
+          "instruction": "说明本文档作为设计、开发、测试、验收和演示准备共同依据的作用，明确面向教师、学生、项目组、测试人员和评审者。必须写成 2 个自然段，不得列点。"
+        },
+        {
+          "pid": "S8-T01-P02",
+          "section": "section{目的}",
+          "target_words": "250-350 中文字",
+          "instruction": "说明本 SRS 与可行性分析、概要设计、详细设计和测试计划之间的边界关系，强调需求文档回答做什么和做到什么程度，不回答内部如何实现。"
+        },
+        {
+          "pid": "S8-T01-P03",
+          "section": "section{范围}",
+          "target_words": "450-550 中文字",
+          "instruction": "界定 LingoBridge 的产品范围：俄语背景学习者的中文学习辅助平台，覆盖教师课程管理、课件同步、学生课堂学习、课后练习、作业与录音闭环。不得把实时字幕、3B 模型、跨境支付写成当前已交付范围。"
+        },
+        {
+          "pid": "S8-T01-P04",
+          "section": "section{范围}",
+          "target_words": "350-450 中文字",
+          "instruction": "界定 MVP 范围与后续版本范围。MVP 只写已能支撑演示和小班试点的能力；V1.1/V2.0/V3.0 作为扩展边界说明。"
+        },
+        {
+          "pid": "S8-T01-P05",
+          "section": "section{定义与缩略语}",
+          "target_words": "表格 12-16 行，表前后各 120-180 中文字",
+          "instruction": "保留 LaTeX 表格，补充 SRS、MVP、TTS、ASR、Live Class、Courseware、Homework、Presence、WebRTC、i18n、UML 等术语。表格前后需用自然段解释术语统一的必要性。"
+        },
+        {
+          "pid": "S8-T01-P06",
+          "section": "新增 section{参考资料}",
+          "target_words": "LaTeX 表格 8-12 行，表前 150-220 中文字",
+          "instruction": "新增参考资料节，列出 GB/T 9385、需求访谈、MVP PRD、用户手册、预算表、测试数据采集指南等资料。不得使用 Markdown 链接。"
+        }
+      ],
+      "acceptance": [
+        "chap01.tex 不再包含 TODO 注释。",
+        "术语表为合法 LaTeX 表格。",
+        "正文无 Markdown 语法、无表情符号、无宣传式语气。",
+        "范围边界清楚区分已交付、MVP、后续规划。"
+      ]
+    },
+    {
+      "id": "S8-T02",
+      "topic": "总体描述章扩写：背景、用户、约束、假设与产品前景",
+      "owner_hint": "srs-chap02-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap02.tex",
+      "target_chapter": "chapter{总体描述}",
+      "target_length": "3600-4300 中文字",
+      "audit_required": true,
+      "input_refs": [
+        "docs/01-reference/ob-vault/refined/01-需求分析文档.md",
+        "docs/01-reference/ob-vault/references/01-discovery/01-LingoBridge 初次需求访谈.md",
+        "docs/01-reference/ob-vault/references/01-discovery/03-01-LingoBridge 二次需求访谈.md",
+        "docs/01-reference/ob-vault/references/05-delivery/07-03-LingoBridge MVP 预算总表及拆解.md"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T02-P01",
+          "section": "section{产品背景}",
+          "target_words": "450-550 中文字",
+          "instruction": "从俄语背景中文学习、跨境课堂、课后练习断裂和课程资产沉淀不足四个角度写背景。必须自然叙述，不写市场宣传。"
+        },
+        {
+          "pid": "S8-T02-P02",
+          "section": "section{产品背景}",
+          "target_words": "350-450 中文字",
+          "instruction": "说明两次需求访谈后从全量平台收敛到 MVP 的过程，写清楚为什么先做课程、课件、课堂、作业和录音闭环。"
+        },
+        {
+          "pid": "S8-T02-P03",
+          "section": "section{产品前景}",
+          "target_words": "450-550 中文字",
+          "instruction": "新增产品前景节，描述 LingoBridge 与腾讯会议类工具的关系：不是替代全部会议能力，而是补足中文学习专用的课件、练习、数据沉淀和课堂同步需求。"
+        },
+        {
+          "pid": "S8-T02-P04",
+          "section": "section{用户特征}",
+          "target_words": "600-750 中文字",
+          "instruction": "写教师、学生、管理员三类用户画像。每类先用自然段描述使用动机、能力边界、使用频率和典型任务，再用 LaTeX 表格汇总。"
+        },
+        {
+          "pid": "S8-T02-P05",
+          "section": "section{运行环境}",
+          "target_words": "350-450 中文字",
+          "instruction": "新增运行环境节，描述 Web 端、桌面和移动浏览器、网络条件、摄像头麦克风权限、PDF 渲染和音频播放这些用户侧环境要求。不得写服务器内部部署细节。"
+        },
+        {
+          "pid": "S8-T02-P06",
+          "section": "section{约束条件}",
+          "target_words": "500-650 中文字",
+          "instruction": "描述项目时间、演示稳定性、文件大小、跨境网络、第三方服务、隐私合规、成本预算等约束。必须写成段落加 LaTeX 表格。"
+        },
+        {
+          "pid": "S8-T02-P07",
+          "section": "section{假设与依赖}",
+          "target_words": "500-650 中文字",
+          "instruction": "写清楚课程内容由教师提供、学生具备浏览器和音频设备、课堂同步依赖网络、TTS 或媒体能力依赖浏览器或第三方服务、演示课程数据可预置。每个依赖必须说明风险。"
+        },
+        {
+          "pid": "S8-T02-P08",
+          "section": "section{需求分期}",
+          "target_words": "450-550 中文字",
+          "instruction": "新增需求分期节，按 MVP、V1.1、V2.0、V3.0 描述。扩展能力必须明确写为后续版本，不得污染 MVP 范围。"
+        }
+      ],
+      "acceptance": [
+        "chap02.tex 不再包含 TODO 注释。",
+        "总体描述章至少包含产品背景、产品前景、用户特征、运行环境、约束条件、假设与依赖、需求分期。",
+        "所有扩展功能均标注阶段，不与 MVP 混淆。",
+        "不出现夸张市场话术。"
+      ]
+    },
+    {
+      "id": "S8-T03",
+      "topic": "功能需求章第一轮扩写：核心业务闭环",
+      "owner_hint": "srs-functional-core-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap03.tex",
+      "target_chapter": "chapter{需求规格}",
+      "target_section": "section{功能需求}",
+      "target_length": "4200-5200 中文字",
+      "audit_required": true,
+      "input_refs": [
+        "docs/01-reference/ob-vault/refined/04-功能需求文档-PRD.md",
+        "docs/01-reference/ob-vault/references/02-specification/03-02-LingoBridge MVP PRD v2.0.md",
+        "docs/01-reference/ob-vault/references/05-delivery/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T03-P01",
+          "section": "section{功能需求}",
+          "target_words": "250-320 中文字",
+          "instruction": "写功能需求总述，说明功能需求按教师端、学生端、课堂同步、课后练习和后台管理组织。不要列点。"
+        },
+        {
+          "pid": "S8-T03-P02",
+          "section": "subsection{身份认证模块}",
+          "target_words": "450-550 中文字",
+          "instruction": "扩写 FR-001。自然段说明登录、角色识别、会话保持和角色路由；随后用 LaTeX 表格给出 4-6 条验收标准。不得描述密码算法或代码实现。"
+        },
+        {
+          "pid": "S8-T03-P03",
+          "section": "subsection{课程管理模块}",
+          "target_words": "550-700 中文字",
+          "instruction": "扩写 FR-002。说明教师创建课程、维护课程信息、关联班级、进入课程详情和发起课堂的需求。必须覆盖正常、异常和边界验收。"
+        },
+        {
+          "pid": "S8-T03-P04",
+          "section": "subsection{课件管理模块}",
+          "target_words": "650-800 中文字",
+          "instruction": "扩写 FR-003。说明 PDF/PPTX 上传、三页演示课件限制、课件预览、课堂同步渲染、失败提示和重新上传。不得写具体上传算法。"
+        },
+        {
+          "pid": "S8-T03-P05",
+          "section": "subsection{作业管理模块}",
+          "target_words": "550-700 中文字",
+          "instruction": "扩写 FR-004。说明教师导入 Excel、生成作业、学生查看作业、提交练习、教师查看提交结果。Excel 字段可作为需求字段出现，但不要写数据库设计。"
+        },
+        {
+          "pid": "S8-T03-P06",
+          "section": "subsection{中文语音与朗读辅助模块}",
+          "target_words": "500-650 中文字",
+          "instruction": "重命名并扩写 FR-005。只写文本朗读、音频播放、发音跟读辅助、浏览器音频权限和失败降级。ASR 评分若未真实实现，只能写成后续扩展需求。"
+        },
+        {
+          "pid": "S8-T03-P07",
+          "section": "subsection{录音模块}",
+          "target_words": "500-650 中文字",
+          "instruction": "扩写 FR-006。说明学生录音采集、试听、重录、提交、教师查看和隐私提示。验收标准需覆盖无麦克风权限、录音中断和重复提交。"
+        }
+      ],
+      "acceptance": [
+        "每个 FR 模块包含自然段说明、用户故事和 LaTeX 验收标准表。",
+        "用户故事不得使用 Markdown 代码块。",
+        "核心业务闭环需求可被测试人员直接转化为测试用例。",
+        "未实现智能评分不得写成已完成。"
+      ]
+    },
+    {
+      "id": "S8-T04",
+      "topic": "功能需求章第二轮扩写：直播课堂、后台、接口边界与需求矩阵",
+      "owner_hint": "srs-functional-live-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap03.tex",
+      "target_chapter": "chapter{需求规格}",
+      "target_section": "section{功能需求}",
+      "target_length": "3300-4200 中文字",
+      "audit_required": true,
+      "input_refs": [
+        "docs/01-reference/ob-vault/references/05-delivery/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md",
+        "docs/01-reference/ob-vault/references/06-operations/10-演示策略和注意事项.md",
+        "docs/01-reference/teams-vs-tencent-meeting.md"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T04-P01",
+          "section": "subsection{直播课堂模块}",
+          "target_words": "750-950 中文字",
+          "instruction": "扩写 FR-007。必须覆盖教师开课、学生入会、课堂成员可见、PDF 同步渲染、教师摄像头/声音同步、学生举手、教师授权、学生开启摄像头和麦克风。写成需求行为，不写 WebRTC 内部实现。"
+        },
+        {
+          "pid": "S8-T04-P02",
+          "section": "subsection{直播课堂模块}",
+          "target_words": "450-600 中文字",
+          "instruction": "补充课堂异常需求：迟到学生进入 live 课堂时应获取当前课件页和成员状态；网络抖动时应提示同步状态；权限未授权时学生不得开启本地音视频。"
+        },
+        {
+          "pid": "S8-T04-P03",
+          "section": "subsection{管理后台模块}",
+          "target_words": "500-650 中文字",
+          "instruction": "扩写 FR-008。说明管理员进行账号、课程资源、班级、测试数据和系统状态查看的需求。不得把复杂多租户学校认证写成 MVP 已完成。"
+        },
+        {
+          "pid": "S8-T04-P04",
+          "section": "新增 subsection{通知与状态反馈模块}",
+          "target_words": "450-550 中文字",
+          "instruction": "新增 FR-009。说明系统应在上传、进入课堂、权限申请、录音、作业提交等关键节点给用户明确状态反馈。"
+        },
+        {
+          "pid": "S8-T04-P05",
+          "section": "新增 subsection{功能需求优先级矩阵}",
+          "target_words": "LaTeX 表格 9-12 行，表前后各 150-220 中文字",
+          "instruction": "将 FR-001 至 FR-009 汇总为优先级矩阵，区分 P0、P1、P2 和版本阶段。"
+        },
+        {
+          "pid": "S8-T04-P06",
+          "section": "新增 section{接口需求}",
+          "target_words": "650-800 中文字",
+          "instruction": "新增接口需求节，覆盖用户接口、软件接口、通信接口和设备权限接口。只写外部可观察契约，不写内部函数和数据库。"
+        }
+      ],
+      "acceptance": [
+        "直播课堂需求覆盖双屏老师/学生并发访问的演示场景。",
+        "学生举手、教师授权、学生音视频开启三段权限链条写清楚。",
+        "接口需求不包含代码级实现。",
+        "功能矩阵为合法 LaTeX 表格。"
+      ]
+    },
+    {
+      "id": "S8-T05",
+      "topic": "非功能需求扩写：性能、安全、可靠性、易用性和合规",
+      "owner_hint": "srs-nfr-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap03.tex",
+      "target_chapter": "chapter{需求规格}",
+      "target_section": "section{非功能需求}",
+      "target_length": "3000-3800 中文字",
+      "audit_required": true,
+      "input_refs": [
+        "docs/00-project-docs/standards/checklists/SRS检查清单.md",
+        "docs/01-reference/ob-vault/references/05-delivery/07-04-LingoBridge 当前进度、Sprint规划与部署扫盲.md",
+        "docs/01-reference/ob-vault/references/05-delivery/07-03-LingoBridge MVP 预算总表及拆解.md"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T05-P01",
+          "section": "subsection{性能需求}",
+          "target_words": "500-650 中文字",
+          "instruction": "将页面响应、PDF 渲染、课堂状态同步、上传大小、音视频启动时延写成可测试指标。若指标无实测依据，用演示验收目标表述，不得写生产级 SLA。"
+        },
+        {
+          "pid": "S8-T05-P02",
+          "section": "subsection{安全性需求}",
+          "target_words": "450-600 中文字",
+          "instruction": "描述认证、角色权限、课堂音视频授权、文件上传限制、学生录音隐私和后台访问控制。"
+        },
+        {
+          "pid": "S8-T05-P03",
+          "section": "subsection{可靠性需求}",
+          "target_words": "400-550 中文字",
+          "instruction": "描述学习记录持久化、课件失败重试、课堂状态恢复、演示数据预置和错误提示，不得承诺 99.9% 可用性除非有监控依据。"
+        },
+        {
+          "pid": "S8-T05-P04",
+          "section": "subsection{可维护性需求}",
+          "target_words": "400-550 中文字",
+          "instruction": "描述需求编号、测试追踪、模块边界、配置化课程数据和后续迁移空间。不得写具体源码结构。"
+        },
+        {
+          "pid": "S8-T05-P05",
+          "section": "subsection{用户界面需求}",
+          "target_words": "500-650 中文字",
+          "instruction": "描述教师端、学生端、管理员端的界面一致性、移动端可用性、错误提示、语言切换和课堂状态反馈。"
+        },
+        {
+          "pid": "S8-T05-P06",
+          "section": "新增 subsection{数据与合规需求}",
+          "target_words": "550-700 中文字",
+          "instruction": "补充用户数据、课程资源、录音数据、测试数据注入、数据保留和删除请求等需求。跨境与未成年人场景只写审慎要求，不扩展法律结论。"
+        }
+      ],
+      "acceptance": [
+        "所有 NFR 均可测试或可验收。",
+        "无生产级夸张 SLA。",
+        "安全与权限需求覆盖课堂音视频授权。",
+        "非功能需求不写实现细节。"
+      ]
+    },
+    {
+      "id": "S8-T06",
+      "topic": "附录、图表工件与需求追踪矩阵",
+      "owner_hint": "srs-appendix-diagram-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/data/chap04.tex",
+      "target_chapter": "chapter{附录}",
+      "target_length": "1800-2600 中文字，加 3-5 个表格或图表引用",
+      "audit_required": true,
+      "input_refs": [
+        "docs/00-project-docs/standards/06_图表与建模规范.md",
+        "docs/00-project-docs/standards/checklists/SRS检查清单.md",
+        "docs/01-reference/ob-vault/references/05-delivery/07-01-LingoBridge 用户使用操作手册（老师版+学生版）.md"
+      ],
+      "diagram_rules": [
+        "用例图、课堂状态图、需求追踪矩阵必须作为独立工件处理。",
+        "若生成图片，必须编写 Python 脚本输出 SVG/PDF/PNG，再在 LaTeX 正文使用 \\includegraphics 引入。",
+        "若不生成图片，只能把 UML 源码保存到 docs/00-project-docs/02-SRS/templates/uml/ 下，正文中写明图源文件路径，不得把 UML 或 Mermaid 代码块放进 .tex。",
+        "不得在 .tex 中使用 TikZ、Mermaid 或 Graphviz 代码直接画图。"
+      ],
+      "paragraph_plan": [
+        {
+          "pid": "S8-T06-P01",
+          "section": "section{用例模型}",
+          "target_words": "350-450 中文字",
+          "instruction": "说明用例模型的角色、系统边界和主要用例。生成或预留 use-case UML 工件。"
+        },
+        {
+          "pid": "S8-T06-P02",
+          "section": "section{课堂状态模型}",
+          "target_words": "350-450 中文字",
+          "instruction": "说明 live 课堂从未开始、等待、进行中、举手申请、授权发言、结束的状态迁移。生成或预留 classroom-state UML 工件。"
+        },
+        {
+          "pid": "S8-T06-P03",
+          "section": "section{需求追踪矩阵}",
+          "target_words": "LaTeX longtable 18-25 行，表前后各 150-220 中文字",
+          "instruction": "建立 FR/NFR 到设计文档、测试用例和演示脚本的追踪关系。没有现成测试用例编号时先使用 TBD 编号，但必须格式统一。"
+        },
+        {
+          "pid": "S8-T06-P04",
+          "section": "section{未决问题清单}",
+          "target_words": "450-600 中文字",
+          "instruction": "列出仍需产品或技术确认的问题：音视频生产级稳定性、ASR 评分、跨境支付、学校认证、对象存储、长期数据保留。使用 LaTeX 表格，不用 Markdown 清单。"
+        },
+        {
+          "pid": "S8-T06-P05",
+          "section": "section{版本变更记录}",
+          "target_words": "LaTeX 表格 4-6 行，表前 100-150 中文字",
+          "instruction": "记录本次由骨架文档扩写为 SRS v1.0 的变更历史。"
+        }
+      ],
+      "acceptance": [
+        "chap04.tex 不再只有 TODO。",
+        "正文中不出现任何代码画图语法。",
+        "至少存在 uml 或 figures 目录中的图表工件。",
+        "需求追踪矩阵覆盖所有 FR 和主要 NFR。"
+      ]
+    },
+    {
+      "id": "S8-T07",
+      "topic": "全文一致性审校与 LaTeX 风格修复",
+      "owner_hint": "srs-editor-agent",
+      "target_files": [
+        "docs/00-project-docs/02-SRS/templates/data/chap01.tex",
+        "docs/00-project-docs/02-SRS/templates/data/chap02.tex",
+        "docs/00-project-docs/02-SRS/templates/data/chap03.tex",
+        "docs/00-project-docs/02-SRS/templates/data/chap04.tex"
+      ],
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S8-T07-STEP01",
+          "action": "style_scan",
+          "description": "扫描全文是否残留 Markdown、英文夹杂、TODO、AI 腔套话、表情符号、绝对化承诺和未实现功能完成式表述。"
+        },
+        {
+          "step_id": "S8-T07-STEP02",
+          "action": "terminology_normalization",
+          "description": "统一教师、学生、管理员、课堂、课件、作业、录音、语音朗读、课堂同步、权限授权等术语。"
+        },
+        {
+          "step_id": "S8-T07-STEP03",
+          "action": "paragraph_smoothing",
+          "description": "将堆砌式短句改写为自然段。除验收标准、矩阵和术语表外，不保留不必要的列表。"
+        },
+        {
+          "step_id": "S8-T07-STEP04",
+          "action": "requirements_testability_check",
+          "description": "检查每条需求是否可被测试。不可测试表述必须改为可观察行为或可测指标。"
+        }
+      ],
+      "acceptance": [
+        "全文术语一致。",
+        "正文读起来像正式论文或软件工程说明书，不像 Prompt 提纲。",
+        "所有表格均为合法 LaTeX 环境。",
+        "每个章节都能独立通过 latex-auditor 的风格扫描。"
+      ]
+    },
+    {
+      "id": "S8-T08",
+      "topic": "编译回归、PDF 页数校准与最终提交",
+      "owner_hint": "srs-build-agent",
+      "target_file": "docs/00-project-docs/02-SRS/templates/02-SRS.tex",
+      "audit_required": false,
+      "steps": [
+        {
+          "step_id": "S8-T08-STEP01",
+          "action": "compile",
+          "description": "在 docs/00-project-docs/02-SRS/scripts 或 templates 目录执行 4-pass XeLaTeX 编译，确保生成 02-SRS.pdf。"
+        },
+        {
+          "step_id": "S8-T08-STEP02",
+          "action": "pdf_page_count_check",
+          "description": "检查 PDF 页数。若正文不足 18 页，优先扩写总体描述、功能需求和非功能需求的自然段；若超过 24 页，压缩附录和重复验收说明。"
+        },
+        {
+          "step_id": "S8-T08-STEP03",
+          "action": "warning_check",
+          "description": "检查 undefined citation、undefined reference、LaTeX Error、Overfull hbox。非关键 overfull 可记录，关键排版错误必须修复。"
+        },
+        {
+          "step_id": "S8-T08-STEP04",
+          "action": "final_audit",
+          "description": "对 02-SRS.pdf 与四个章节源文件执行最终审核，确认没有 Markdown 残留、代码图残留、TODO 和事实越界。"
+        },
+        {
+          "step_id": "S8-T08-STEP05",
+          "action": "commit",
+          "description": "通过后提交：git add docs/00-project-docs/02-SRS prds/json/sprint08-prd-260527-v0.1.json && git commit -m 'docs/02-SRS: add Ralph expansion plan for full requirements spec'。是否 push 由主控 agent 根据用户指令决定。"
+        }
+      ],
+      "acceptance": [
+        "02-SRS.pdf 页数控制在 18-24 页。",
+        "全文编译通过。",
+        "最终审计没有硬性禁令违规。",
+        "Sprint 8 PRD JSON 已提交。"
+      ]
+    }
+  ],
+  "agent_prompt_templates": [
+    {
+      "name": "chapter_expansion_agent_prompt",
+      "template": "你是 LingoBridge SRS 文档扩写 agent。只处理分配给你的 target_file 与 paragraph_plan。先读取 input_refs，再按 pid 逐自然段扩写。所有正文必须是合法 LaTeX，禁止 Markdown 语法，禁止代码块，禁止在正文里用 Mermaid、TikZ、Graphviz 或 ASCII 画图。除验收标准和表格外，正文必须写成自然段，像正式软件工程论文一样连贯。每个自然段必须满足 target_words。不得把未实现功能写成已完成能力。完成后汇报每个 pid 的字数、改动范围和残留风险。"
+    },
+    {
+      "name": "diagram_agent_prompt",
+      "template": "你是 LingoBridge SRS 图表工件 agent。你不得把任何代码画图语法嵌入 .tex 正文。需要图时，优先用 Python 生成 SVG/PDF/PNG 并由 LaTeX 使用 includegraphics 引入；若图尚需人类修改，则把 PlantUML 或 Mermaid 源码保存为独立 .puml/.mmd 文件，并在正文中只引用工件路径和图意说明。完成后报告生成的文件路径、图的语义边界和是否已被正文引用。"
+    },
+    {
+      "name": "latex_auditor_prompt",
+      "template": "你是严格的 LaTeX 与软件需求规格说明书审稿人。按七个维度审计：LaTeX 合法性、Markdown 残留、需求可测试性、事实边界、术语一致性、图表合规性、论文语气自然度。输出 ACCEPTED、ACCEPTED_WITH_MINOR_FIXES 或 REJECTED，并给出文件路径、行号、问题、修改建议。不得泛泛表扬。"
+    }
+  ]
+}

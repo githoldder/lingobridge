@@ -1,0 +1,85 @@
+@startuml deployment-topology
+
+skinparam backgroundColor #FFFFFF
+skinparam NodeBackgroundColor #EFF6FF
+skinparam NodeBorderColor #3B82F6
+skinparam NodeFontColor #1E3A5F
+skinparam ComponentBackgroundColor #3B82F6
+skinparam ComponentBorderColor #2563EB
+skinparam ComponentFontColor #FFFFFF
+skinparam DatabaseBackgroundColor #10B981
+skinparam DatabaseBorderColor #059669
+skinparam DatabaseFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam CloudBackgroundColor #EFF6FF
+skinparam CloudBorderColor #3B82F6
+skinparam ArtifactBackgroundColor #F0FDF4
+skinparam ArtifactBorderColor #10B981
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam RectangleBorderColor #F43F5E
+skinparam RectangleBackgroundColor #FFF1F2
+
+title 生产部署拓扑图
+
+actor "用户设备\n(浏览器)" as user
+
+cloud "Vercel Edge Network" as vercel {
+  component "静态 SPA 托管\n(React 19 + Vite)" as spa
+  component "Rewrites 规则\n/api/* → CVM" as rewrite
+  spa -down-> rewrite
+}
+
+node "DNS 解析" as dns {
+  component "lingobridge.duckdns.org\n(可选, 直连 IP\n绕过 GFW)" as dnscomp
+}
+
+rectangle "防火墙规则\n(腾讯云安全组)" as firewall {
+  note
+    入站规则:
+    TCP 80  (HTTP)
+    TCP 443 (HTTPS)
+    TCP 3001 (API, 仅内部)
+    TCP 5432 (PG, 仅内部)
+  end note
+}
+
+node "腾讯云 CVM\n101.34.72.227" as cvm {
+  component "Caddy 反向代理\n容器 :80/:443" as caddy
+  component "Express API 服务\n容器 :3001" as express
+  database "PostgreSQL\n容器 :5432" as pg
+  artifact "本地文件存储\nbackend/storage/" as storage
+
+  caddy -down-> express : HTTP 转发\n端口 3001
+  express -down-> pg : SQL 连接\n端口 5432
+  express -right-> storage : 文件读写\n音频/课件
+}
+
+user -down-> vercel : HTTPS\n(全球 CDN)
+user -down-> dns
+dns -down-> cvm : HTTPS
+vercel -down-> cvm : HTTPS\n/api/* 转发
+firewall -right-> cvm
+
+note right of vercel
+  前端静态资源
+  全球 CDN 加速
+  自动 HTTPS 证书
+end note
+
+note right of storage
+  存储内容:
+  · 课件文件 (PDF/PPTX)
+  · 学生录音 (WebM)
+  · TTS 音频缓存
+end note
+
+note bottom of pg
+  生产数据库
+  包含完整表结构:
+  users, courses, classes,
+  homework_submissions,
+  recordings, live_sessions 等
+end note
+
+@enduml

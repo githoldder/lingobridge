@@ -2,14 +2,15 @@
 
 ## Source Of Truth
 
-The approved source PRD is:
-
-`/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md`
-
-Repository execution copies:
+The approved source PRD for repository execution is maintained in:
 
 - `prds/prd.md`
 - `prds/prd.json`
+
+Historical private notebook paths must not be used as source links in prompts,
+deliverables, citations, or handoff reports. If a private notebook draft was
+used to seed the repository copy, treat the repository copy above as the
+auditable baseline for all agent work.
 
 ## Must Stay In Scope
 
@@ -29,4 +30,3 @@ Repository execution copies:
 - Multi-tenant SaaS implementation.
 - International payment.
 - AI pronunciation scoring.
-

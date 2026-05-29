@@ -1,75 +1,392 @@
 \chapter{需求规格}
 
 \section{功能需求}
+本平台的功能需求定义围绕“教纲课件辅助消费与发音录制”这一业务主线展开，功能范围严格限定在 MVP 开发边界之内。核心模块包含：身份认证、课程管理、课件管理、作业管理、中文 TTS 朗读辅助、录音模块、直播课堂、管理后台以及状态反馈模块。
 
-\subsection{身份认证模块}
+为了清晰直观地展示本系统各处理模块与外部实体（教师、学生、系统管理员）以及内部数据存储之间的动态数据传递流向，项目组建立了系统的第一级数据流模型（DFD Level 1），如图 \ref{fig:data_flow} 所示。
 
-% 需求ID: FR-001
-% 优先级: P0
-% TODO: 登录、注册、角色路由
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{LingoBridge数据流图.pdf}
+\caption{LingoBridge 核心功能第一级数据流图 (DFD Level 1)}
+\label{fig:data_flow}
+\end{figure}
 
-\subsection{课程管理模块}
+根据图 \ref{fig:data_flow} 可知，数据从外部输入（如教师导入 Excel、上传课件 PDF，学生录制并提交发音 WebM）流入系统，系统各功能过程（1.0 至 6.0）将其清洗和处理后，持久化落入相应的数据存储元数据库中（D1 至 D6）。同时，系统支持数据的向外流动（如学生端从 DFD 加载课件图、TTS 播放语音文件，以及向 D6请求积分排行榜 ZSET 数据进行渲染），实现了需求功能层级的高效流转。
 
-% 需求ID: FR-002
-% 优先级: P0
-% TODO: 课程 CRUD、Live Class 管理
 
-\subsection{课件管理模块}
+\subsection{身份认证模块 [FR-001]}
+本模块负责系统内各角色的身份验证与鉴权。系统区分教师、学生与管理员三种角色，采用基于令牌（Token）的无状态会话保持机制。系统需要根据用户的角色身份，在登录成功后进行动态角色路由，分发至对应的控制台视图。
+\paragraph{用户故事}
+在具有俄语背景的留学生阿合买提已在系统注册且角色定义为学生的前提下（\textbf{Given}），当阿合买提在登录界面输入正确的用户名与密码并点击登录时（\textbf{When}），系统应当在 1.5 秒内快速完成无状态令牌的身份验证与校验，并将页面无缝重定向至学生端课程列表视图，同时界面静态语言文本默认初始化加载为其首选的俄语（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-001 身份认证模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-001-A1 & 输入未注册的用户名或错误的密码 & 系统拦截请求，给出“用户名或密码错误”的俄语/哈语提示，不泄露安全细节。 \\
+FR-001-A2 & 未登录状态下通过 URL 直接访问受保护的页面 & 路由拦截器生效，页面强制重定向回登录页，并弹出“请先登录”的提示。 \\
+FR-001-A3 & 登录成功后的会话保持 & 在本地安全存储中写入 Token，在会话有效期内刷新页面无需重复登录。 \\
+FR-001-A4 & 用户点击“安全退出” & 系统销毁本地 Token 并向后端发送失效请求，页面瞬间重定向回登录页。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-% 需求ID: FR-003
-% 优先级: P0
-% TODO: PDF/PPTX 上传、渲染
+\subsection{课程管理模块 [FR-002]}
+本模块提供教师对课程基本信息的创建与管理能力。教师可新增、编辑课程大纲，并将课程分配给特定的班级学生群体。
+\paragraph{用户故事}
+在中文教师王老师已成功登录其 PC 教师端控制台且其名下绑定有 20 名试点高校留学生的前提下（\textbf{Given}），当王老师点击“新建课程”按钮、输入规范的课程名称《中文拼音第一课》、选择关联班级并提交时（\textbf{When}），系统应在后台数据库中立即生成对应的课程关联实体记录，并在王老师的课程控制面板卡片中动态展示与其关联的试点班级花名册（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-002 课程管理模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-002-A1 & 教师创建空白名称的课程 & 系统提交按钮置灰，输入框红框警告提示“课程名称不能为空”。 \\
+FR-002-A2 & 学生端查看分配课程列表 & 对应班级的学生登录后，系统实时在学生首页拉取并展示被分配的课程。 \\
+FR-002-A3 & 教师进入已创建课程详情 & 展示该课程下的课件列表、作业列表、学生学籍数据及录音统计面板。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{作业管理模块}
+\subsection{课件管理模块 [FR-003]}
+本模块为教学的核心资产承载模块。教师可上传 \texttt{.pdf} 或 \texttt{.pptx} 格式的课件文件，系统后台负责解析并高保真地渲染在前端课件容器中，支持学生和教师进行左右翻页预览。
+\paragraph{用户故事}
+在教师王老师已在桌面版 Chrome 浏览器中登录教师控制台且准备为留学生上传今日教学讲义的前提下（\textbf{Given}），当王老师点击“上传课件”并选中一个体积为 4.5MB、共包含 3 页拼音示范的 PDF 文件提交时（\textbf{When}），系统应在后台自动执行文件格式校验及高保真 PDF 静态图片分页解析转换，随后在前端界面渲染“导入成功”的 Toast 提示，且使该课件卡片在当前班级内可被无延迟翻页消费（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-003 课件管理模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-003-A1 & 教师上传非 \texttt{.pdf} 或 \texttt{.pptx} 格式的文件 & 前端立即拦截上传请求，提示“仅支持 PDF 和 PPTX 格式文件”。 \\
+FR-003-A2 & 课件体积超过 50MB & 系统阻止上传，提示“文件大小已超出 50MB 限制，请先压缩课件”。 \\
+FR-003-A3 & 演示模式下的三页展示限制 & 系统在高频网络测试下，确保多级翻页过渡流畅，限制单课件最多上传并在前台预览 10 页以保障跨境带宽。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-% 需求ID: FR-004
-% 优先级: P0
-% TODO: Excel 导入、任务生成
+\subsection{作业管理模块 [FR-004]}
+本模块规范了课后作业的分发流程。教师可通过导入规范的 Excel 表格一键生成课后作业任务，每个任务基于唯一索引（如 \texttt{lessonNodeId}）与具体的课时节点强绑定，实现去重覆盖更新。
+\paragraph{用户故事}
+在教师王老师已在控制台进入当前课程作业管理与发布面板的前提下（\textbf{Given}），当王老师下载系统规范的 Excel 作业模板、录入拼音发音跟读文案，并点击“导入 Excel”按钮上传提交时（\textbf{When}），系统应在后台自动解析 Excel 行数据并执行 \texttt{lessonNodeId} 节点自动去重映射，随后自动生成包含 4 条拼音跟读子任务的课后作业表单，并实时推送分发给关联试点的全班学生（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-004 作业管理模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-004-A1 & 上传格式错误的 Excel 或缺少核心字段的表格 & 系统中止解析，给出“表格格式错误，缺少拼音跟读文本列”的明确提示。 \\
+FR-004-A2 & 针对相同唯一索引的作业进行反复导入（去重校验） & 后端自动执行 Upsert 逻辑，仅更新文案并保留已有的学生成绩，绝不生成冗余项。 \\
+FR-004-A3 & 学生查看待办作业列表 & 学生端首页显式展示该课程下的课后跟读作业，标明未作答状态。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{中文 TTS 模块}
+\subsection{中文语音与朗读辅助模块 [FR-005]}
+本模块为留学生提供课后的普通话标准发音听读支持。系统通过在课件页面中提取并关联中文标准朗读文本，在学生点击“朗读”后调用云端 TTS 接口合成并播放音频。
+\paragraph{用户故事}
+在学生阿合买提已在翻页课件容器中翻至声母“d, t, n, l”专属拼音学习页面的前提下（\textbf{Given}），当阿合买提点击拼音字符旁边的“朗读此页”图标时（\textbf{When}），系统应在 1 秒内捕获该事件并匹配双层语音缓存，向客户端播放高清晰度的标准普通话发音合成音频流（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-005 中文语音朗模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-005-A1 & 点击高频固定词汇的朗读 & 系统命中双层缓存中的内存级或磁盘级音频文件，零网络时延直接播放。 \\
+FR-005-A2 & 弱网或云端 TTS 接口不可用时的降级 & 系统自动捕获接口超时异常，弹出提示并降级为调用客户端浏览器本地的 Web Speech API 发音组件。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-% 需求ID: FR-005
-% 优先级: P0
-% TODO: 文本转语音
+\subsection{录音模块 [FR-006]}
+本模块提供学生普通话口语发音的本地录制与持久化沉淀。学生可录制自己的声音、本地试听回放，并能够自主在线删除已提交的录音以保护隐私。
+\paragraph{用户故事}
+在留学生阿合买提已开启《拼音第二课》课后跟读作业面板且准备进行口语跟读录音练习的前提下（\textbf{Given}），当阿合买提显式授予浏览器麦克风访问权限、点击“开始录音”大声朗读，并在 10 秒后点击“停止”与“提交作业”时（\textbf{When}），系统应通过 MediaRecorder API 异步采集 WebM 封装的 Opus 编码音频数据流，将其稳定上传至服务器 OSS 存储并在数据库中建立索引，从而在阿合买提的个人已提交作业列表中实时生成一条可回放的跟读录音记录（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-006 录音模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-006-A1 & 设备没有麦克风硬件或用户拒绝授权麦克风权限 & 前端捕获权限被拒异常，弹出“请在浏览器设置中允许麦克风访问权限”的警告，并阻止录音操作。 \\
+FR-006-A2 & 录音时长超过系统设定的 15 秒硬上限 & 系统自动触发停止采集，保存已录制音频并提示“已达最大录制时长，录音结束”。 \\
+FR-006-A3 & 学生在列表中点击“彻底删除录音” & 后端同步清理存储系统中的音频文件和数据库中的索引关联，实现数据彻底物理擦除。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{录音模块}
+\subsection{直播课堂模块 [FR-007]}
+本模块主要提供在线上授课期间的师生页面同步以及受控音视频连麦机制。教师可发起翻页信令，学生的课件页面根据 Presence 状态机进行跟随；学生可进行举手连麦申请，获得教师授权后方可开启本地硬件设备。
+\paragraph{用户故事}
+在教师王老师与留学生阿合买提已同时加入同一个直播课堂且王老师正在进行课件同步讲解的前提下（\textbf{Given}），当王老师在教师端屏幕上将课件翻至第 2 页时（\textbf{When}），系统应通过低延迟信令通道在 2 秒内向学生端分发 Presence 状态码，使阿合买提的学生界面自动翻页并重新渲染第 2 页课件 Canvas 图像（\textbf{Then}）。与此同时，当阿合买提在学生端点击“申请举手发言”且王老师在控制面板同意其连麦请求时（\textbf{When}），系统应自动激活阿合买提的本地麦克风媒体轨道，并通过 WebRTC 信令管道将阿合买提的本地口语发音音频流实时广播至课堂内其他成员（\textbf{Then}）。
+\paragraph{验收标准}
+\paragraph{硬件摄像头关闭 Bug 修复硬性标准}
+在点击“关闭麦克风/摄像头”或退出直播视图时，系统必须显式执行媒体流轨道的 \texttt{track.stop()} 方法，并将所有 \texttt{MediaStream} 与 \texttt{AudioContext} 实例显式置空。严禁仅通过修改 CSS \texttt{display:none} 隐藏，必须彻底停用硬件，直至系统硬件占用指示灯完全熄灭，防范硬件占用异常导致的运行不稳定风险。
+\begin{table}[H]
+\centering
+\caption{FR-007 直播课堂模块验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-007-A1 & 迟到的学生在中途进入在线课堂 & 系统初始化时自动获取当前最新的 Presence 页码，确保迟到学生与教师的进度实时同步对齐。 \\
+FR-007-A2 & 教师端退出课堂或断开连接 & 系统在阿合买提的界面弹出“教师已离开课堂”的弱提示，并关闭一切连麦音频信道。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-% 需求ID: FR-006
-% 优先级: P0
-% TODO: 学生录音采集、上传、回放
+直播在线课堂内部的状态流转控制具备高内聚的状态转换契约，状态流转关系如图 \ref{fig:classroom_state} 所示。
 
-\subsection{直播课堂模块}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{LingoBridge状态图.pdf}
+\caption{LingoBridge 在线课堂 Presence 状态机转换图}
+\label{fig:classroom_state}
+\end{figure}
 
-% 需求ID: FR-007
-% 优先级: P1
-% TODO: 教师直播、画笔批注
+如图 \ref{fig:classroom_state} 所示，课堂日程在创建后默认处于未开始状态，随着教师发起授课进入等待，当师生建立长连接后状态转换为进行中。在进行中状态下，Presence 翻页信令实现实时广播。学生发出举手申请后切换为申请中，经教师授权后转换为连麦授权发言状态，激活本地麦克风。下课或异常退出时，系统状态机销毁，强制进入 Closed 并执行硬件注销。
 
-\subsection{管理后台模块}
+\subsection{管理后台与状态反馈模块 [FR-008, FR-009]}
+本模块为管理员提供数据大屏和账号管控支持，并在用户执行长耗时任务（如上传大课件、导入 Excel 等）时提供清晰的状态反馈提示。
+\paragraph{用户故事}
+在系统管理员已成功登录后台管理控制面板的前提下（\textbf{Given}），当管理员在控制台点击“一键注入拼音三课演示数据”并予以确认时（\textbf{When}），系统前端应立即弹出半透明的“正在注入演示数据，请稍候”的加载动画以防止重复点击冲突，并在后台完成数据注入后弹出“演示数据注入成功”的通知，使得全平台师生账号均可实时加载该预置演示课程进行无缝消费（\textbf{Then}）。
+\paragraph{验收标准}
+\begin{table}[H]
+\centering
+\caption{FR-008, FR-009 管理后台与反馈验收标准}
+\begin{tabularx}{\textwidth}{l p{5.5cm} X}
+\toprule
+\textbf{标准编号} & \textbf{测试场景与输入说明} & \textbf{期望输出与可观察行为} \\
+\midrule
+FR-008-A1 & 教师执行大文件课件上传 & 系统页面正中弹出“上传中 (Progress: XX\%)”的遮罩动画，防范用户的重复提交冲突。 \\
+FR-008-A2 & 管理员批量导入哈萨克斯坦留学生账号 & 支持批量数据验证，导入失败时能给出具体的行号与失败原因报错。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-% 需求ID: FR-008
-% 优先级: P2
-% TODO: 账号、资源、数据管理
+\subsection{功能需求优先级与版本矩阵}
+本系统在分期快速交付的约束下，对上述 FR-001 至 FR-009 的功能点及对应的版本规划整理为优先级矩阵，如表 3.1 所示。
+
+\begin{table}[H]
+\centering
+\caption{功能需求优先级与版本矩阵}
+\begin{tabularx}{\textwidth}{l l X l l}
+\toprule
+\textbf{功能 ID} & \textbf{功能模块名称} & \textbf{核心功能特征描述} & \textbf{优先级} & \textbf{版本分期} \\
+\midrule
+FR-001 & 身份认证模块 & 账户登录、角色识别与重定向 & P0 & V1.0 MVP \\
+FR-002 & 课程管理模块 & 课程 CRUD 维护与试点班级绑定 & P0 & V1.0 MVP \\
+FR-003 & 课件管理模块 & PDF/PPTX 上传转换与 10 页内翻页展示 & P0 & V1.0 MVP \\
+FR-004 & 作业管理模块 & Excel 导入去重、跟读作业分发 & P0 & V1.0 MVP \\
+FR-005 & 中文朗读辅助模块 & 课件关联文本语音合成 TTS 标准播放 & P0 & V1.0 MVP \\
+FR-006 & 录音采集模块 & MediaRecorder 采集、回放与自主删除 & P0 & V1.0 MVP \\
+FR-007 & 直播课堂模块 & Presence 同步翻页与受控连麦授权 & P1 & V1.1 阶段 \\
+FR-008 & 管理后台模块 & 管理员教务维护与演示数据一键注入 & P2 & V1.0 MVP \\
+FR-009 & 状态反馈模块 & 操作进度提示遮罩与错误 Toast 反馈 & P0 & V1.0 MVP \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{非功能需求}
+本系统的非功能性需求从性能、安全、可靠性、易用性以及法律数据合规等维度为系统设定了客观、可测量的验收指标。
 
 \subsection{性能需求}
-
-% NFR-001: 页面响应时间 < 2s
-% NFR-002: 并发用户 >= 50
+系统的性能要求致力于确保在跨国弱网网络环境下的用户流畅度。
+在页面与数据加载延迟指标上，系统在香港云节点部署且留学生本地网络访问的典型测试条件下，静态页面的首屏加载耗时应深度优化至 500 毫秒以内，且中文 TTS 标准发音的播放响应时延应控制在 1.0 秒以内，以保障即入即学的交互流畅度。在课件转换的排队耗时维度，当教师端提交 10 页以内的 PPTX 或 PDF 格式课件时，后台自动执行高保真静态 Canvas 图片转换的整体处理耗时应控制在 15 秒以内。针对直播课堂状态同步响应时延，师生之间的 Presence 翻页跟随信令的跨海分发及渲染延迟应被严格约束在 2.0 秒以内，防止因长连接延迟引发教学不同步的硬伤。此外，在音频文件体积约束方面，学生端单次 15 秒以内的拼音跟读录音经过 WebM 封装与 Opus 编码后，其文件体积大小必须限制在 1MB 以下，以有效减轻跨境长距离弱网环境下的网络通信带宽负荷。
 
 \subsection{安全性需求}
-
-% NFR-003: 密码加密存储
-% NFR-004: API 鉴权
+系统采取多维度的安全防御机制：
+在鉴权安全层面，系统内的所有敏感 API 数据写入与数据库读取请求在执行前，必须 100\% 强制通过身份验证无状态会话令牌（Token）的严格校验与过滤。在输入安全校验维度，凡是教师端上传的课件标题、关联作业拼音文本及其他用户表单输入信息，系统后端必须执行严密的 XSS 字符清洗与安全防御转义，彻底禁止任何恶意注入脚本的执行。此外，在设备硬件的物理停用防护上，一旦学生主动点击“关闭麦克风”或退出直播课堂/跟读视图，系统前端必须显式执行底层的 \texttt{track.stop()} 切断逻辑，完全注销媒体轨道并断开硬件物理供电，从根本上防止发生恶意后台窃听及硬件被持续占用悬挂的系统安全隐患。
 
 \subsection{可靠性需求}
+在自适应指数退避重连机制上，一旦遭遇跨境海缆网络抖动或 WSS/HTTPS 长连接暂时阻断，客户端信令层必须立即自动启动基于指数退避的重试机制，于后台静默重新建立稳定的信令连接，彻底规避界面抛出阻断性报错，以最大化保护留学生的使用连贯度。在演示数据预置备份方面，系统底层默认深度预置并存储了“拼音三课”的完整课程架构、高保真课件图片及学生练习演示数据库，确保平台在部署后开箱即用，降低敏捷交付初期对外部庞大实时教务交互环境的过度强依赖。
 
-% NFR-005: 学习记录持久化
+\subsection{用户界面与易用性需求}
+在多语热切换的界面适配维度，系统操作界面必须原生支持中文简体、俄语与哈萨克语三语的一键实时热切换，所有核心文本标识、系统导航按钮、表单占位符及 Toast 提示信息在切换语言后均须通过 \texttt{LanguageContext} 实时转换，严禁在页面中残留非对称的拼写或漏翻语种文本。在错误指引清晰度方面，针对跨境访问中高频发生的麦克风录音授权被拒、网络上传超时等异常，系统交互层必须统一弹出直观、友好的弹窗式步骤引导（提供如何解除权限锁的俄语说明），严禁将底层的代码级报错（如 \texttt{PermissionDeniedError}）直接暴露给终端留学生用户。
 
-\subsection{可维护性需求}
+\subsection{数据与合规需求}
+由于本产品面向跨国留学生，数据安全需严格遵循中哈两国的基础数据保护法：
+在学生个人数据自主权的最高合规准则下，系统郑重承诺不主动采集或沉淀留学生的任何生物敏感识别信息，所有采集的跟读录音数据仅限用于中文教师的日常拼音作业批改。留学生用户对其个人的口语录音数据拥有完备的所有权与控制权，支持在个人控制台控制面板中一键执行“彻底物理删除”，系统将同步触发后台清除任务，实现数据库索引记录和 OSS 物理文件系统的完全彻底擦除。在数据保留策略限制上，对于已结课或已停用的班级历史音频数据，系统设定了定时自动归档与过期自动清理的后台脚本管线，既能显著降低香港服务器的磁盘开销，又能从根本上防范过期历史数据的意外泄漏风险。
 
-% NFR-006: 模块化架构
+\section{接口需求}
+LingoBridge 为保证可插拔特性，对系统与外部硬件及环境的通信交互界面进行了标准化定义：
+在用户接口（User Interface）维度上，学生端前端采用基于 CSS Flexbox 和 Grid 的强自适应响应式流式布局，兼容支持从主流桌面 PC 浏览器到移动端 iPad 与手机的主流分辨率视口，且界面全局交互组件配备有清爽、低延迟的 CSS Micro-animations 状态转换动效。在硬件设备权限接口（Hardware Interfaces）层面，平台与客户端底层硬件的交互安全通过标准的 Web Audio API 接口与 MediaRecorder 音频采集器接口进行连接，在请求时调起浏览器安全麦克风权限对话框。针对软件外部通信接口（Software Interfaces），本系统前后端数据交互 API均对标标准的 RESTful 契约规范，网络通信链路完全基于高安全等级的 HTTPS 以及 WSS（安全 WebSocket）长连接信令协议，前后端传输的所有实体契约 100\% 采用 JSON 格式进行对象序列化与反序列化，保障数据的高效流通。
 
-\subsection{用户界面需求}
+\section{数据模型与数据字典}
+为了确保系统底层数据结构的高内聚与扩展性，LingoBridge 采用了 SaaS 级多租户关系模型，全局实体关系图如图 \ref{fig:erd_diagram} 所示。
 
-% NFR-007: 中文/俄语/哈萨克语 UI 切换
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{LingoBridge E-R图.pdf}
+\caption{LingoBridge SaaS 核心数据表实体关系图 (ERD)}
+\label{fig:erd_diagram}
+\end{figure}
+
+本系统试点及 MVP 阶段的核心数据库物理表结构详细定义如下：
+
+\paragraph{1. 合作教育机构表 (Institution)}
+表 3.10 定义了合作教育机构的字段规范。
+\begin{table}[H]
+\centering
+\caption{合作教育机构表 (Institution)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+inst\_id & UUID & NOT NULL & PK & 机构唯一标识符 \\
+name & VARCHAR(128) & NOT NULL & - & 机构名称 \\
+country & VARCHAR(64) & NOT NULL & - & 机构所在国家 \\
+description & TEXT & NULL & - & 机构业务背景介绍 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{2. 试点高校表 (School)}
+表 3.11 定义了试点高校的字段规范。
+\begin{table}[H]
+\centering
+\caption{试点高校表 (School)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+school\_id & UUID & NOT NULL & PK & 高校唯一标识符 \\
+inst\_id & UUID & NOT NULL & FK & 关联合作教育机构 ID \\
+name & VARCHAR(128) & NOT NULL & - & 中文官方名称 \\
+cjk\_localized\_name & VARCHAR(128) & NOT NULL & - & 俄语/哈语本地化译名 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{3. 试点班级表 (Class)}
+表 3.12 定义了试点班级的字段规范。
+\begin{table}[H]
+\centering
+\caption{试点班级表 (Class)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+class\_id & UUID & NOT NULL & PK & 班级唯一标识符 \\
+school\_id & UUID & NOT NULL & FK & 关联试点高校 ID \\
+name & VARCHAR(64) & NOT NULL & - & 班级名称 \\
+semester & VARCHAR(32) & NOT NULL & - & 对应学期 (如 2026-Spring) \\
+total\_students & INT & NOT NULL & - & 班级学生总人数 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{4. 系统用户表 (User)}
+表 3.13 定义了系统用户的字段规范。
+\begin{table}[H]
+\centering
+\caption{系统用户表 (User)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+user\_id & UUID & NOT NULL & PK & 用户唯一标识符 \\
+school\_id & UUID & NOT NULL & FK & 关联所属学校 ID \\
+username & VARCHAR(64) & NOT NULL & UQ & 登录用户名 (唯一) \\
+password\_hash & VARCHAR(256) & NOT NULL & - & 经过加盐哈希的安全密码密文 \\
+role & VARCHAR(16) & NOT NULL & - & 角色: 'teacher', 'student', 'admin' \\
+localized\_lang & VARCHAR(8) & NOT NULL & - & 用户界面默认语言 ('zh'/'ru'/'kk') \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{5. 课程信息表 (Course)}
+表 3.14 定义了课程基本信息的字段规范。
+\begin{table}[H]
+\centering
+\caption{课程信息表 (Course)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+course\_id & UUID & NOT NULL & PK & 课程唯一标识符 \\
+creator\_id & UUID & NOT NULL & FK & 关联创建教师用户 ID \\
+name & VARCHAR(128) & NOT NULL & - & 课程名称 \\
+description & TEXT & NULL & - & 课程详细描述说明 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{6. 课件静态文件表 (Courseware)}
+表 3.15 定义了课件关联静态文件的字段规范。
+\begin{table}[H]
+\centering
+\caption{课件静态文件表 (Courseware)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+courseware\_id & UUID & NOT NULL & PK & 课件唯一标识符 \\
+course\_id & UUID & NOT NULL & FK & 关联所属课程 ID \\
+file\_name & VARCHAR(256) & NOT NULL & - & 原始文件名 \\
+file\_path & VARCHAR(512) & NOT NULL & - & 存储系统的文件存储绝对路径 \\
+file\_size & INT & NOT NULL & - & 文件大小 (字节) \\
+total\_pages & INT & NOT NULL & - & 课件转换后的总页数 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{7. 课后作业节点表 (Homework)}
+表 3.16 定义了作业跟读节点的字段规范。
+\begin{table}[H]
+\centering
+\caption{课后作业节点表 (Homework)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+homework\_id & UUID & NOT NULL & PK & 作业唯一标识符 \\
+course\_id & UUID & NOT NULL & FK & 关联所属课程 ID \\
+lesson\_node\_id & VARCHAR(64) & NOT NULL & UQ & 作业节点唯一去重索引 (教纲强绑定) \\
+pinyin\_text & VARCHAR(128) & NOT NULL & - & 中文跟读声母韵脚标准文本 \\
+russian\_translation & VARCHAR(256) & NOT NULL & - & 俄语释义说明辅助文本 \\
+audio\_tts\_cache\_key & VARCHAR(256) & NULL & - & 对应 TTS 发音音频的云端缓存文件索引 \\
+created\_at & TIMESTAMP & NOT NULL & - & 记录创建时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{8. 学生录音表 (VoiceRecord)}
+表 3.17 定义了学生发音录音的字段规范。
+\begin{table}[H]
+\centering
+\caption{学生录音表 (VoiceRecord)}
+\begin{tabularx}{\textwidth}{l p{3.2cm} p{1.8cm} p{1.8cm} X}
+\toprule
+\textbf{字段名} & \textbf{数据类型} & \textbf{空约束} & \textbf{键约束} & \textbf{说明} \\
+\midrule
+record\_id & UUID & NOT NULL & PK & 录音唯一记录标识符 \\
+homework\_id & UUID & NOT NULL & FK & 关联对应的作业节点 ID \\
+student\_id & UUID & NOT NULL & FK & 关联提交学生的注册用户 ID \\
+file\_path & VARCHAR(512) & NOT NULL & - & 录音文件持久化存储相对路径 \\
+duration\_seconds & DECIMAL(4,2) & NOT NULL & - & 音频时长 (秒) \\
+status & VARCHAR(16) & NOT NULL & - & 记录状态 ('submitted', 'deleted') \\
+submitted\_at & TIMESTAMP & NOT NULL & - & 音频实际提交上报时间 \\
+\bottomrule
+\end{tabularx}
+\end{table}

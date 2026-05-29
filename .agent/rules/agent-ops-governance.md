@@ -58,5 +58,27 @@ To prevent massive breaking code leaks and regression in critical features (such
      ```
 2. **Zero Remote Push**:
    During active sprint execution, all commits **must remain strictly local**. The Agent is forbidden from running `git push` to remote origins.
-3. **Sprint Human Review**:
-   At the end of a Sprint, the Agent presents the local Git log. The Human reviews the commits and performs a single, safe batch-push to remote upon approval.
+3. **Local Staging**: All commits must remain local. Zero push to the remote origin is allowed during execution. The human will review and batch-push the commits upon Sprint sign-off.
+
+---
+
+## 4. Ralph Execution Framework (四层分解约束)
+
+所有文档生产和工程开发活动必须遵循 Ralph 四层分解模型：**Object → Key-Result → Task → Step**。详细规则参见 [ralph-execution-framework.md](./ralph-execution-framework.md)。
+
+核心执行纪律：
+* **单次单问题**：Agent 每次只处理一个 Step，禁止跨 Step 混合执行。
+* **调研先行**：涉及内容产出的 Step 必须先完成文献检索和调研日志。
+* **脚本注入优先**：通过精确行号替换注入纯 LaTeX 源码，禁止全文覆写。
+
+---
+
+## 5. Adversarial Audit Protocol (对抗式审核)
+
+所有生命周期文档（01-FA 至 07-UM）的内容产出必须经过执行-审核双 Agent 对抗环。详细规则参见 [adversarial-audit.md](./adversarial-audit.md)。
+
+核心机制：
+* **Executor** 按原子任务产出 LaTeX 内容。
+* **Auditor** 以"毒舌论文打假专家"人设执行 7 维度扫描。
+* 审核不通过则 Executor 按修正指令逐条修复后重新提交。
+* 三次返修仍 FAIL 则终止并上报人类层。

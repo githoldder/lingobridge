@@ -1,29 +1,61 @@
 \chapter{引言}
 
 \section{目的}
+本软件需求规格说明书（SRS）旨在明确 LingoBridge 中文学习平台的设计基准、开发边界与验收标准，为项目组、测试人员、评审专家以及合作机构提供统一的规范依据。本说明书对系统在课前预习、直播教学、课后跟读以及录音管理等核心模块的功能与非功能行为进行了规整，确保开发阶段的质量控制与验收测试的科学性。
 
-% TODO: 说明编写本 SRS 的目的
+编写本说明书的首要目的在于通过细致的需求规格定义，在软件生命周期的早期阶段锁定平台边界，降低由于跨国网络环境和硬件设备差异带来的工程实现风险。本文档作为 LingoBridge 平台有条件可行性判定之后的延续性规范，是后续概要设计（HLD）、详细设计（LLD）、测试计划（TP）以及部署指南（DEP）编写的唯一基准，强调需求的可观察与可测试性，并不涉及系统内部代码的具体实现细节。
 
 \section{范围}
+LingoBridge 中文学习平台是一款专为具有俄语背景的中文初学者量身定制的课后辅助跟读练习工具。本系统的产品边界定位在课件的播放与发音录制消费端，紧密结合教师现有的课堂大纲，为留学生提供声母、韵脚、音标的语音朗读播放与跟读录制，并沉淀学习过程中的音频轨迹资产。本系统不承担重型课程管理系统、实时多人在线白板编辑或跨境商业付费结算等非核心功能。
 
-% TODO: 说明本 SRS 适用的系统/项目范围
+本产品在开发与交付周期上实行严格的分期规划。当前交付的 V1.0 MVP 阶段主要聚焦于单学校、单租户（如 CZU 试点）的核心流程闭环，支持课件 PDF 翻页展示、中文标准文本转语音（TTS）播放、基于浏览器接口的麦克风录音采集与上传，以及班级排行榜激励。后续的 V1.1 阶段将引入多租户隔离、腾讯会议一键拉起；V2.0 阶段将引入云端轻量翻译大模型以提供实时双语字幕与学校认证；V3.0 阶段则实现国际付费收单解耦。
 
 \section{定义与缩略语}
+为了确保文档术语在项目生命周期内的一致性，防止因多语言翻译和跨界术语歧义造成的工程误差，本规格说明书对文中所涉及的核心专业术语及缩略语进行了统一界定。表 1.1 列出了 LingoBridge 平台的核心术语定义。
 
 \begin{table}[H]
 \centering
-\caption{术语定义}
-\begin{tabular}{|l|l|}
-\hline
-\textbf{术语} & \textbf{定义} \\
-\hline
-SRS & 软件需求规格说明书 \\
-\hline
-TTS & Text-to-Speech，文本转语音 \\
-\hline
-MVP & Minimum Viable Product，最小可行产品 \\
-\hline
-Live Class & 直播课堂，教学的核心容器 \\
-\hline
-\end{tabular}
+\caption{LingoBridge 核心术语与缩略语定义}
+\begin{tabularx}{\textwidth}{l p{4cm} X}
+\toprule
+\textbf{术语/缩略语} & \textbf{英文全称} & \textbf{定义与业务含义} \\
+\midrule
+SRS & Software Requirements Specification & 软件需求规格说明书，阐述系统功能与约束 \\
+MVP & Minimum Viable Product & 最小可行产品，聚焦核心拼音跟读流程 of the V1.0 MVP \\
+TTS & Text-to-Speech & 文本转语音，调用云服务合成中文标准朗读音频 \\
+ASR & Automatic Speech Recognition & 自动语音识别，用于后续口语测评与语音识别 \\
+Live Class & Live Classroom & 在线课堂，承载教师授课、课件同步与信令互动的容器 \\
+Presence & Status Synchronization & 在线状态，基于高频状态机维持的师生白板同步状态 \\
+WebRTC & Web Real-Time Communication & 网页即时通信，提供浏览器端音视频传输与信令通道 \\
+i18n & Internationalization & 国际化，系统支持多语言（中、英、俄、哈）一键切换 \\
+LMS & Learning Management System & 学习管理系统，提供教务与学籍管理的重型教务平台 \\
+SaaS & Software as a Service & 软件即服务，多租户多学校共享的基础设施软件模式 \\
+C2K & Educational Institution & 本项目的合作国际教育机构，提供试点学员与渠道支撑 \\
+CZU & Chita State University & 试点高校，系统首个落地进行留学生教学试点的机构 \\
+UUID & Universally Unique Identifier & 通用唯一识别码，用于系统中用户、课程与录音的唯一标识 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+上述术语在后续的需求描述、设计开发以及测试用例编写中将严格对齐表 1.1 的定义。开发团队与业务团队在进行功能沟通时，应以本表定义的语义为准，避免生搬硬套非本项目的通用名词。
+
+\section{参考资料}
+本规格说明书在编制过程中，严格参考了国家标准及项目的历史需求访谈记录，以保证文档结构的合规性与数据来源的真实性。相关参考资料如表 1.2 所示。
+
+\begin{table}[H]
+\centering
+\caption{参考资料及著录清单}
+\begin{tabularx}{\textwidth}{l p{3.5cm} X}
+\toprule
+\textbf{资料名称} & \textbf{版本/日期} & \textbf{主要参考内容与价值说明} \\
+\midrule
+GB/T 9385---2008 & 2008 年版 & 计算机软件需求规格说明规范，规范本文档结构 \\
+GB/T 8567---2006 & 2006 年版 & 计算机软件文档编制规范，指导生命周期文档管理 \\
+LingoBridge 初次需求访谈记录 & 2026-04-18 & 记录初始大而全需求，包含翻译、弹幕与收费想法 \\
+LingoBridge 二次需求访谈记录 & 2026-05-02 & 明确向 MVP 收敛，确定拼音跟读和录音存储为核心 \\
+LingoBridge MVP PRD & v2.0 / 2026-05 & 详细定义核心功能树、Given-When-Then 验收规范 \\
+LingoBridge 用户使用操作手册 & v1.0 / 2026-05 & 老师版与学生版原型操作说明，提供任务流事实 \\
+LingoBridge MVP 预算总表及拆解 & v1.0 / 2026-05 & 规范服务器采购、云接口费用，约束经济可行性指标 \\
+\bottomrule
+\end{tabularx}
 \end{table}

@@ -1,4 +1,93 @@
-\chapter{接口设计（概要）}
+\chapter{接口设计}
 
-% TODO: RESTful API 路由总览
-% /api/v1/auth, /api/v1/courses, /api/v1/coursewares, etc.
+\section{用户接口设计}
+LingoBridge 平台的用户接口采用极简主义的设计美学，全面贯彻响应式自适应布局标准，以保证在不同终端设备上的视觉呈现一致性。前端交互开发主要依托标准的 Web 技术栈，如通过 HTML5 Canvas 2D 绘图引擎承载教师端的基础白板划线指示，并下推 PDF.js 分页库在浏览器沙盒内直接将 PDF 课件逐页高精准渲染为像素级一致的画布。系统在左侧设计了常驻式侧边导航栏，右侧则为核心功能工作区，在视觉上提供清晰的层级结构。
+
+\section{外部接口设计}
+在外部服务对接维度，平台遵循轻量运营与极低网络开销的核心诉求，设计了标准的外部 API 调度网关，并对未验证能力执行候选及演进降级描述。
+
+针对学生口语听读跟读的纠音诉求，系统后端在接到录音解析请求后，设计了流式调用自动语音识别（ASR）评测接口的扩展占位符。在目前的 MVP 原型阶段，系统主要提供本地音频采集与回放，ASR 评测打分及音素级分析功能定位为\textbf{后续演进路线}。
+
+针对中文标准拼音的听读合成诉求，系统调度第三方语音合成（TTS）流式 API 接口，返回高压缩率的标准音频字节流，并配合后端的双层缓存策略进行就地复用。
+
+为了实现直播课堂中高质量的音视频通话闭环，系统在设计上规划了第三方会议接口。由于第三方会议平台存在严格的企业资质审核门槛及长周期的企业级准入限制，在 MVP 试点阶段，系统不直接集成腾讯会议及 Microsoft Teams 的官方 OAuth 2.0 鉴权通道。系统将官方 REST API 自动同步考勤和自动建会功能降级为\textbf{候选增强技术}，并通过设计非 API 依赖的外链分享降级预案来保证基本教学闭环的跑通。
+
+\section{内部接口设计}
+系统的前端展现子系统与后端信令控制子系统之间，全部基于无状态的 HTTP RESTful 协议和 WebSocket 长连接信道进行安全交互。为了确保数据流通契约的严密性与需求可追踪性，特制定表 4.1 所示的系统接口路由概览表，以及表 4.2 所示的系统接口 DTO 与状态码契约明细表。表中所涉及的接口均从 \texttt{backend/src/app.ts} 路由声明中真实提取。
+
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.18}
+\begin{longtable}{@{}p{1.35cm} p{1.05cm} p{4.1cm} p{2.0cm} p{1.8cm} p{1.45cm}@{}}
+\caption{LingoBridge 系统核心 RESTful 接口路由概览表} \label{tab:api_overview} \\
+\toprule
+\textbf{接口编号} & \textbf{请求方法} & \textbf{路由路径} & \textbf{鉴权角色} & \textbf{当前实现状态} & \textbf{需求追踪 ID} \\
+\midrule
+\endfirsthead
+\caption[]{LingoBridge 系统核心 RESTful 接口路由概览表（续）} \\
+\toprule
+\textbf{接口编号} & \textbf{请求方法} & \textbf{路由路径} & \textbf{鉴权角色} & \textbf{当前实现状态} & \textbf{需求追踪 ID} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+API-001 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak auth/\allowbreak login} & 匿名开放 & 已实现 & FR-001 \\
+API-002 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak auth/\allowbreak register} & 匿名开放 & 已实现 & FR-001 \\
+API-003 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak users/\allowbreak me} & 已登录用户 & 已实现 & FR-001 \\
+API-004 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak classes} & 已登录用户 & 已实现 & FR-002 \\
+API-005 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak classes} & 教师/管理员 & 已实现 & FR-002 \\
+API-006 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak courses} & 已登录用户 & 已实现 & FR-002 \\
+API-007 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak coursewares} & 教师/管理员 & 已实现 & FR-003 \\
+API-008 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak assignments/\allowbreak import} & 教师/管理员 & 已实现 & FR-006 \\
+API-009 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak assignments/\allowbreak export} & 教师/管理员 & 已实现 & FR-006 \\
+API-010 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak recordings} & 学生角色 & 已实现 & FR-006 \\
+API-011 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak recordings} & 已登录用户 & 已实现 & FR-006 \\
+API-012 & \texttt{GET} & \texttt{/api/\allowbreak v1/\allowbreak tts} & 已登录用户 & 已实现 & FR-003 \\
+API-013 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak translate} & 已登录用户 & 候选增强 & FR-005 \\
+API-014 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak live-\allowbreak sessions} & 教师/管理员 & 已实现 & FR-007 \\
+API-015 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak live-\allowbreak sessions/\allowbreak :id/\allowbreak signals} & 教师/学生 & 候选增强 & FR-007 \\
+API-016 & \texttt{POST} & \texttt{/api/\allowbreak v1/\allowbreak live-\allowbreak sessions/\allowbreak :id/\allowbreak presence} & 教师/学生 & 已实现 & FR-007 \\
+\end{longtable}
+\endgroup
+
+为了明确上述接口在前后端数据交互过程中的强类型结构以及 HTTP 状态码契约，特制定表 4.2 所示的分模块接口明细规格说明。表中定义的 DTO 均在 TypeScript 编译期执行静态类型约束。
+
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.18}
+\begin{longtable}{@{}p{1.25cm} p{2.45cm} p{2.55cm} p{4.2cm} p{2.4cm}@{}}
+\caption{LingoBridge 分模块 RESTful 接口 DTO 与状态码契约表} \label{tab:api_detail} \\
+\toprule
+\textbf{接口编号} & \textbf{输入 DTO 规格} & \textbf{输出 DTO 规格} & \textbf{HTTP 状态码与核心错误契约} & \textbf{隶属业务子系统} \\
+\midrule
+\endfirsthead
+\caption[]{LingoBridge 分模块 RESTful 接口 DTO 与状态码契约表（续）} \\
+\toprule
+\textbf{接口编号} & \textbf{输入 DTO 规格} & \textbf{输出 DTO 规格} & \textbf{HTTP 状态码与核心错误契约} & \textbf{隶属业务子系统} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+API-001 & \texttt{Login\allowbreak Dto} & \texttt{Token\allowbreak Dto} & 200 OK / 401 AuthFailed (登录凭证错误) & 用户与鉴权模块 \\
+API-002 & \texttt{Register\allowbreak Dto} & \texttt{User\allowbreak Dto} & 200 OK / 400 BadRequest (邮箱已存在) & 用户与鉴权模块 \\
+API-003 & 无 & \texttt{User\allowbreak Dto} & 200 OK / 401 Unauthorized (JWT已过期) & 用户与鉴权模块 \\
+API-004 & 无 & \texttt{Class\allowbreak Dto[]} & 200 OK / 401 Unauthorized (未登录鉴权) & 班级与课程模块 \\
+API-005 & \texttt{Class\allowbreak Create\allowbreak Dto} & \texttt{Class\allowbreak Dto} & 201 Created / 400 BadRequest (参数不全) & 班级与课程模块 \\
+API-006 & \texttt{Filter\allowbreak Query} & \texttt{Course\allowbreak Dto[]} & 200 OK / 401 Unauthorized (越权请求) & 班级与课程模块 \\
+API-007 & \texttt{Multipart\allowbreak Form} & \texttt{File\allowbreak Dto} & 201 Created / 413 TooLarge (文件超20MB) & 班级与课程模块 \\
+API-008 & \texttt{Multipart\allowbreak Form} & \texttt{Log\allowbreak Dto} & 200 OK / 400 BadRequest (Excel模板错误) & 作业与词汇模块 \\
+API-009 & \texttt{Export\allowbreak Query} & 二进制流 & 200 OK / 404 NotFound (课时无作业记录) & 作业与词汇模块 \\
+API-010 & \texttt{Multipart\allowbreak Form} & \texttt{Recording\allowbreak Dto} & 201 Created / 400 BadRequest (音频格式损坏) & 作业与词汇模块 \\
+API-011 & \texttt{Record\allowbreak Query} & \texttt{Recording\allowbreak Dto[]} & 200 OK / 401 Unauthorized (未登录状态) & 作业与词汇模块 \\
+API-012 & \texttt{Tts\allowbreak Query} & 二进制流 & 200 OK / 500 TtsFailed (TTS引擎通信失败) & 语音与合成模块 \\
+API-013 & \texttt{Translate\allowbreak Dto} & \texttt{Translate\allowbreak Dto} & 200 OK (翻译候选, 暂不支持物理翻译) & 语音与合成模块 \\
+API-014 & \texttt{Live\allowbreak Create\allowbreak Dto} & \texttt{Live\allowbreak Session\allowbreak Dto} & 201 Created / 400 BadRequest (课时已被占用) & 在线互动课堂 \\
+API-015 & \texttt{Signal\allowbreak Dto} & \texttt{Signal\allowbreak Dto} & 200 OK (画笔信令候选, MVP 阶段暂置空) & 在线互动课堂 \\
+API-016 & \texttt{Presence\allowbreak Dto} & \texttt{Presence\allowbreak Dto} & 200 OK / 400 BadRequest (信道连接中断) & 在线互动课堂 \\
+\end{longtable}
+\endgroup
+
+\section{数据接口设计}
+系统底层的数据库访问接口均由统一的 Repository 数据源适配仓库承载。数据访问层不仅在接口方法签名上对上层控制器隐藏了物理介质的差异，更在底层封装了双模式读写通道。当系统启动并检测到物理环境变量 \texttt{DB\_MODE=postgres} 时，数据访问层内部的数据流自动转换为向连接池派发包含参数占位符的 SQL 结构化语句，并严格遵循 DTO 格式进行结果返回；而在本地开发或演示模式下，仓库层数据流则切换至 JSON 读写器，直接对物理文件系统中的 JSON 元数据存储执行并发安全锁保护的排他文件 I/O 读写，在逻辑与物理上保障了数据传输对象的行为一致。

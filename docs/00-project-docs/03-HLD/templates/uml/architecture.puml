@@ -1,0 +1,79 @@
+@startuml architecture
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam node {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam cloud {
+  BackgroundColor #F0FDF4
+  BorderColor #10B981
+  FontColor #1E293B
+}
+skinparam database {
+  BackgroundColor #FFF7ED
+  BorderColor #F97316
+  FontColor #1E293B
+}
+skinparam rectangle {
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam artifact {
+  BackgroundColor #FDF2F8
+  BorderColor #F43F5E
+  FontColor #1E293B
+}
+skinparam ArrowColor #3B82F6
+skinparam ArrowFontColor #64748B
+
+title LingoBridge 部署架构图 (Deployment Diagram)
+
+rectangle "客户端层 (Client Tier)" as client_tier #F8FAFC {
+  node "浏览器 SPA" as browser {
+    artifact "React 19 + Vite" as react
+    artifact "PDF.js 课件渲染" as pdfjs
+    artifact "Web Audio API\n录音 / TTS 播放" as webaudio
+  }
+}
+
+rectangle "边缘层 (Edge Tier)" as edge_tier #F0FDF4 {
+  cloud "Vercel CDN" as vercel {
+    node "静态资源托管\n(HTML/JS/CSS)" as static_host
+    node "Edge Functions\n路由重写 /api/* → CVM" as edge_fn
+  }
+}
+
+rectangle "应用层 (Application Tier)" as app_tier #E0F2FE {
+  node "腾讯云 CVM (Docker)" as cvm {
+    node "Caddy 反向代理\n:80 → :3001" as caddy
+    node "Express 应用 :3001" as express {
+      artifact "JWT 认证中间件" as jwt_mw
+      artifact "REST API 路由" as api_routes
+      artifact "Repository 层\n(双模式: PG / JSON)" as repo
+    }
+  }
+}
+
+rectangle "数据层 (Data Tier)" as data_tier #FFF7ED {
+  database "PostgreSQL 容器\n:5432" as pg
+  database "本地文件存储\nbackend/storage/\n(音频 / 课件)" as fs
+}
+
+rectangle "外部服务 (External)" as ext_tier #FDF2F8 {
+  artifact "Azure Speech TTS API" as azure_tts
+  artifact "未来 ASR 服务商\n(语音识别)" as future_asr
+}
+
+browser -down-> vercel : HTTPS :443
+static_host -down-> browser : 静态资源响应
+edge_fn -down-> caddy : HTTP 内网转发\n/api/* 重写
+caddy -down-> express : HTTP :3001
+express -down-> pg : TCP :5432\nSQL 查询
+express -down-> fs : 文件 I/O\n读写音频/课件
+express -right-> azure_tts : HTTPS\nTTS 合成请求
+express -right-> future_asr : HTTPS\n(预留接口)
+
+@enduml

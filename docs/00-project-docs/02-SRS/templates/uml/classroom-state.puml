@@ -1,0 +1,52 @@
+@startuml Live Classroom State Model
+[*] --> NotStarted : 教师创建课堂日程
+
+state NotStarted {
+  NotStarted : 课件已关联
+  NotStarted : 连麦通道未初始化
+}
+
+NotStarted --> Waiting : 教师点击“发起授课”
+
+state Waiting {
+  Waiting : 教师进入直播房间
+  Waiting : 等待学生端连接
+}
+
+Waiting --> Ongoing : 师生建立长连接
+
+state Ongoing {
+  Ongoing : 教师广播翻页信令 (Presence)
+  Ongoing : 学生端自动同步跳转页码
+}
+
+Ongoing --> RaisingHand : 学生点击“举手连麦”
+
+state RaisingHand {
+  RaisingHand : 学生端挂起连麦申请
+  RaisingHand : 教师端控制面板弹出通知
+}
+
+RaisingHand --> Ongoing : 教师拒绝 或 申请超时
+
+RaisingHand --> Authorized : 教师点击“同意连麦授权”
+
+state Authorized {
+  Authorized : 激活学生端浏览器麦克风
+  Authorized : 实时广播学生音频流至全员
+}
+
+Authorized --> Ongoing : 教师取消授权 或 学生主动关闭
+
+Ongoing --> Closed : 教师点击“下课”/关闭会话
+Waiting --> Closed : 教师主动关闭会话
+Authorized --> Closed : 教师主动关闭会话
+
+state Closed {
+  Closed : 彻底停用并断开所有媒体流通道
+  Closed : 显式强制调用 track.stop()
+  Closed : 销毁 Presence 状态机实例
+}
+
+Closed --> [*]
+@enduml

@@ -1,0 +1,172 @@
+@startuml faq-troubleshooting-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #FFF1F2
+skinparam PartitionBorderColor #F43F5E
+
+title 常见问题排查决策树
+
+start
+
+#F43F5E:用户遇到问题;
+
+if (问题类型?) then (页面无法加载)
+
+  partition "Q1: 页面无法加载" {
+    :检查网络连接;
+    note right
+      确认 Wi-Fi / 有线网络正常
+      尝试访问其他网站
+    end note
+
+    :尝试刷新页面;
+    note right
+      Ctrl+R / Cmd+R
+      强制刷新
+    end note
+
+    :清除浏览器缓存;
+    note right
+      清除 Cookie 和缓存
+      或使用无痕模式
+    end note
+
+    if (仍然失败?) then (是)
+      #F43F5E:联系管理员;
+      note right
+        提供浏览器控制台
+        错误截图
+      end note
+    else (否)
+      #10B981:问题已解决;
+    endif
+  }
+
+elseif (问题类型?) then (麦克风无法录音)
+
+  partition "Q2: 麦克风无法录音" {
+    :检查浏览器麦克风权限;
+    note right
+      浏览器地址栏左侧
+      点击锁图标 → 麦克风 → 允许
+    end note
+
+    :检查系统音频设置;
+    note right
+      系统偏好设置 → 声音
+      确认输入设备正确
+    end note
+
+    :尝试其他浏览器;
+    note right
+      推荐使用 Chrome
+      Safari 部分 API 不兼容
+    end note
+
+    if (仍然失败?) then (是)
+      #F43F5E:联系管理员;
+    else (否)
+      #10B981:问题已解决;
+    endif
+  }
+
+elseif (问题类型?) then (课件上传失败)
+
+  partition "Q3: 课件上传失败" {
+    :检查文件格式;
+    note right
+      仅支持 PDF 和 PPTX
+      不支持 DOC/JPG 等
+    end note
+
+    :检查文件大小;
+    note right
+      文件大小限制 < 20MB
+      超过需压缩后重试
+    end note
+
+    :检查是否已选择课时;
+    note right
+      上传前需先选择
+      目标课时节点
+    end note
+
+    if (仍然失败?) then (是)
+      #F43F5E:联系管理员;
+    else (否)
+      #10B981:问题已解决;
+    endif
+  }
+
+elseif (问题类型?) then (直播课堂连接超时)
+
+  partition "Q4: 直播课堂连接超时" {
+    :检查是否教师已开课;
+    note right
+      确认 live_sessions
+      状态为 active
+    end note
+
+    :等待自动重连;
+    note right
+      最多 10 次指数退避
+      间隔: 1s, 2s, 4s...
+    end note
+
+    :手动刷新重试;
+    note right
+      F5 刷新页面
+      重新进入教室
+    end note
+
+    if (仍然失败?) then (是)
+      #F43F5E:联系管理员;
+    else (否)
+      #10B981:问题已解决;
+    endif
+  }
+
+else (Vercel 502 错误)
+
+  partition "Q5: Vercel 502 错误" {
+    :后端服务可能宕机;
+    note right
+      502 Bad Gateway
+      表示后端无响应
+    end note
+
+    :检查 /api/v1/health;
+    note right
+      直接访问 CVM IP
+      http://101.34.72.227:3001
+      /api/v1/health
+    end note
+
+    if (健康检查失败?) then (是)
+      #F43F5E:联系运维人员;
+      note right
+        提供错误时间戳
+        后端可能需要重启
+        PM2 / Docker 排查
+      end note
+    else (否)
+      :可能是网络波动;
+      :稍后重试;
+      #10B981:问题已解决;
+    endif
+  }
+
+endif
+
+stop
+
+@enduml

@@ -1,0 +1,80 @@
+@startuml
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam activity {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam activityDiamond {
+  BackgroundColor #FEF3C7
+  BorderColor #F97316
+  FontColor #1E293B
+}
+skinparam swimlane {
+  BorderColor #3B82F6
+  TitleFontColor #1E293B
+}
+skinparam arrow {
+  Color #3B82F6
+  FontColor #64748B
+}
+skinparam partition {
+  BorderColor #10B981
+  BackgroundColor #F0FDF4
+}
+
+title LingoBridge MVP 业务闭环流程 (MVP Business Loop)
+
+|#F0FDF4| 教师端 (Teacher) |
+start
+#D1FAE5:教师登录\n(JWT 鉴权);
+#D1FAE5:创建课程 & 绑定班级\n(courses + classes);
+#D1FAE5:上传 PDF/PPTX 课件\n(courseware_files);
+#D1FAE5:导入 Excel 作业\n(assignment_nodes\n+ vocabulary_items);
+
+fork
+  #10B981:开启直播课堂\n(live_sessions\nPresence 同步);
+fork again
+  |#E0F2FE| 学生端 (Student) |
+  #93C5FD:学生登录/注册\n(users 表);
+  #93C5FD:加入班级\n(class_members);
+  #93C5FD:进入课堂\n(Presence 上线);
+end fork
+
+|#E0F2FE| 学生端 (Student) |
+#93C5FD:浏览课件页面\n(course_pages);
+#93C5FD:TTS 听读跟读\n(Azure Speech F0);
+#93C5FD:录音练习 (3 槽位机制)\n(recordings × 3);
+
+if (对录音满意？) then (是)
+  #10B981:提交作业\n(homework_submissions\n+ homework_recording_attempts);
+else (否)
+  #FCA5A5:重新录音\n(覆盖槽位);
+  -> 重试;
+  backward:返回录音练习;
+endif
+
+|#F0FDF4| 教师端 (Teacher) |
+#D1FAE5:查看学生提交列表\n(homework_submissions);
+#D1FAE5:试听学生录音\n(recordings);
+#D1FAE5:评分 & 反馈\n(learning_records);
+
+|#E0F2FE| 学生端 (Student) |
+#93C5FD:查看成绩与反馈\n(learning_records);
+
+|#FFF7ED| 数据闭环 (Data Loop) |
+#FBBF24:学习数据沉淀\n┌─ learning_records\n├─ recordings\n├─ homework_submissions\n└─ transcript_segments;
+
+stop
+
+legend right
+  |= 颜色 |= 含义 |
+  | <back:#D1FAE5>   </back> | 教师操作 |
+  | <back:#93C5FD>   </back> | 学生操作 |
+  | <back:#FBBF24>   </back> | 数据持久化 |
+  | <back:#FCA5A5>   </back> | 异常/重试 |
+end legend
+
+@enduml

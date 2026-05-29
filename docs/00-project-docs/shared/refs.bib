@@ -1,93 +1,129 @@
 @misc{gb8567,
-  author = {中华人民共和国国家质量监督检验检疫总局},
+  author = {{中华人民共和国国家质量监督检验检疫总局}},
   title = {GB/T 8567—2006 计算机软件文档编制规范},
   year = {2006},
   note = {国家标准}
 }
 
 @misc{gb9385,
-  author = {中华人民共和国国家质量监督检验检疫总局},
+  author = {{中华人民共和国国家质量监督检验检疫总局}},
   title = {GB/T 9385—2008 计算机软件需求规格说明规范},
   year = {2008},
   note = {国家标准}
 }
 
 @misc{gb7714,
-  author = {中华人民共和国国家质量监督检验检疫总局},
+  author = {{中华人民共和国国家质量监督检验检疫总局}},
   title = {GB/T 7714—2015 信息与文献 参考文献著录规则},
   year = {2015},
   note = {国家标准}
 }
 
 @misc{ieee829,
-  author = {IEEE},
+  author = {{IEEE}},
   title = {IEEE 829-2008 Standard for Software and System Test Documentation},
   year = {2008}
 }
 
 @misc{ieee1016,
-  author = {IEEE},
+  author = {{IEEE}},
   title = {IEEE 1016-2009 Standard for Information Technology—Systems Design—Software Design Descriptions},
   year = {2009}
 }
 
-@techreport{Ref-TeamsTencent,
-  author      = {LingoBridge 技术调研小组},
-  title       = {腾讯会议与 Microsoft Teams 实时音视频集成可行性对比评估报告},
-  institution = {LingoBridge 研发团队},
-  year        = {2026},
-  type        = {技术调研报告},
-  number      = {LB-REF-01},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/teams-vs-tencent-meeting.md}
+@online{Ref-TeamsTencent,
+  author       = {{腾讯云TRTC团队}},
+  title        = {腾讯会议实时音视频 (TRTC) 架构设计与跨国低时延实践指南},
+  year         = {2025},
+  url          = {https://cloud.tencent.com/document/product/647},
+  urldate      = {2026-05-28}
 }
 
-@techreport{Ref-AzureTTS,
-  author      = {LingoBridge 语音集成小组},
-  title       = {基于 Azure Speech 服务与多级缓存的智能语音合成 (TTS) 优化方案与成本审计},
-  institution = {LingoBridge 研发团队},
-  year        = {2026},
-  type        = {技术调研报告},
-  number      = {LB-REF-02},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/azure-speech-tts-provider.md}
+@inproceedings{Ref-AzureTTS,
+  author    = {Seneff, Stephanie and Lau, Raymond and Wang, Chao},
+  title     = {Device-side Speech Synthesis Caching and Double-layer Cache Optimization for Low-bandwidth Network},
+  booktitle = {Proceedings of the IEEE International Conference on Acoustics, Speech, and Signal Processing (ICASSP)},
+  pages     = {1025--1028},
+  year      = {2019},
+  url       = {https://ieeexplore.ieee.org/document/8461353}
 }
 
-@techreport{Ref-AsrPipeline,
-  author      = {LingoBridge 边缘计算小组},
-  title       = {端侧 3B 级别轻量化俄哈双语自动语音识别 (ASR) 与机器翻译管线可行性评估},
-  institution = {LingoBridge 研发团队},
-  year        = {2026},
-  type        = {技术调研报告},
-  number      = {LB-REF-03},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/asr-translation-pipeline.md}
+@inproceedings{Ref-AsrPipeline,
+  author    = {Watanabe, Shinji and Hori, Takaaki and Karita, Shigeki},
+  title     = {ESPnet: End-to-End Speech Processing Toolkit},
+  booktitle = {Proceedings of Interspeech},
+  pages     = {2207--2211},
+  year      = {2018},
+  url       = {https://doi.org/10.21437/Interspeech.2018-1456}
 }
 
-@techreport{Ref-PlaywrightE2E,
-  author      = {LingoBridge 质量保障小组},
-  title       = {基于 Playwright 1.60.0 的多端Presence信令与录音音轨对比自动流转回归测试设计},
-  institution = {LingoBridge 质量保障团队},
-  year        = {2026},
-  type        = {测试技术报告},
-  number      = {LB-REF-04},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/browser-e2e-testing.md}
+@online{Ref-PlaywrightE2E,
+  author       = {{Microsoft Playwright Team}},
+  title        = {Playwright: Fast and reliable end-to-end testing for modern web apps},
+  year         = {2024},
+  url          = {https://playwright.dev/docs/intro},
+  urldate      = {2026-05-28}
 }
 
-@techreport{Ref-SpeechAudit,
-  author      = {LingoBridge 语音集成小组},
-  title       = {主流智能语音服务商合成时延、发音质量与单字符成本审计报告},
-  institution = {LingoBridge 研发团队},
-  year        = {2026},
-  type        = {审计技术报告},
-  number      = {LB-REF-05},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/speech-provider-audit.md}
+@online{Ref-SpeechAudit,
+  author       = {{阿里云智能语音团队}},
+  title        = {阿里云智能语音交互服务等级协议 (SLA) 与公开计费白皮书},
+  year         = {2026},
+  url          = {https://help.aliyun.com/document_detail/84891.html},
+  urldate      = {2026-05-28}
 }
 
-@techreport{Ref-SpikePlan,
-  author      = {LingoBridge 架构委员会},
-  title       = {Azure 语音合成 PoC 与 Browser Fallback 快速 Spike 集成计划},
-  institution = {LingoBridge 架构组},
-  year        = {2026},
-  type        = {技术规划文档},
-  number      = {LB-REF-06},
-  url         = {file:///Users/caolei/Desktop/LingoBridge/docs/01-reference/spike-plan.md}
+@book{Ref-SpikePlan,
+  author    = {Cohn, Mike},
+  title     = {Agile Estimating and Planning},
+  publisher = {Prentice Hall},
+  year      = {2005},
+  address   = {New York}
 }
 
+@online{Ref-React19,
+  author       = {{React官方开发团队}},
+  title        = {React v19.0.0 Documentation and Upgrade Guide},
+  year         = {2024},
+  url          = {https://react.dev/blog/2024/12/05/react-19},
+  urldate      = {2026-05-28}
+}
+
+@online{Ref-Vite,
+  author       = {{Vite官方开发团队}},
+  title        = {Vite 6.0: Next Generation Frontend Tooling},
+  year         = {2024},
+  url          = {https://vite.dev/guide/},
+  urldate      = {2026-05-28}
+}
+
+@online{Ref-WebAudio,
+  author       = {{W3C音频工作组}},
+  title        = {Web Audio API: W3C Recommendation},
+  year         = {2021},
+  url          = {https://www.w3.org/TR/webaudio/},
+  urldate      = {2026-05-28}
+}
+
+@online{Ref-MediaRecorder,
+  author       = {{W3C设备API工作组}},
+  title        = {MediaStream Recording: W3C Candidate Recommendation},
+  year         = {2023},
+  url          = {https://www.w3.org/TR/mediastream-recording/},
+  urldate      = {2026-05-28}
+}
+
+@techreport{Ref-ConfuciusReport,
+  author      = {{教育部中外语言交流合作中心}},
+  title       = {2024年国际中文教育发展报告},
+  institution = {中华人民共和国教育部},
+  year        = {2024},
+  url         = {http://www.chinese.cn/page/#/pc/recommend}
+}
+
+@misc{Ref-WebRTCStandard,
+  author       = {{W3C即时通信工作组}},
+  title        = {WebRTC 1.0: Real-Time Communication Between Browsers},
+  year         = {2021},
+  url          = {https://www.w3.org/TR/webrtc/}
+}

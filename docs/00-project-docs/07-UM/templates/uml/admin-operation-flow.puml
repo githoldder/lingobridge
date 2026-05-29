@@ -1,0 +1,116 @@
+@startuml admin-operation-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 管理员操作流程图
+
+start
+
+:管理员登录;
+note right
+  使用管理员账号
+  role = "admin"
+end note
+
+:进入管理面板;
+note right
+  /admin 路由
+  仅 admin 角色可见
+end note
+
+fork
+
+  partition "用户管理" #EFF6FF {
+    :查看教师列表;
+    note right
+      GET /admin/users?role=teacher
+      表格展示教师信息
+    end note
+
+    :查看学生列表;
+    note right
+      GET /admin/users?role=student
+      表格展示学生信息
+    end note
+
+    :搜索用户;
+    note right
+      按用户名/邮箱
+      模糊搜索
+    end note
+
+    :修改用户状态;
+    note right
+      active ↔ disabled
+      PATCH /admin/users/:id
+    end note
+  }
+
+fork again
+
+  partition "课程管理" #F0FDF4 {
+    :查看所有课程;
+    note right
+      GET /admin/courses
+      全局课程概览
+    end note
+
+    :查看课件列表;
+    note right
+      GET /admin/coursewares
+      文件管理与清理
+    end note
+
+    :查看录音列表;
+    note right
+      GET /admin/recordings
+      存储用量监控
+    end note
+
+    :查看直播会话;
+    note right
+      GET /admin/live-sessions
+      历史会话记录
+    end note
+  }
+
+fork again
+
+  partition "系统管理" #FFF7ED {
+    :演示数据一键注入 (seed);
+    note right
+      POST /admin/seed
+      注入 demo 教师/学生
+      + 示例课程数据
+    end note
+
+    :查看审计日志;
+    note right
+      操作记录追踪
+      关键动作留痕
+    end note
+
+    :系统健康检查;
+    note right
+      GET /api/v1/health
+      数据库连接状态
+      存储空间检查
+    end note
+  }
+
+end fork
+
+stop
+
+@enduml

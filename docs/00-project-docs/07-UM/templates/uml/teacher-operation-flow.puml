@@ -1,0 +1,122 @@
+@startuml teacher-operation-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 教师操作流程图
+
+start
+
+partition "账户与班级" {
+  :登录系统;
+  note right
+    输入教师账号密码
+    POST /auth/login
+  end note
+
+  :创建班级;
+  note right
+    设置班级名称
+    生成班级邀请码
+  end note
+
+  :添加学生到班级;
+  note right
+    学生使用邀请码加入
+    或教师手动添加
+  end note
+}
+
+partition "课程管理" {
+  :创建课程并绑定班级;
+  note right
+    设置课程名称、描述
+    关联目标班级
+  end note
+
+  :排课（创建课时节点）;
+  note right
+    设置课时标题
+    lesson_nodes 表记录
+  end note
+
+  :上传 PDF/PPTX 课件;
+  note right
+    multipart/form-data
+    支持 PDF 和 PPTX 格式
+    存储至 backend/storage/
+  end note
+
+  :设置默认课件（星标选择）;
+  note right
+    标记 is_default = true
+    直播课堂自动加载
+  end note
+
+  :导入 Excel 作业词表;
+  note right
+    解析 Excel 文件
+    生成 learning_tasks
+    与 vocabulary_items
+  end note
+}
+
+partition "直播课堂" {
+  :发起直播课堂;
+  note right
+    创建 live_sessions
+    状态: active
+  end note
+
+  :课件翻页与白板批注;
+  note right
+    实时同步页码
+    Presence 广播
+  end note
+
+  :处理学生举手连麦;
+  note right
+    接收举手请求
+    批准/拒绝连麦
+  end note
+
+  :结束课堂;
+  note right
+    更新 live_sessions
+    状态: ended
+  end note
+}
+
+partition "作业批阅" {
+  :查看学生作业提交;
+  note right
+    homework_submissions
+    按学生/课时筛选
+  end note
+
+  :回放学生录音;
+  note right
+    播放 recordings
+    对比 TTS 示范音频
+  end note
+
+  :反馈评价;
+  note right
+    文字评语
+    记录 learning_records
+  end note
+}
+
+stop
+
+@enduml

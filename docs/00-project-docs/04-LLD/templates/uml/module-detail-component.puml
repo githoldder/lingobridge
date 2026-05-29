@@ -1,0 +1,102 @@
+@startuml module-detail-component
+
+skinparam backgroundColor #FFFFFF
+skinparam component {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+  ArrowColor #3B82F6
+}
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam note {
+  BackgroundColor #FFF7ED
+  BorderColor #F43F5E
+}
+skinparam defaultFontName "Microsoft YaHei"
+
+package "前端层 (Frontend - React 19 + Vite)" as FE {
+  package "页面视图 (Views)" as Views {
+    component [LoginView\n登录页] as LoginView
+    component [DashboardView\n仪表盘] as DashboardView
+    component [TeacherCoursesView\n教师课程列表] as TeacherCoursesView
+
+    package "TeacherCourseDetailView\n教师课程详情" as TCDV {
+      component [InfoTab\n课程信息] as InfoTab
+      component [StudentsTab\n学生管理] as StudentsTab
+      component [ScheduleTab\n课时安排] as ScheduleTab
+      component [CoursewareTab\n课件管理] as CoursewareTab
+      component [HomeworkTab\n作业管理] as HomeworkTab
+      component [LiveTab\n直播管理] as LiveTab
+    }
+
+    component [TeacherClassroomView\n教师直播课堂] as TeacherClassroomView
+    component [StudentClassroomView\n学生直播课堂] as StudentClassroomView
+    component [HomeworkView\n学生作业页] as HomeworkView
+    component [VocabularyView\n词汇学习页] as VocabularyView
+    component [ScheduleView\n课程表页] as ScheduleView
+    component [AdminDashboardView\n管理员后台] as AdminDashboardView
+  }
+
+  package "上下文层 (Context)" as CTX {
+    component [AuthContext\n认证上下文\n(JWT / 角色)] as AuthContext #D1FAE5
+    component [LanguageContext\n语言上下文\n(i18n 中/英)] as LanguageContext #D1FAE5
+  }
+
+  package "服务层 (Service - apiClient.ts)" as SVC {
+    component [coursesApi\n课程接口] as coursesApi
+    component [liveSessionsApi\n直播接口] as liveSessionsApi
+    component [lessonNodesApi\n课时接口] as lessonNodesApi
+    component [recordingsApi\n录音接口] as recordingsApi
+    component [assignmentsApi\n作业接口] as assignmentsApi
+    component [learningRecordsApi\n学习记录接口] as learningRecordsApi
+    component [classesApi\n班级接口] as classesApi
+    component [ttsApi\nTTS 语音合成接口] as ttsApi
+  }
+}
+
+package "后端层 (Backend - Node.js + Express)" as BE {
+  component [app.ts\nExpress Router\n路由分发] as ExpressRouter #DBEAFE
+  component [JWT Auth Middleware\nJWT 认证中间件] as JWTMiddleware #FEE2E2
+}
+
+package "仓储层 (Repository - 双模式)" as REPO {
+  component [usersRepo\n用户仓储] as usersRepo
+  component [coursesRepo\n课程仓储] as coursesRepo
+  component [classesRepo\n班级仓储] as classesRepo
+  component [assignmentsRepo\n作业仓储] as assignmentsRepo
+  component [filesRepo\n文件仓储] as filesRepo
+
+  note bottom of usersRepo
+    双模式:
+    JSON 文件 (开发)
+    PostgreSQL (生产)
+  end note
+}
+
+package "数据层 (Data)" as DATA {
+  database "PostgreSQL\n(生产环境)" as PG #D1FAE5
+  database "JSON File\n(开发环境)" as JSON #FEF3C7
+}
+
+Views --> CTX : 消费上下文
+Views --> SVC : 调用 API
+CTX --> SVC : 注入 Token
+SVC --> ExpressRouter : HTTP 请求\n(Axios)
+ExpressRouter --> JWTMiddleware : 校验令牌
+JWTMiddleware --> REPO : 调用仓储方法
+usersRepo --> PG
+usersRepo --> JSON
+coursesRepo --> PG
+coursesRepo --> JSON
+classesRepo --> PG
+classesRepo --> JSON
+assignmentsRepo --> PG
+assignmentsRepo --> JSON
+filesRepo --> PG
+filesRepo --> JSON
+
+@enduml
