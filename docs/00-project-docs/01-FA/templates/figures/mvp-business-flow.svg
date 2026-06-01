@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .title { font: 700 30px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .lane { font: 700 22px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .text { font: 18px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #1e293b; }
+      .small { font: 15px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #475569; }
+      .box { rx: 14; ry: 14; stroke-width: 2; }
+      .arrow { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 8 8; }
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">LingoBridge MVP 业务闭环流程</text>
+
+  <rect x="55" y="90" width="325" height="565" fill="#f0fdf4" stroke="#10b981" stroke-width="2" rx="18"/>
+  <rect x="437" y="90" width="325" height="565" fill="#eff6ff" stroke="#3b82f6" stroke-width="2" rx="18"/>
+  <rect x="820" y="90" width="325" height="565" fill="#fff7ed" stroke="#f59e0b" stroke-width="2" rx="18"/>
+
+  <text x="218" y="130" text-anchor="middle" class="lane">教师端</text>
+  <text x="600" y="130" text-anchor="middle" class="lane">学生端</text>
+  <text x="982" y="130" text-anchor="middle" class="lane">数据闭环</text>
+
+  <rect x="105" y="165" width="225" height="58" class="box" fill="#d1fae5" stroke="#059669"/>
+  <text x="218" y="190" text-anchor="middle" class="text">教师登录</text>
+  <text x="218" y="211" text-anchor="middle" class="small">JWT 鉴权</text>
+
+  <rect x="105" y="250" width="225" height="58" class="box" fill="#d1fae5" stroke="#059669"/>
+  <text x="218" y="275" text-anchor="middle" class="text">创建课程与班级</text>
+  <text x="218" y="296" text-anchor="middle" class="small">课程、班级、成员映射</text>
+
+  <rect x="105" y="335" width="225" height="58" class="box" fill="#d1fae5" stroke="#059669"/>
+  <text x="218" y="360" text-anchor="middle" class="text">上传课件并布置作业</text>
+  <text x="218" y="381" text-anchor="middle" class="small">PDF/PPTX 与跟读节点</text>
+
+  <rect x="105" y="505" width="225" height="58" class="box" fill="#d1fae5" stroke="#059669"/>
+  <text x="218" y="530" text-anchor="middle" class="text">试听录音与评分反馈</text>
+  <text x="218" y="551" text-anchor="middle" class="small">教师异步批改</text>
+
+  <rect x="487" y="165" width="225" height="58" class="box" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="600" y="190" text-anchor="middle" class="text">学生登录并加入班级</text>
+  <text x="600" y="211" text-anchor="middle" class="small">账号、班级绑定</text>
+
+  <rect x="487" y="250" width="225" height="58" class="box" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="600" y="275" text-anchor="middle" class="text">进入课堂与浏览课件</text>
+  <text x="600" y="296" text-anchor="middle" class="small">Presence 与翻页同步</text>
+
+  <rect x="487" y="335" width="225" height="58" class="box" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="600" y="360" text-anchor="middle" class="text">TTS 听读与跟读练习</text>
+  <text x="600" y="381" text-anchor="middle" class="small">标准音频示范</text>
+
+  <rect x="487" y="420" width="225" height="58" class="box" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="600" y="445" text-anchor="middle" class="text">录音三槽位练习</text>
+  <text x="600" y="466" text-anchor="middle" class="small">可重录、可覆盖</text>
+
+  <rect x="487" y="505" width="225" height="58" class="box" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="600" y="530" text-anchor="middle" class="text">提交作业并查看反馈</text>
+  <text x="600" y="551" text-anchor="middle" class="small">成绩与教师评语</text>
+
+  <rect x="870" y="205" width="225" height="58" class="box" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="982" y="230" text-anchor="middle" class="text">学习过程数据</text>
+  <text x="982" y="251" text-anchor="middle" class="small">课堂、课件、作业轨迹</text>
+
+  <rect x="870" y="335" width="225" height="58" class="box" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="982" y="360" text-anchor="middle" class="text">录音与提交记录</text>
+  <text x="982" y="381" text-anchor="middle" class="small">recordings / submissions</text>
+
+  <rect x="870" y="465" width="225" height="58" class="box" fill="#fed7aa" stroke="#ea580c"/>
+  <text x="982" y="490" text-anchor="middle" class="text">反馈与学习档案</text>
+  <text x="982" y="511" text-anchor="middle" class="small">learning_records</text>
+
+  <path class="arrow" d="M 218 223 L 218 250"/>
+  <path class="arrow" d="M 218 308 L 218 335"/>
+  <path class="arrow" d="M 330 364 C 405 364 410 194 487 194"/>
+  <path class="arrow" d="M 600 223 L 600 250"/>
+  <path class="arrow" d="M 600 308 L 600 335"/>
+  <path class="arrow" d="M 600 393 L 600 420"/>
+  <path class="arrow" d="M 600 478 L 600 505"/>
+  <path class="arrow" d="M 712 449 C 790 449 790 364 870 364"/>
+  <path class="arrow" d="M 712 534 C 780 534 790 494 870 494"/>
+  <path class="arrow" d="M 870 494 C 760 610 410 610 330 534"/>
+  <path class="arrow dash" d="M 870 234 C 790 234 790 279 712 279"/>
+
+  <rect x="175" y="680" width="850" height="46" fill="#f8fafc" stroke="#cbd5e1" rx="12"/>
+  <text x="600" y="710" text-anchor="middle" class="small">核心闭环：教师布置任务 → 学生听读录音 → 数据沉淀 → 教师反馈 → 学生改进</text>
+</svg>
