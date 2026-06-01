@@ -1,0 +1,78 @@
+\chapter{接口详细设计}
+
+\section{前后端通信架构设计}
+LingoBridge 系统采用了基于经典客户端与服务端分离的现代化双通道通信架构设计。对于常规的资源维护、账户信息查询以及作业提交等无状态的数据交互，系统统一采用遵循 RESTful 规范的超文本传输协议进行通信，所有请求和响应体均被序列化为结构化轻量级对象，并采用统一的安全通道进行传输以防止中间人窃听与数据篡改。为了应对直播课堂中高频度、低延迟的教学课件页码同步、文字聊天以及电子白板墨迹广播等高实时性业务，系统设计了基于长连接的事件驱动协议。该协议建立在网络套接字基础之上，在客户端与网关之间建立持久性的双向通信信道，并通过房间订阅机制实现多终端状态毫秒级的分发与同步。
+
+\section{核心 RESTful API 接口规格}
+在物理接口实现阶段，系统对这十个核心接口的路径、方法、鉴权级别以及业务属性进行了严密的规划。
+
+\begin{longtable}{lllll}
+\caption{LingoBridge 核心 RESTful API 接口汇总规格表} \label{tab:api-specs} \\
+\toprule
+接口路径 & 请求方法 & 认证要求 & 对应核心模块 & 接口职责与业务描述 \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+/api/v1/auth/login & POST & 否 & 身份认证模块 & 用户提供账号与密码，经过加盐校验后生成唯一的鉴权令牌。 \\
+/api/v1/users/me & GET & 是 & 身份认证模块 & 客户端请求头附带令牌，用于获取当前在线用户的角色与个人资料详情。 \\
+/api/v1/courses & POST & 是 & 课程管理模块 & 教师权限用户创建新课程，后端验证角色并写入课程大纲基础实体。 \\
+/api/v1/files/upload & POST & 是 & 课件渲染模块 & 支持教师端上传演示文稿课件，生成文件存储路径并启动后端文档页解析。 \\
+/api/v1/live/sessions & POST & 是 & 直播课堂模块 & 教师启动直播课堂，后端分配全局唯一的会话房间号并绑定当前教学课时。 \\
+/api/v1/lessons & GET & 是 & 课程管理模块 & 根据课程标识符，拉取其下属的所有教学课时单元及排好的先后顺序列表。 \\
+/api/v1/homework/submit & POST & 是 & 录音模块 & 学生提交特定课时配套的语音作业录音，后端关联音频文件实体记录。 \\
+/api/v1/evaluations/:id & GET & 是 & 录音模块 & 客户端获取智能测评引擎针对某一音频生成的发音完整、精准度多维打分。 \\
+/api/v1/live/whiteboard/:sessionId & GET & 是 & 直播课堂模块 & 获取特定直播课堂的某页课件上所有累积的历史电子白板笔迹笔画。 \\
+/api/v1/teachers/students & GET & 是 & 课程管理模块 & 教师端拉取与其强关联的学生结对清单，便于进行学习轨迹监控。 \\
+\bottomrule
+\end{longtable}
+
+在具体的请求和响应对象设计上，为了提升接口自解释性并便于自动化测试，所有的业务状态码均采用统一的格式进行包装。例如当客户端向创建课程接口发送请求时，必须在请求负载中提供包含标题和描述的 JSON 字段，若处理成功则会返回代表操作成功的状态码及生成的资源标识符。
+
+\section{序列化协议与接口调用时序}
+系统各个实体、组件和网络接口之间的交互不仅有静态的结构定义，更包含了复杂的动态行为与调用先后顺序。
+
+系统前端与后端的组件架构关系如图\ref{fig:module-detail-component}所示。该图详细刻画了表示层视图组件与底层鉴权代理以及状态存储库之间的依赖与调用逻辑。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{module-detail-component.pdf}
+\caption{LingoBridge 系统组件与模块依赖图}
+\label{fig:module-detail-component}
+\end{figure}
+
+当匿名用户进入系统并尝试进行账户鉴权登录时，其背后的时序调用细节如图\ref{fig:auth-login-sequence}所示。用户在登录表单输入身份凭证并点击确认后，前端登录组件会将数据提交至鉴权状态管理器。该管理器通过底层的网络适配器向后端的鉴权接口发送请求，后端接收后调用账户查询服务获取用户信息并进行密码哈希比对。验证通过后，会话生成器产生包含用户权限代码的 JWT 令牌并将其组装在响应体中回传。前端管理器捕获响应后将令牌持久化写入本地缓存，同时通知界面组件刷新显示状态。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{auth-login-sequence.pdf}
+\caption{用户登录鉴权详细调用时序图}
+\label{fig:auth-login-sequence}
+\end{figure}
+
+课件文件的上传以及后端异步的多页画布解析流程如图\ref{fig:courseware-upload-sequence}所示。教师端选择本地的教学文档并提交后，上传组件会首先调用本地的文件过滤器检查类型，随后发起文件传输请求。后端的网关控制器接收到完整的二进制流后，调用文件服务将其写入对象存储，并在数据库中建立对应的课件实体。随后，文件服务会通过消息总线异步触发文档解析微服务。该解析引擎会将文档逐页转换为高清的静态画布供前端分层展示，在此期间前端上传组件可通过状态查询接口定时轮询解析进度以提供友好的加载动画。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{courseware-upload-sequence.pdf}
+\caption{课件上传与异步画布解析调用时序图}
+\label{fig:courseware-upload-sequence}
+\end{figure}
+
+学生参与口语测评、执行音频录音上传并接收智能反馈的时序逻辑如图\ref{fig:homework-recording-sequence}所示。当学生点击开始录音时，录音模块会调用底层的媒体捕获组件向用户申请音频输入权限，并在授权通过后启动周期性的缓冲片监听。录音结束后，系统将分片缓冲区编码整合成标准的音频波形文件，随后调用作业提交接口发送给后端文件网关。后端在接收并保存音频实体后，会通过外部调用代理将音频路径推送给智能评测引擎。评测引擎提取音频特征并进行音素比对，最后将包含多维度分数的测评结果返回，后端将其写入数据库并通知客户端渲染发音指导详情。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{homework-recording-sequence.pdf}
+\caption{口语作业录音提交与智能语音测评时序图}
+\label{fig:homework-recording-sequence}
+\end{figure}
+
+直播课堂实例中多终端课页同步、翻页控制与电子白板笔迹低延迟广播的时序图如图\ref{fig:live-presence-sequence}所示。在直播课堂建立长连接会话后，教师与学生终端作为客户端节点加入同一个房间。当教师端执行点击翻页操作时，翻页组件会将带有目标页码的信令通过持久信道向通信服务器发送，服务器识别教师身份后立即向房间内的所有学生终端广播该页码更新信令。学生终端在接收到信令后自动清除当前画布上的上页笔迹，并加载新页的课件图像。当教师在白板上进行涂鸦绘制时，墨迹绘制坐标序列会以微小时间片为周期，被连续打包发送至服务器，由服务器低延迟中转分发给其他学生，在学生终端的画布上实时重绘。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{live-presence-sequence.pdf}
+\caption{直播课堂实时在线同步与白板笔迹广播时序图}
+\label{fig:live-presence-sequence}
+\end{figure}
