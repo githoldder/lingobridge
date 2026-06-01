@@ -1,0 +1,19 @@
+# analysis/ai-learning-recommendation/environment.yml
+# LingoBridge v2.0 AI 模块 Conda 环境清单
+# 生成时间: 2026-06-01
+# 用途: 本地课堂演示兜底（uv 为默认推荐环境）
+# 使用方式: conda env create -f environment.yml && conda activate lingobridge-ai-v2
+
+name: lingobridge-ai-v2
+
+channels:
+  - defaults
+  - conda-forge
+
+dependencies:
+  - python>=3.11
+
+# P0: 优先使用标准库实现，不预装大型 ML 框架
+# 如确需 pandas/scikit-learn，取消下方注释并确保与 requirements.txt 同步
+# - pandas>=2.0.0
+# - scikit-learn>=1.4.0

@@ -1055,3 +1055,52 @@ Action: Added the v2.0 milestone PRD for “基于机器学习的国际中文学
 - prds/json/sprint09-prd-260601-v2.0.json: Added mandatoryAgentDiscipline environment/process/git/context policies and expanded S9-T00 into 5 executable steps.
 
 [Status] | Sprint 09 v2.0 AI PRD execution governance and memory sync completed | Done
+
+# S9-T00 执行记录 — 2026-06-01 S9-T00 实操执行
+Date: 2026-06-01
+Action: 完成 S9-T00 全部 5 个 step 的实际执行产出
+
+## S9-T00-S01: Python 环境策略
+- 创建 `analysis/ai-learning-recommendation/README.md`：明确 uv 为默认推荐、conda 为兜底。
+- 创建 `analysis/ai-learning-recommendation/requirements.txt`：P0 为空（纯 Python 标准库），预留 pandas/scikit-learn 注释槽位。
+- 创建 `analysis/ai-learning-recommendation/environment.yml`：conda 环境清单，与 requirements.txt 同步。
+- 创建目录结构：`data/`、`src/`、`output/`、`reports/`，均创建 `.gitkeep` 占位。
+
+## S9-T00-S02: PM2 本地进程治理
+- 创建 `docs/03-testing-deployment/ai-v2-demo-runbook.md`：覆盖 PM2 命令表、ecosystem.config.cjs 关键配置、避免僵尸进程规则（6 条）、Vite dev server 临时使用规范。
+- 明确优先使用 `npm run pm2:start/restart/logs/stop`，端口异常先 restart 再 kill。
+
+## S9-T00-S03: Ralph 小 feature commit 纪律
+- 在 ai-v2-demo-runbook.md 中写入 commit 规则（必须包含 taskId/stepId）、回滚规则（优先 git revert）、禁止 git push 时机、Sprint review 后 Push 流程。
+- 在 ai-v2-demo-runbook.md 中写入 Sprint review 闸门六维度清单和输出模板。
+
+## S9-T00-S04: context 与 memory 记录规范
+- 将本条执行记录追加到 `context/context.txt`。
+- 明确：短期踩坑 → `context/context.txt`；长期规则 → 用户确认后沉淀 `.agent/rules` 或 `prds/current`。
+- 明确禁止：将本地私有路径、真实学生隐私、密钥、临时截图写入长期记忆。
+
+## S9-T00-S05: Sprint review 闸门
+- Review 清单已写入 ai-v2-demo-runbook.md Section 5。
+- 验证命令参考已写入 runbook 附录。
+
+## 实际修改文件清单
+- `analysis/ai-learning-recommendation/README.md`（新建）
+- `analysis/ai-learning-recommendation/requirements.txt`（新建）
+- `analysis/ai-learning-recommendation/environment.yml`（新建）
+- `docs/03-testing-deployment/ai-v2-demo-runbook.md`（新建）
+- `context/context.txt`（追加本条记录）
+
+## 验证结果
+- JSON PRD 格式校验：PASSED
+- PM2 命令覆盖：确认 `pm2:start/restart/logs/stop` 在 package.json 中存在
+- Git 状态：main 领先 origin/main 1 commit，暂无待提交变更（完成后 commit）
+
+## MVP 主流程影响
+无触碰。本任务仅产出文档和治理文件，未修改任何业务代码。
+
+## 踩坑提醒
+- 本任务 workspace 实际路径：`/Users/caolei/Desktop/LingoBridge`（非 workspace-agent-6c4d331f）
+- analysis/ai-learning-recommendation 目录为新建，后续 agent 开始 S9-T02 前需确认 Python 环境已就绪
+- PM2 演示前必须检查 `pm2 status`，端口 3001 和 4174 不能被占用
+
+[Status] | S9-T00 全部 5 个 step 执行完毕，本地 commit 待完成 | Pending Commit
