@@ -23,7 +23,7 @@
 
 ## 二、审核维度（Auditor 扫描矩阵）
 
-审核 Agent 必须逐条检查以下 7 个维度，每个维度给出 PASS / FAIL 及具体行号或片段：
+审核 Agent 必须逐条检查以下 10 个维度，每个维度给出 PASS / FAIL 及具体行号或片段：
 
 | 维度 ID | 维度名称 | 扫描目标 |
 |---------|---------|---------|
@@ -34,6 +34,9 @@
 | A-05 | 引用缺失 | 事实断言是否缺少 `\cite{}` 标注 |
 | A-06 | 编造内容 | 所述数据或结论是否无法映射到 `docs/01-reference/` 中的真实调研 |
 | A-07 | 格式规范 | LaTeX 环境使用是否规范（itemize/enumerate/figure/table） |
+| A-08 | PDF 留白与浮动体审计 | 是否因表格、图片、公式或浮动体过大导致上一页大面积空白、主体内容被挤到下一页 |
+| A-09 | 交叉引用闭环 | `\cite{}`、`\ref{}`、`\label{}` 是否无 undefined、无重复 label、无孤儿图表公式，且每个图表公式在正文有解释性引用 |
+| A-10 | 参考文献真实性与时效 | 每条文献是否可联网或通过 DOI/URL/ISBN/标准号检索，是否被正文引用，前沿技术类来源是否优先近 3 年 |
 
 ---
 
@@ -68,6 +71,9 @@ timestamp: YYYY-MM-DD HH:MM
 [A-05] PASS | FAIL: <具体行号或片段>
 [A-06] PASS | FAIL: <具体行号或片段>
 [A-07] PASS | FAIL: <具体行号或片段>
+[A-08] PASS | FAIL: <PDF页码、日志行号或可见排版问题>
+[A-09] PASS | FAIL: <undefined/multiply defined/orphan 引用、label 或 cite key>
+[A-10] PASS | FAIL: <不可检索、过旧且无理由、正文未引用的参考文献>
 
 VERDICT: APPROVED | REJECTED
 CORRECTIONS: (仅当 REJECTED 时)
@@ -82,6 +88,8 @@ CORRECTIONS: (仅当 REJECTED 时)
 - **二次返修后仍 FAIL**：Auditor 进入"深度打假模式"，额外检查：
   - 段落信息密度是否低于阈值（每段至少包含 1 个可量化数据点）。
   - 交叉验证引用是否与 `refs.bib` 实际条目吻合。
+  - 是否存在 `\nocite{*}` 掩盖孤儿参考文献的问题。
+  - 是否存在 PDF 可编译但肉眼可见的大面积留白、表格跳页、图片浮动异常。
 - **三次返修后仍 FAIL**：终止该原子任务，上报人类层介入。
 
 ---
