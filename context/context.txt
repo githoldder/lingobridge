@@ -865,3 +865,193 @@ Action: Expanded 01-FA to 12 pages with detailed multi-tier budgets, risk matrix
 - docs/00-project-docs/01-FA/templates/01-FA.pdf: Re-compiled flawlessly to 12 pages.
 
 [Status] | 01-FA expanded 2x, SRS tables fixed, diagrams/UML integrated, DFD/ERD & Data Dictionary added! | Done
+
+# 2026-05-28 Sprint 09-R3 Centering All Tables & Hyperlink Professional References
+Date: 2026-05-28
+Action: Standardized all 27 tables across 01-FA and 02-SRS to tabularx environments locked to textwidth, ensuring mathematically perfect horizontal centering and zero margin overflow. Upgraded refs.bib bibliographies in both docs with S/A-tier real-world sources (W3C, React 19, Vite 6, Playwright, Ministry of Education) and locked multi-word corporate authors without space (e.g., LingoBridge技术调研小组) to completely resolve BibTeX scrambled author rendering.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/ref/refs.bib: Completely upgraded reference items to S/A-tier real resources and secured authors against scrambling.
+- docs/00-project-docs/02-SRS/templates/ref/refs.bib: Shared matching refs.bib upgrade.
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Standardized Table 1.1 to tabularx.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Standardized Table 2.1 & 2.2 to tabularx.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Standardized Table 4.1 to tabularx.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Standardized Table 2.1 & 2.2 to tabularx.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Standardized 8 Acceptance Tables, 1 Priority Matrix Table, and 8 Data Dictionary Tables to tabularx.
+- docs/00-project-docs/02-SRS/templates/data/chap04.tex: Standardized Table 4.2 & 4.3 to tabularx.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Flawlessly re-compiled and verified.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Flawlessly re-compiled and verified.
+
+[Status] | Sprint 09-R3 Table Centering & Professional Reference upgrades completed and verified | Done
+
+# 2026-05-28 Sprint 09-R4 Markdown Bold Clean-up & Reference URL Standardization
+Date: 2026-05-28
+Action: Cleaned up residual Markdown double-star bold syntax from FA chap02 and chap04 and replaced them with LaTeX textbf commands. Upgraded all internal technical report reference URLs from local file paths (file:///Users/caolei/Desktop/...) to standard, professional public GitHub paths (https://github.com/githoldder/lingobridge/blob/main/docs/...), satisfying academic standards and GB/T 7714 criteria.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Standardized bold markers.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Standardized bold markers.
+- docs/00-project-docs/01-FA/templates/ref/refs.bib: Standardized citation URLs.
+- docs/00-project-docs/02-SRS/templates/ref/refs.bib: Standardized citation URLs.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Flawlessly compiled and verified.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Flawlessly compiled and verified.
+
+[Status] | Sprint 09-R4 Markdown bold clean-up and URL standardization completed | Done
+
+# 2026-05-28 Sprint 09-R5 Skills & Rules Hardening of Auditing Lessons
+Date: 2026-05-28
+Action: Hardened the LaTeX and document standard skills and workflows by permanently recording our real-world pitfalls, lessons, and mitigation guidelines. Solidified the "No absolute paths", "No Markdown in LaTeX", "Honest logging", and "Citation specificity" red lines, ensuring future agents will never repeat the same circular-referencing or formatting mistakes.
+
+## Added & Updated Files:
+- .agent/skills/01_latex_infrastructure/SKILL.md: Added Section 5 (LaTeX Delivery and Logging Pitfalls Guide).
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Added Section 3.5 (Academic Bibliography Self-citation and Local Path Pitfalls Guide).
+
+[Status] | Hardening of auditing lessons in skills and rules completed | Done
+
+# 2026-05-28 Sprint 09-R6 Lists Clean-up & Compact Figures Plan
+Date: 2026-05-28
+Action: Completely eliminated all bullet list environments (itemize) from 01-FA and 02-SRS, transforming them into cohesive and professional academic paragraphs. Shrunk and repositioned all figure blocks using strict physical positioning [H], successfully resolving all empty page gaps and compacting document layouts.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Compacted figure layout.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Inserted cost_comparison figure and analysis.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Completely eliminated itemize bullet points.
+- docs/00-project-docs/02-SRS/templates/data/chap02.tex: Eliminated environment, assumptions, and roadmap bullet points.
+- docs/00-project-docs/02-SRS/templates/data/chap03.tex: Eliminated Given-When-Then, NFR, and interface lists, and compacted DFD/State/ER diagrams.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Flawlessly compiled and compacted.
+- docs/00-project-docs/02-SRS/templates/02-SRS.pdf: Flawlessly compiled and compacted.
+
+[Status] | Sprint 09-R6 Lists clean-up and compact layout completed | Done
+
+# 2026-05-28 Sprint 09-R7 FA Policy-First Structural Rewrite Plan
+Date: 2026-05-28
+Action: Successfully executed the complete structural and logical rewrite of 01-FA. Shuffled and remap existing assets into a policy-first commercial progression (合规 -> 支持 -> 需求 -> 商业 -> 竞品 -> 落地 -> 风险), resulting in an extremely professional, cohesive academic feasibility analysis report without list environments.
+
+## Added & Updated Files:
+- docs/00-project-docs/01-FA/templates/data/chap01.tex: Rewritten as Policy Compliance and Strategic Alignment.
+- docs/00-project-docs/01-FA/templates/data/chap02.tex: Rewritten as Market Needs and Competitor Analysis.
+- docs/00-project-docs/01-FA/templates/data/chap03.tex: Rewritten as Technology mature and Dual-channel deployment.
+- docs/00-project-docs/01-FA/templates/data/chap04.tex: Rewritten as Business Model, Roadmap, and Risk Matrix.
+- docs/00-project-docs/01-FA/templates/01-FA.pdf: Recompiled and verified (14 pages).
+
+[Status] | Sprint 09-R7 FA structural rewrite completed | Done
+
+# 2026-05-28 Sprint 09-R8 HLD High-Level Design Comprehensive Writing Plan
+Date: 2026-05-28
+Action: Successfully executed the comprehensive and detailed writing of all 5 chapters of 03-HLD from a blank skeleton. Integrated overall architectural diagram, 8 core physical tables booktabs datadicts, 10 sub-route restful API matrix, and 3 critical algorithms pseudocode in standard LaTeX environments without list elements.
+
+## Added & Updated Files:
+- docs/00-project-docs/03-HLD/templates/thusetup.tex: Added booktabs and float packages import.
+- docs/00-project-docs/03-HLD/templates/data/chap01.tex: Rewritten for overall architecture and selection trilinear table.
+- docs/00-project-docs/03-HLD/templates/data/chap02.tex: Rewritten for 6 core modules design and hardware protection stops.
+- docs/00-project-docs/03-HLD/templates/data/chap03.tex: Rewritten for multi-tenant ERD and 8 core tables datadicts.
+- docs/00-project-docs/03-HLD/templates/data/chap04.tex: Rewritten for restful API route mapping matrix.
+- docs/00-project-docs/03-HLD/templates/data/chap05.tex: Rewritten for 3 core system algorithms pseudocodes.
+- docs/00-project-docs/03-HLD/templates/03-HLD.pdf: Flawlessly recompiled and verified (19 pages).
+
+[Status] | Sprint 09-R8 HLD comprehensive writing completed | Done
+
+# 2026-05-28 Sprint 09-R9 HLD GB/T 8567-2006 Standard 10-Chapter Reconstruction
+Date: 2026-05-28
+Action: Restructured LingoBridge High-Level Design (03-HLD) from 5 chapters to standard GB/T 8567-2006 10-chapter spec. Fully resolved listing format (zero itemize/enumerate), mathematical CJK warnings, local paths, and Markdown leakage bugs. Imported state diagrams and DFDs from SRS and flawlessly compiled a 31-page high-quality design blueprint.
+
+## Added & Updated Files:
+- docs/00-project-docs/03-HLD/templates/03-HLD.tex: Expanded chapter inputs from 5 to 10.
+- docs/00-project-docs/03-HLD/templates/data/chap01.tex: Chapter 1 Introduction (glossary trilinear table and purpose).
+- docs/00-project-docs/03-HLD/templates/data/chap02.tex: Chapter 2 General Design (layered system goals, embedding architecture.pdf).
+- docs/00-project-docs/03-HLD/templates/data/chap03.tex: Chapter 3 Structural Design (sub-system definitions, call chains).
+- docs/00-project-docs/03-HLD/templates/data/chap04.tex: Chapter 4 Interface Design (12 key RESTful routing contracts trilinear matrix).
+- docs/00-project-docs/03-HLD/templates/data/chap05.tex: Chapter 5 Data Design (SaaS ERD LingoBridge关系图.pdf, 8 relational tables).
+- docs/00-project-docs/03-HLD/templates/data/chap06.tex: Chapter 6 Operations Design (Presence state machine LingoBridge状态图.pdf, wait room).
+- docs/00-project-docs/03-HLD/templates/data/chap07.tex: Chapter 7 Error Handling (WSS index-backoff reconnection pseudocode Algorithm 7.1).
+- docs/00-project-docs/03-HLD/templates/data/chap08.tex: Chapter 8 Security (JWT/RBAC filter, physical microphone teardown track.stop()).
+- docs/00-project-docs/03-HLD/templates/data/chap09.tex: Chapter 9 Performance (TTS double-layer cache Algorithm 9.1, recording Opus Algorithm 9.2).
+- docs/00-project-docs/03-HLD/templates/data/chap10.tex: Chapter 10 Unresolved Risks (Tencent Meeting URL regex fallback strategics).
+- docs/00-project-docs/03-HLD/templates/03-HLD.pdf: Compiled successfully (31 pages).
+
+[Status] | Sprint 09-R9 HLD GB/T 8567-2006 10-chapter reconstruction completed | Done
+
+# 2026-05-29 Sprint 09-R10 HLD Longtable Boundary Overflow Fix & Prompt Engineering Optimization
+Date: 2026-05-29
+Action: Audited the HLD bottom-margin spillover bug in Chapter 4 RESTful API table. Converted table/tabularx to longtable to enable automatic paging. Injected \allowbreak to prevent long URL horizontal box overflow. Codified standard Section 3.6 in .agent/skills/05_lingobridge_docs_standard/SKILL.md to enforce longtable constraints and automatic linebreaks across all future agent prompts, resolving compiling warning leaks.
+
+## Added & Updated Files:
+- docs/00-project-docs/03-HLD/templates/data/chap04.tex: Refactored RESTful matrix to use dynamic longtable and allowbreak paths.
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Added Section 3.6 outlining the longtable page break & URL line-break guidelines.
+- docs/00-project-docs/03-HLD/templates/03-HLD.pdf: Compiled flawlessly (31 pages, zero overflows).
+
+[Status] | Sprint 09-R10 HLD longtable overflow fix and prompt engineering optimization completed | Done
+
+# 2026-05-29 Sprint 09-R11 HLD REST API Longtable Text Overlap Correction
+Date: 2026-05-29
+Action: Corrected the earlier assumption that converting the REST API matrix to `longtable` plus a few `\allowbreak` markers was sufficient. The rendered PDF still showed horizontal text overlap where long monospace API paths such as `/api/v1/live-sessions/:id/signals` intruded into adjacent Chinese authorization/status columns. The reliable fix was to treat this as a column-width and continuation-header problem: shrink `\tabcolsep`, localize `\footnotesize`, explicitly rebalance all `p{...}` widths so the sum stays below `\textwidth`, insert `\allowbreak` at every path boundary, and use `\endfirsthead` plus an unlabelled continuation caption for longtable continuation pages.
+
+## Reusable Lesson:
+- `longtable` only solves vertical page breaking; it does not automatically solve horizontal overlap.
+- For API/DTO matrices, do not rely on font shrinking alone. Always combine explicit `p{...}` widths, reduced `\tabcolsep`, route-level `\allowbreak`, and rendered-page inspection.
+- If a table spans pages, put `\label` only in the first caption. Continuation captions must use `\caption[]{...（续）}` to avoid repeated labels.
+- Verification must include both log scan (`Overfull \hbox`, `multiply defined`) and PDF page rendering. A PDF that compiles can still contain visible text collision.
+
+## Updated Files:
+- docs/00-project-docs/03-HLD/templates/data/chap04.tex: Rebalanced REST API overview/detail longtables, added continuation headers, and removed Markdown bold leakage.
+- docs/00-project-docs/03-HLD/templates/03-HLD.pdf: Recompiled after table correction.
+- .agent/skills/05_lingobridge_docs_standard/SKILL.md: Added the special API longtable overlap case to the skills mechanism.
+- .agent/skills/01_latex_infrastructure/SKILL.md: Added the same case to LaTeX troubleshooting guidance.
+
+[Status] | Sprint 09-R11 HLD API table overlap correction and skills memory sync completed | Done
+
+# 2026-05-29 Sprint 09-R12 UML PlantUML Source Code Generation & LaTeX Figure Alignment
+Date: 2026-05-29
+Action: Codified 3 core prioritized UML PlantUML (.puml) source diagrams under templates/uml/ directory. Integrated corresponding LaTeX figure placeholders in main chap03/06 chapters to support future GBT-8567 alignment. Added temporary physical vector PDF placeholders to allow flawless compilation.
+
+## Updated Files:
+- docs/00-project-docs/03-HLD/templates/uml/module-component.puml: System module component PlantUML source code.
+- docs/00-project-docs/03-HLD/templates/uml/module-call-sequence.puml: Module call sequence PlantUML source code.
+- docs/00-project-docs/03-HLD/templates/uml/runtime-activity.puml: Waitroom indexes-backoff runtime activity PlantUML source code.
+- docs/00-project-docs/03-HLD/templates/data/chap03.tex: Injected Figure 3.1 & 3.2 PDF placeholders in Section 3.1/3.3.
+- docs/00-project-docs/03-HLD/templates/data/chap06.tex: Injected Figure 6.2 PDF placeholder in Section 6.2.
+- docs/00-project-docs/03-HLD/templates/figures/: Created temporary physical placeholders module-component.pdf, module-call-sequence.pdf and runtime-activity.pdf.
+- docs/00-project-docs/03-HLD/templates/03-HLD.pdf: Clean compiled flawlessly (27 pages).
+
+[Status] | Sprint 09-R12 UML PlantUML code generation and figure alignment completed | Done
+
+
+# 2026-05-29 UML 图表体系全量补全
+Date: 2026-05-29
+Action: 为 01-FA 至 07-UM 全部 7 份生命周期文档补全 29 个缺失的 PlantUML 源文件，并在 01-FA 中注入 2 处 LaTeX 图占位符。
+
+## 新增 29 个 .puml 文件
+- 01-FA: architecture.puml, mvp-business-flow.puml, implementation-roadmap.puml (3)
+- 02-SRS: core-business-activity.puml (1)
+- 03-HLD: architecture.puml, api-interaction-sequence.puml, erd.puml, data-flow.puml, presence-state.puml, error-recovery-sequence.puml, auth-security-sequence.puml (7)
+- 04-LLD: module-detail-component.puml, auth-login-sequence.puml, courseware-upload-sequence.puml, homework-recording-sequence.puml, live-presence-sequence.puml, database-erd.puml (6)
+- 05-TP: test-process-activity.puml, test-environment-deployment.puml, defect-lifecycle-state.puml, e2e-test-flow.puml (4)
+- 06-DEP: deployment-topology.puml, deployment-activity.puml, healthcheck-smoke-flow.puml, rollback-recovery-flow.puml (4)
+- 07-UM: teacher-operation-flow.puml, student-operation-flow.puml, admin-operation-flow.puml, faq-troubleshooting-flow.puml (4)
+
+## LaTeX 修改
+- 01-FA/chap01.tex: 追加 MVP 业务闭环章节 + mvp-business-flow.pdf 图占位
+- 01-FA/chap04.tex: 追加 implementation-roadmap.pdf 图占位
+
+## 配色规范
+全部统一: 主色 #10B981, 辅色 #3B82F6, 警示色 #F43F5E, 白底 #FFFFFF
+
+[Status] | UML 图表体系 29 个源文件全量补全 + LaTeX 占位注入完成 | Done
+
+
+
+# 2026-06-01 Sprint 09 v2.0 AI Learning Recommendation Execution Governance
+Date: 2026-06-01
+Action: Added the v2.0 milestone PRD for “基于机器学习的国际中文学习行为分析与个性化练习推荐系统” and upgraded the JSON plate from a high-level task list into an executable agent design file. The JSON now includes mandatory environment, process, Git/Ralph, review, and context-memory governance before any feature implementation.
+
+## Key Execution Decisions
+- Python environment: local demo may use either uv or Anaconda. Default recommendation is uv for reproducible lightweight repo-local scripts; conda is allowed as a classroom-demo fallback via environment.yml.
+- Process management: local demo should prefer PM2 using the existing ecosystem.config.cjs and npm scripts (`pm2:start`, `pm2:restart`, `pm2:logs`, `pm2:stop`) to avoid zombie Vite/tsx/backend processes.
+- Git/Ralph discipline: every small feature or independently revertible step must be committed locally with task/step id in the message. Sprint execution must stop for review before any final push.
+- Context and memory: short-term execution lessons and pitfalls go into context/context.txt. Long-term rules should only move into .agent/rules or prds/current after user confirmation. Do not write private absolute paths, secrets, or real student data into memory.
+
+## Updated PRD Files
+- prds/md/sprint09-prd-260601-v2.0.md: Added S9-T00 as the first governance task.
+- prds/json/sprint09-prd-260601-v2.0.json: Added mandatoryAgentDiscipline environment/process/git/context policies and expanded S9-T00 into 5 executable steps.
+
+[Status] | Sprint 09 v2.0 AI PRD execution governance and memory sync completed | Done
