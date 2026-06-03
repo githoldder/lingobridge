@@ -1,0 +1,12 @@
+domain,resource_name,url,reason,usage_notes,verified_date
+business-market,ISO 24896 - Notation for business reporting,https://www.iso.org/standard/88366.html,paid/official standard,"Use metadata and licensed copy only; no bulk copying.",2026-06-02
+business-market,Royal Statistical Society - Best Practices for Data Visualisation,https://royal-statistical-society.github.io/datavisguide/,copyrighted official guide,"Use rules by citation/paraphrase; screenshot only after permission/page metadata review.",2026-06-02
+software-engineering,OMG UML 2.5.1,https://www.omg.org/spec/UML,official specification,"Use as final UML compliance baseline; screenshots require page/figure metadata and terms review.",2026-06-02
+software-engineering,OMG BPMN 2.0,https://www.omg.org/spec/BPMN/2.0/,official specification,"Use as final BPMN compliance baseline; screenshots require page/figure metadata and terms review.",2026-06-02
+software-engineering,ISO 5807:1985,https://www.iso.org/standard/11955.html,paid ISO standard,"Use licensed copy only; no copying from unofficial PDFs.",2026-06-02
+software-engineering,IEEE 1016-2009,https://standards.ieee.org/ieee/1016/4502,paid IEEE standard,"Use metadata and licensed copy only; no copying from unofficial PDFs.",2026-06-02
+software-engineering,GB/T 9385-2008,https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=2790825C43AD0B69E3C38C140BFFCFE6,official metadata page,"Use for standard identity/status; full text screenshots require authorized source.",2026-06-02
+ui-design,ISO 9241-125:2017,https://www.iso.org/standard/64839.html,paid ISO standard,"Use licensed copy only; no copying from unofficial PDFs.",2026-06-02
+ui-design,Figma Components Styles and Shared Libraries,https://www.figma.com/best-practices/components-styles-and-shared-libraries/,official web guidance,"Use rules and project-created Figma components; do not copy article images blindly.",2026-06-02
+ui-design,Material Design 3,https://m3.material.io/,official web guidance,"Use as design-system guidance; copy assets only under explicit Google terms.",2026-06-02
+ui-design,Microsoft Fluent 2,https://fluent2.microsoft.design/,official web guidance,"Use as design-system guidance; copy assets only under Microsoft terms.",2026-06-02

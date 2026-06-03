@@ -11,7 +11,7 @@
   \centering
   \caption{LingoBridge 部署常见故障诊断与排除方案对照表}
   \label{tab:troubleshooting-matrix}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{lXX}
     \toprule
     故障表现症状 & 潜在诱发原因 & 推荐诊断与排除解决方法 \\
     \midrule
@@ -20,7 +20,7 @@
     浏览器请求时提示 502 错误 & 后端接口服务崩溃或内部代理转发端口配置错误 & 检查后端进程运行状态并重新对齐代理配置文件 \allowbreak \\
     前端静态资源页面加载报 404 错误 & 前端静态打包产物目录缺失或代理路径指定有误 & 验证前端产物目录完整性并更新代理配置根目录 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 第一类是服务端口占用故障。如果系统启动失败并抛出监听端口已被绑定的网络异常，运维人员需要使用终端命令 \texttt{lsof -i :3001} 或 \texttt{netstat -tuln} 查询当前占用三千零一端口的进程识别号，在确认其不是核心系统依赖后，可通过强制终止命令将其杀掉，以释放端口资源供后端 API 服务正常绑定。

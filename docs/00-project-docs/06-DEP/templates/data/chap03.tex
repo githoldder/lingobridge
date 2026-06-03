@@ -17,7 +17,7 @@
   \centering
   \caption{LingoBridge 部署验证健康检查对照表}
   \label{tab:healthcheck-matrix}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{llX}
     \toprule
     检查项目类别 & 预期响应状态 & 检测验证命令与参数 \\
     \midrule
@@ -26,7 +26,7 @@
     数据目录写入权限 & 目录权属为 node 且具有写权限 & ls -ld backend/data \allowbreak \\
     语音文件存放路径 & 目录权属为 node 且具有写权限 & ls -ld backend/storage \allowbreak \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \section{系统冒烟测试}

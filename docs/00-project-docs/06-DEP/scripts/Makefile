@@ -4,7 +4,7 @@
 
 TEX = xelatex
 BIB = bibtex
-MAIN = thuthesis-example
+MAIN = 06-DEP
 TEMPLATE_DIR = ../templates
 export TEXINPUTS := .:./cls//:
 export BIBINPUTS := .:./ref//:

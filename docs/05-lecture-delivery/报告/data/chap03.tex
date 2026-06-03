@@ -1,0 +1,133 @@
+% !TeX root = ../thuthesis-example.tex
+\chapter{系统具体实现}
+
+本章旨在阐述本系统从数学模型转化为可行性原型代码的技术细节。系统设计了端云协同与轻量级自包含人工智能计算的原型验证模式：移动端负责发音录音的 L1 三级缓存与作业状态高频同步，AI 服务端负责基于图论的有向拓扑关联计算、深度知识追踪（DKT）状态预测，以及基于拼音编辑距离相似度模糊检索的视频字幕流校准。通过这种工程化设计，系统既保证了算法在端侧演示时的响应效率，又实现了严谨、稳健的学习行为分析闭环。
+
+\section{开发环境配置与技术栈选型}
+
+在系统构建初期，本研究针对算法在演示环境下的稳定度，进行了严谨的工具链选型：
+\begin{itemize}
+    \item \textbf{图算法引擎（NetworkX）}：采用轻量级纯 Python 图论库 \textbf{NetworkX}，构建国际中文拼音-声调-字-词的拓扑依赖有向图。相比外部图数据库服务，NetworkX 采用邻接矩阵递归查询，消除了跨服务维护的依赖，确保了演示时的开箱即跑与自包含。
+    \item \textbf{深度学习核心（PyTorch）}：算法底层基于 \textbf{PyTorch 2.12} 构建，利用其高度优化的循环神经网络模块（LSTM），在 CPU 环境下快速完成细粒度学习日志的下一步预测序列训练。
+    \item \textbf{视频字幕对齐（Levenshtein 检索）}：使用拼音级的 Levenshtein 编辑距离相似度计算作为模糊检索依据，在极低系统开销下实现了 ASR 字幕流的原地纠错校准与双语对照翻译原型。
+\end{itemize}
+
+\section{有向拓扑依赖知识图谱构建与分析}
+
+\subsection{汉字拓扑依赖节点 Schema 设计}
+汉字的构字与拼读过程天然具备强烈的“图结构”特征。系统通过构建有向图 $G = (V, E)$ 描述中文知识库的关系原型：
+\begin{itemize}
+    \item \textbf{顶点集 $V$}：代表不同层级的知识节点，包含声母节点（Initial）、韵母节点（Final）、声调节点（Tone 1-4）以及汉字节点（Character）与词汇节点（Vocabulary）。
+    \item \textbf{有向边集 $E$}：代表前置依赖关系 $PREREQUISITE\_OF$。例如，拼音声母 $b$、韵母 $a$ 和第四声（Tone 4）均是有向边指向汉字“爸”的前置节点。
+\end{itemize}
+
+\begin{algorithm}
+\caption{基于 NetworkX 的知识图谱拓扑依赖分析算法}
+\begin{algorithmic}[1]
+\Procedure{AnalyzeKnowledgeGraph}{$Nodes, Edges$}
+    \State $G \gets \text{Initialize Directed Graph}$
+    \For{每个节点 $v \in Nodes$}
+        \State $G.add\_node(v.id, name=v.name, category=v.category)$
+    \EndFor
+    \For{每条边 $e \in Edges$}
+        \State $G.add\_edge(e.source, e.target, type="PREREQUISITE\_OF")$
+    \EndFor
+    
+    \State $PageRank \gets \text{nx.pagerank}(G, \text{alpha}=0.85)$ \Comment{度量知识点的级联权重}
+    \State $InDegree \gets \text{nx.in\_degree}(G)$
+    
+    \State \Return $G, PageRank, InDegree$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+为了量化各知识点在整个国际中文学习网络中的“核心性”与“困难度”，系统在算法实现中引入了经典的 PageRank 算法（如算法3.1所示）。对于任意节点 $v_i$，其 PageRank 分值 $PR(v_i)$ 定义为：
+\begin{equation}
+PR(v_i) = \frac{1-d}{N} + d \sum_{v_j \in M(v_i)} \frac{PR(v_j)}{L(v_j)}
+\end{equation}
+其中，$d=0.85$ 为阻尼因子，$M(v_i)$ 为所有指向 $v_i$ 的节点集合，$L(v_j)$ 为节点 $v_j$ 的出度。PageRank 分值越高的节点（如声母、韵母等高频基础节点），在掌握度级联传播中扮演的枢纽性越强。
+
+\section{基于 PyTorch LSTM 的深度知识追踪实现}
+
+\subsection{数据流编码与序列补齐机制}
+深度知识追踪（DKT）要求对学生在时间序列上的答题记录进行细粒度表征。系统对输入的每一个做题记录 $(item_t, correct_t)$ 进行复合 One-hot 编码：
+\begin{equation}
+x_t = 
+\begin{cases} 
+e_{\text{skill}_t}, & \text{if } \text{correct}_t = 1 \\
+e_{\text{num\_skills} + \text{skill}_t}, & \text{if } \text{correct}_t = 0
+\end{cases}
+\end{equation}
+输入维度为 $2 \times N$（本系统中 $N=14$，输入维度为 28），它同时保留了学生“做了哪道题”以及“做对还是做错”的联合状态。为了满足批处理计算，系统对长度不一的学生序列进行自动 Zero-Padding，并在 Loss 计算中引入掩码张量（Mask Tensor）进行屏蔽。
+
+\subsection{DKT 网络的前向计算与反向传播}
+系统在 \texttt{train\_knowledge\_tracing.py} 中实现了基于单层 LSTM 的 DKT 原型模型。其计算逻辑如算法3.2所示。
+
+\begin{algorithm}
+\caption{基于 PyTorch LSTM 的深度知识追踪算法}
+\label{ag:3.2}
+\begin{algorithmic}[1]
+\Procedure{DKTForward}{$X\_Batch, Y\_Batch, Mask$}
+    \State $h_0 \gets \mathbf{0}, \quad c_0 \gets \mathbf{0}$ \Comment{初始化隐藏状态与细胞状态}
+    \State $Outputs \gets []$
+    \For{每个时间步 $t \in [1, T]$}
+        \State $f_t \gets \sigma(W_f [h_{t-1}, x_t] + b_f)$ \Comment{遗忘门计算}
+        \State $i_t \gets \sigma(W_i [h_{t-1}, x_t] + b_i)$ \Comment{输入门计算}
+        \State $\tilde{C}_t \gets \tanh(W_c [h_{t-1}, x_t] + b_c)$
+        \State $C_t \gets f_t * C_{t-1} + i_t * \tilde{C}_t$ \Comment{更新记忆细胞}
+        \State $o_t \gets \sigma(W_o [h_{t-1}, x_t] + b_o)$ \Comment{输出门计算}
+        \State $h_t \gets o_t * \tanh(C_t)$
+        
+        \State $y_t \gets \text{Sigmoid}(W_{fc} h_t + b_{fc})$ \Comment{预测下一步全部知识点掌握度}
+        \State $Outputs.append(y_t)$
+    \EndFor
+    
+    \State $Loss \gets \text{BCELoss}(Outputs * Mask, Y\_Batch * Mask)$ \Comment{仅对下一步实际考察点计算}
+    \State \Call{BackwardAndOptimize}{}
+    \State \Return $Loss, Outputs$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+在每一个时间步 $t$，LSTM 的隐状态 $h_t$ 经过一个线性全连接层（Fully-Connected Layer）投影和 Sigmoid 激活函数，输出一个 14 维的概率向量 $y_t$。该向量的第 $i$ 个维度数值 $y_{t,i} \in (0, 1)$，代表模型预测学生在完成前 $t$ 步练习后，在第 $t+1$ 步对知识点 $i$ 答对的后验概率。
+
+\section{基于拼音编辑距离检索的字幕校准实现}
+
+\subsection{ASR 偏误的拼音 Levenshtein 模糊纠错}
+在录播课场景中，国际中文学习者的发音偏误（如平翘舌不分、声调不准）会导致自动语音识别（ASR）技术产生明显的转写偏误，如将“第四声”误识为“地势声”，将“婆婆的婆”识别为“破破的破”。
+
+系统开发了基于拼音编辑距离（Levenshtein Distance）相似度模糊匹配算法（如算法3.3所示）。系统在内存中以课程标准词汇-拼音字典作为检索库（Vector Context）。当接收到 ASR 原始字幕片段后，通过动态规划算法计算 ASR 混淆拼音与词表中标准拼音的编辑距离：
+\begin{equation}
+Word_{calib} = \arg\min_{W \in Dict} \text{Levenshtein}(\text{ASR}(Word_{raw}), \text{Pinyin}(W))
+\end{equation}
+
+\begin{algorithm}
+\caption{基于拼音编辑距离模糊匹配的 ASR 字幕校准算法}
+\begin{algorithmic}[1]
+\Procedure{CalibrateASRSubtitles}{$ASR\_Stream, Context\_Dict$}
+    \State $Calibrated\_Subtitles \gets []$
+    \For{每个字幕帧 $Frame \in ASR\_Stream$}
+        \State $Text \gets Frame.text$
+        \For{ASR 混淆拼音 $ASR\_Py \in ASR\_Pinyin\_Map$}
+            \State $Match \gets \arg\min_{W} \text{Levenshtein}(ASR\_Py, \text{Pinyin}(W))$
+            \If{$\text{Levenshtein} \le 2$} \Comment{拼音级距离在阈值内，确认为偏误}
+                \State $Text \gets \text{Replace}(Text, ErrorWord, Match)$
+            \EndIf
+        \EndFor
+        
+        \State $Fragments \gets []$
+        \For{课程核心词 $W \in Context\_Dict$}
+            \If{$W$ 存在于 $Text$}
+                \State $Fragments.append(\text{TranslateDict}[W])$
+            \EndIf
+        \EndFor
+        
+        \State $Translation \gets \text{Join}(Fragments)$
+        \State $Calibrated\_Subtitles.append(\{Frame.time, Text, Translation\})$
+    \EndFor
+    \State \Return $Calibrated\_Subtitles$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+通过该算法，系统在纠正 ASR 拼音偏误后，基于中英双语词表进行段落片段的自动对齐拼接，输出格式规范的 SRT 双语字幕流。该方案在端侧具备较低计算开销（低于 1ms），作为一种轻量且自包含的字幕校准原型，可改善学习材料的可读性。

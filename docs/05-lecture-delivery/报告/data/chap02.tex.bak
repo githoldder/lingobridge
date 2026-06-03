@@ -1,0 +1,163 @@
+% !TeX root = ../thuthesis-example.tex
+
+\chapter{系统设计与方法}
+\section{基于 MediaPipe 关键点与深度特征的融合设计}
+
+本系统的核心设计逻辑在于通过“时空对齐”技术，将移动端边缘侧的高频拓扑追踪能力与专业级硬件的物理感知能力相结合。系统的感知过程并非离散运行，而是通过一套精密的坐标转换机制实现多模态数据的深度融合。
+
+在面部检测阶段，系统调用 MediaPipe Face Landmarker 框架对输入的 RGB 图像流进行实时分析。该算法基于经过深度优化的残差回归网络，能够以极高的帧率定位 $478$ 个精细的面部关键点。MediaPipe 输出的原始数据为归一化后的像素坐标集合 $P = \{p_1, p_2, \dots, p_{478}\}$，其中每个点 $p_i$ 的坐标表示为 $(x_i, y_i)$，其取值范围定义在单位区间 $[0.0, 1.0]$ 内，代表该点在二维图像平面中的相对投影位置。
+
+为了获取三维空间维度信息，系统引入了与彩色相机轴向对齐的 TrueDepth 结构光传感器。该传感器通过发射红外散斑图并捕获反射畸变，实时生成一份与彩色图像帧同步的深度矩阵（Depth Map） $\mathbf{D}$。融合设计的核心步骤在于将 2D 像素坐标映射至深度矩阵的行列索引。设深度矩阵的分辨率为 $W \times H$，则对应采样点的矩阵索引 $(Row, Col)$ 计算公式如下：
+
+\begin{equation}
+Col = \lfloor x_i \times W \rfloor \\
+Row = \lfloor y_i \times H \rfloor
+\end{equation}
+
+其中，$x_i$ 与 $y_i$ 分别表示由 MediaPipe 框架提取的第 $i$ 个面部关键点的归一化横坐标与纵坐标；$W$ 与 $H$ 分别代表 TrueDepth 传感器输出深度矩阵的宽度与高度；$\lfloor \cdot \rfloor$ 表示向下取整函数，用于将连续的归一化坐标转换为离散的矩阵像素索引。该算法架构如\ref{fig:architecture}所示.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/2.1架构图.pdf}
+    \caption{基于 MediaPipe 关键点与深度特征的融合设计架构图}
+    \label{fig:architecture}
+\end{figure}
+
+通过该映射关系，系统可以从深度矩阵 $\mathbf{D}$ 的对应存储单元中检索出该点在物理空间中的真实 $Z$ 轴距离数值 $z_i = \mathbf{D}[Row, Col]$。这种“以点搜面”的融合方式，使得系统能够实时构建出一组包含物理坐标 $P_i(x, y, z)$ 的三维生理特征集合。相较于传统识别系统，这种融合感知不仅能追踪面部的平面运动位姿，更能实时监控面部表面的生理起伏曲率，为后续基于标准差 $\sigma$ 的活体检测算法提供了高置信度的原始数据支撑。
+
+\section{基于面部曲率的 3D 活体检测算法}
+
+活体检测（Liveness Detection）是确保生物识别系统安全性的核心防御环节。本研究针对传统 2D 面部识别易受高保真照片、电子屏幕重放等演示攻击（Presentation Attacks）的痛点，提出并实现了一种基于面部表面深度标准差（$\sigma$）的静默活体判别算法。该算法利用 TrueDepth 传感器提供的物理深度信息，通过量化面部表面的空间起伏特征，从物理维度彻底拦截平面伪造攻击。
+
+\subsection{深度采样点选取与空间映射}
+算法首先利用 MediaPipe 框架在彩色图像流中定位出的高精细关键点作为导航锚点。为了充分表征人脸的生理曲率特征，系统在深度矩阵 $\mathbf{D}$ 中选取了 7 个具有代表性的采样点，包括：鼻尖（Nose Tip）、左/右眼内角（Inner Eye Corners）、额头中心（Forehead）、下巴（Chin）以及左/右脸颊（Cheeks）。
+
+设经空间对齐后获取的深度采样点集合为 $Z = \{z_1, z_2, \dots, z_n\}$，其中 $n=7$。每个元素 $z_i$ 代表面部特定解剖结构点距离相机的真实物理深度。
+
+\subsection{数学建模与离散度计算}
+系统首先计算采样点集合的深度均值 $\mu$，用以表征目标面部在当前空间位置的平均深度水平：
+
+\begin{equation}
+\mu = \frac{1}{n} \sum_{i=1}^{n} z_i
+\end{equation}
+
+其中，$\mu$ 为深度平均值，$n$ 为采样点总数，$z_i$ 为第 $i$ 个采样点的物理深度数值。
+
+随后，为了量化目标表面各采样点相对于均值平面的离散程度，即面部的物理起伏程度，系统引入标准差 $\sigma$ 作为核心判定指标：
+
+\begin{equation}
+\sigma = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (z_i - \mu)^2}
+\end{equation}
+
+其中，$\sigma$ 代表面部深度分布的标准差；$(z_i - \mu)^2$ 为各采样点深度与均值的偏差平方，用于衡量空间表面的曲率起伏；$\sqrt{\cdot}$ 确保了计算结果在量纲上与原始深度（米）保持一致。
+\subsection{算法实现伪代码}
+
+基于上述数学模型，系统在 `DepthCameraManager` 中实现了自动化的校验逻辑。以下为核心算法的伪代码描述：
+
+\begin{algorithm}
+\caption{基于物理深度特征的活体判定算法}
+\begin{algorithmic}[1]
+\Procedure{LivenessValidation}{$Landmarks, DepthMap$}
+    \State $S \gets \{1, 133, 362, 10, 152, 234, 454\}$ \Comment{选取核心关键点索引}
+    \State $Points \gets []$
+    \For{$idx \in S$}
+        \State $(lx, ly) \gets Align(Landmarks[idx], DepthMap)$ \Comment{像素对齐}
+        \State $z \gets GetDepthValue(DepthMap, lx, ly)$
+        \If{$z > 0$ and $z \neq NaN$}
+            \State $Points.append(z)$
+        \EndIf
+    \EndFor
+    
+    \If{$len(Points) < 5$} \Return $Pending$ \EndIf
+    
+    \State $stdDev \gets CalculateStdDev(Points)$
+    \State $diff \gets |Points[0] - Points[1]|$ \Comment{鼻尖与眼角的高差}
+    
+    \State $isStdDevOk \gets 0.0075 < stdDev < 0.045$ \Comment{曲率校验}
+    \State $isDistOk \gets 0.15 < Points[0] < 0.75$ \Comment{距离校验}
+    \State $isDepthOk \gets 0.015 < diff < 0.06$ \Comment{纵深校验}
+    
+    \If{$isStdDevOk$ and $isDistOk$ and $isDepthOk$}
+        \State $Accumulator \gets Accumulator + 1$
+        \If{$Accumulator \ge 8$} \State \Return $Passed$ \EndIf
+    \Else
+        \State $Accumulator \gets \max(0, Accumulator - 1)$
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+\subsection{物理判定逻辑与阈值设定}
+在三维空间中，真实的人脸具备复杂的几何拓扑结构，其鼻尖、眼窝与脸颊之间存在显著的纵深差异。实验数据表明，真人在正常识别距离下，其面部采样点的深度标准差 $\sigma$ 通常稳定分布在 $[0.0075m, 0.045m]$ 区间内。
+
+与之相对，照片、纸质面具或电子屏幕虽然具备面部视觉特征，但其表面在物理属性上呈现平坦性或线性倾斜。通过公式计算得到的 $\sigma$ 值将趋近于 $0$（通常小于 $0.005m$）。系统通过以下逻辑判断目标属性：
+\begin{itemize}
+    \item 若 $\sigma_{min} < \sigma < \sigma_{max}$，则判定为具有自然曲率特征的真人面部，系统允许进入后续的识别环节。
+    \item 若 $\sigma < \sigma_{min}$，则判定为平面攻击，系统将实时拦截并提示“请使用真人进行检测”。
+\end{itemize}
+
+这种基于物理深度分布的校验机制不依赖于用户的动作配合，实现了非接触式的静默防御，极大提升了系统的安全阈值与交互体验。
+\section{基于 InsightFace (buffalo\_l) 的迁移学习与微调}
+
+如图\ref{fig:architecture2.3}所示，身份比对阶段，系统构建了以深度度量学习为核心的识别机制。由于 ORL 数据库（共 40 组，每组 10 张）及自主采集的 30 人样本集均属于典型的小样本数据集，传统的从零训练（Training from Scratch）模式极易导致神经网络在稀疏特征空间中陷入过拟合。为此，本研究采用了迁移学习（Transfer Learning）策略，利用在数亿级大规模人脸数据集上预训练成熟的 \textit{buffalo\_l} 模型作为系统的特征提取引擎。架构图如
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/2.3架构图.pdf}
+    \caption{基于 MediaPipe 关键点与深度特征的融合设计架构图}
+    \label{fig:architecture2.3}
+\end{figure}
+
+在该架构设计中，系统冻结了 \textit{buffalo\_l} 内部基于深度残差网络（ResNet）的骨干参数，将其视作一个高维特征映射函数 $f(\cdot)$。当预处理后的面部图像输入模型后，网络会输出一个表征该人脸解剖特征的 512 维特征向量，即嵌入向量（Embedding）。设输入图像为 $I$，其生成的特征向量 $E$ 可表示为：
+\begin{equation}
+E = f(I; \theta)
+\end{equation}
+
+其中，$E \in \mathbb{R}^{512}$ 代表该人脸在希尔伯特空间中的位置；$\theta$ 为冻结的预训练网络权重参数。
+
+为了实现对特定身份的精确划分，本研究在应用层执行了面向任务的“逻辑微调”。在训练与特征库构建阶段，系统对每个目标的 \textbf{前 5 张} 照片执行前向推理，获取对应的特征向量集合 $\{E_1, E_2, \dots, E_5\}$。为了增强模型对同一个人不同姿态与光影的鲁棒性，系统计算该集合的特征质心（Centroid）作为该目标的唯一身份模板向量 $C$：
+\begin{equation}
+C = \frac{1}{k} \sum_{i=1}^{k} E_i
+\end{equation}
+
+其中，$C$ 为该身份在特征库中的参考模态；$k=5$ 为训练样本数量。这一过程有效地将“模型训练”转化为高维空间中的“质心演化”，实现了 One-shot 级别的快速学习适配。
+
+在测试与实时识别阶段，系统利用每个目标的 \textbf{后 5 张} 照片或实时捕捉的帧图像提取待测向量 $E_{test}$。系统通过计算待测向量与库中各身份质心之间的余弦相似度（Cosine Similarity）来判定身份归属。余弦相似度 $S$ 的计算公式如下：
+\begin{equation}
+S(E_{test}, C) = \frac{E_{test} \cdot C}{\|E_{test}\| \|C\|}
+\end{equation}
+
+其中，分母为两个向量模长的乘积，分子为向量的内积。$S$ 的取值范围在 $[-1, 1]$ 之间，越趋近于 1 表明两者在特征空间中的夹角越小，身份一致性越高。
+
+通过设定全局判别阈值 $\tau = 0.5$，系统能够有效区分目标身份或判定为“未知人员”。实验结果表明，这种“骨干迁移 + 特征质心适配”的方法，通过在预训练的高维超球面上重新划分决策边界，使系统在 ORL 数据库及自采 30 人数据集上的平均识别准确率稳步突破 95\% 指标，展现出极强的泛化能力与实际应用可靠性。
+\section{多人场景下的全向识别与坐标映射策略}
+
+为了在复杂且高动态的实时监控环境下提升交互体验，本系统设计并实现了一套全向识别逻辑与 UI 动态打标系统。该方案通过前端图像预处理、后端多向冗余检测以及空间坐标转换技术，解决了多人场景下的识别不稳定性与标签漂移问题。
+
+\subsection{反镜像处理与全向冗余检测}
+针对移动端前置摄像头天然存在的镜像效应及用户持握设备姿态的随机性（如横屏、倒置等），系统在数据链路上实施了双重微调策略。首先是\textbf{反镜像校正（Mirror Correction）}，系统在图像流上传至云端前，调用 \texttt{.oriented(.left)}（或 \texttt{.upMirrored}）方法。该步骤的几何意义在于将捕捉到的镜像空间还原为神经网络预训练时所采用的真实物理空间分布，消除了面部非对称性特征对相似度计算的干扰，使识别分数从波动的低值回归至高置信度区间。
+
+其次，为了实现\textbf{全向鲁棒性}，云端后端服务支持对输入帧执行 $0^\circ, 90^\circ, 180^\circ, 270^\circ$ 的四向并行检测。这一冗余扫描机制确保了无论设备处于何种旋转状态，系统均能准确捕捉到人脸边界框（Bounding Box），并自动根据旋转角度执行反向坐标回旋，从而在不要求用户配合的情况下完成精准定位。
+
+\subsection{坐标映射算法与空间还原}
+系统识别的核心挑战在于如何将后端基于原始图像像素生成的坐标 $(P_x, P_y)$ 动态映射到具有不同分辨率和缩放比例的手机屏幕视图中。本研究推导出一套适用于前置镜像模式的归一化坐标转换逻辑：
+
+\begin{equation}
+UI\_X = \left( 1.0 - \frac{P_x}{W_{img}} \right) \times W_{scr}\\
+UI\_Y = \left( \frac{P_y}{H_{img}} \right) \times H_{scr}
+\end{equation}
+
+其中：
+\begin{itemize}
+    \item $P_x, P_y$ 代表后端返回的识别目标在图像像素坐标系中的质心（或边界框顶点）坐标。
+    \item $W_{img}, H_{img}$ 分别代表上传图像的原始宽度与高度。
+    \item $W_{scr}, H_{scr}$ 分别代表移动端当前显示视图的物理宽度与高度。
+    \item 算式 $1.0 - \frac{P_x}{W_{img}}$ 实现了水平方向的镜像翻转对齐，确保标签与预览画面中的目标完全重合。
+\end{itemize}
+
+\subsection{动态打标与视觉平滑}
+如图\ref{fig:architecture2.4}所示在获取到精确的 $UI$ 坐标后，系统利用 SwiftUI 的 \texttt{GeometryReader} 视口感知技术进行实时渲染。为了避免识别频率与屏幕刷新率不同步导致的视觉抖动，系统为每个身份标签（Name Tag）配置了偏移量处理（如 $Y$ 轴负向偏移 $35$ 像素，以悬浮于目标头部）以及 \texttt{.spring()} 物理弹簧动画。该策略使得身份标签能够在多人交错走动、快速移动时，依然保持丝滑且具有物理感的视觉追踪效果，极大地提升了系统的工程完成度。
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/多向适配与空间坐标映射变换管线.pdf}
+    \caption{多向适配与空间坐标映射变换管线示意图}
+    \label{fig:architecture2.4}
+\end{figure}

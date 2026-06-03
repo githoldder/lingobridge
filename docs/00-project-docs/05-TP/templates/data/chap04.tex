@@ -8,7 +8,7 @@
   \centering
   \caption{LingoBridge 软件缺陷严重程度分级定义表}
   \label{tab:defect-severity}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{lXX}
     \toprule
     严重程度级别 & 定义描述 & 响应时限与修复要求 \\
     \midrule
@@ -17,7 +17,7 @@
     一般 & 辅助业务逻辑异常，或者核心模块存在暂时可行的降级规避方案 & 二十四小时内修复完成并合并至主干开发分支 \\
     微小 & 界面排版瑕疵、文字提示微瑕，或者不影响业务流的轻微操作体验 & 登记进入缺陷库并在下个双周迭代版本中统一优化 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \section{缺陷生命周期与流转流程}

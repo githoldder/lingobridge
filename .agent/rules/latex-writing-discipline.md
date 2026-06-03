@@ -53,24 +53,23 @@
 
 ---
 
-## 🚫 【红线五】严格三线表（booktabs 强制）
-所有生命周期文档中的表格**必须**使用学术三线表格式，不得出现任何非标准排版。
+## 🚫 【红线五】严格三线表（booktabs 强制与宽度防溢出）
+所有生命周期文档中的表格**必须**使用学术三线表格式，且其物理宽度绝不能超出页面的文本边距 (\textwidth)。
 
 1. **列定义禁止竖线**：
-   - 严禁在 `\begin{tabular}` 或 `\begin{longtable}` 的列定义中出现竖线符号 `|`。
-   - 正确：`\begin{tabular}{lll}` 或 `\begin{tabular}{l p{5cm} l}`。
+   - 严禁在 `\begin{tabular}`、`\begin{tabularx}` 或 `\begin{longtable}` 的列定义中出现竖线符号 `|`。
+   - 正确：`\begin{tabularx}{\textwidth}{llX}` 或 `\begin{longtable}{@{}p{3cm}p{8cm}X@{}}`。
    - 错误：`\begin{tabular}{|l|l|l|}`。
 2. **禁止 `\hline`，强制 `booktabs` 三宏**：
-   - 严禁使用 `\hline` 画横线。
-   - 表头上方使用 `\toprule`，表头下方使用 `\midrule`，表尾使用 `\bottomrule`。
-   - 数据行之间**不加任何横线**。
-3. **`booktabs` 宏包声明**：
-   - 项目 `thusetup.tex` 或主文件必须包含 `\usepackage{booktabs}`。
-4. **longtable 同规则**：
-   - `longtable` 环境同样适用：列定义无竖线，使用 `\toprule`/`\midrule`/`\bottomrule`/`\endhead`。
-5. **分页表格强制规则**：
-   - 行数达到 6 行且任一列含有长中文说明、URL、API 路径、DTO 名称或代码标识符时，禁止使用 `table` + `tabularx` + `[H]` 组合，必须改用 `longtable` 或拆分为“概览表 + 分模块子表”。
-   - `longtable` 必须设置重复表头；续页不应重复生成新的表编号；路径与英文标识符必须在斜杠、连字符或语义边界处插入 `\allowbreak`，防止跨页截断、列宽溢出和内容重叠。
+   - 严禁使用 `\hline` 画横线。顶线使用 `\toprule`，表头与表体间使用 `\midrule`，表尾底线使用 `\bottomrule`。数据行之间不得添加任何横线。
+3. **表格宽度强制规约与自适应折行**：
+   - 对于任何包含长中文描述、英文 API 路径、DTO 名称或代码标识符的表格列，**绝对禁止使用无换行功能的 raw 格式列定义（如 l, c, r）**。
+   - 必须使用 `tabularx` 环境并将表格总宽度锚定到 `\textwidth`（即 `\begin{tabularx}{\textwidth}{... X ...}`，其中长文本列设为 `X`），或者显式指定固定宽度列 `p{width}`。
+   - 在长路径、URL 或代码标识符的斜杠、连字符、下划线处，必须显式插入 `\allowbreak` 折行指令。
+4. **编译 Overfull \hbox 阻断性门禁**：
+   - 编译日志（`.log`）中**绝对禁止出现由于表格或段落超宽导致的 Overfull \hbox 警告（以 5.0pt 为界限）**。任何大于 5.0pt 的横向右边界溢出均被视为交付不合格（FAIL），必须进行宽度微调、折行处理或拆表重新编译。
+5. **longtable 同等约束**：
+   - 跨页大表必须使用 `longtable` 环境，且每一列必须显式分配具体的 `p{width}` 列宽或使用类似固定列宽设置，使所有列宽及列间距总和严格小于 `\textwidth`，且重复表头使用 `\endhead`，续页不得重复 caption 标签。
 
 ---
 

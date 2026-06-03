@@ -37,6 +37,7 @@
 | A-08 | PDF 留白与浮动体审计 | 是否因表格、图片、公式或浮动体过大导致上一页大面积空白、主体内容被挤到下一页 |
 | A-09 | 交叉引用闭环 | `\cite{}`、`\ref{}`、`\label{}` 是否无 undefined、无重复 label、无孤儿图表公式，且每个图表公式在正文有解释性引用 |
 | A-10 | 参考文献真实性与时效 | 每条文献是否可联网或通过 DOI/URL/ISBN/标准号检索，是否被正文引用，前沿技术类来源是否优先近 3 年 |
+| A-11 | Overfull \hbox 审查 | 编译日志（.log）中是否存在超过 5.0pt 的横向右边界溢出（尤其针对表格、长代码块） |
 
 ---
 
@@ -74,6 +75,7 @@ timestamp: YYYY-MM-DD HH:MM
 [A-08] PASS | FAIL: <PDF页码、日志行号或可见排版问题>
 [A-09] PASS | FAIL: <undefined/multiply defined/orphan 引用、label 或 cite key>
 [A-10] PASS | FAIL: <不可检索、过旧且无理由、正文未引用的参考文献>
+[A-11] PASS | FAIL: <编译日志中具体的 Overfull \hbox 警告行号与超宽数值>
 
 VERDICT: APPROVED | REJECTED
 CORRECTIONS: (仅当 REJECTED 时)

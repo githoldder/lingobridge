@@ -1,0 +1,47 @@
+{
+  "student_id": 81,
+  "mastery_status": {
+    "Initial_b": 0.9834256768226624,
+    "Initial_p": 0.3980465531349182,
+    "Final_a": 0.4592365026473999,
+    "Final_o": 0.4647502899169922,
+    "Tone_1": 0.40065300464630127,
+    "Tone_2": 0.7089926600456238,
+    "Tone_3": 0.5292544364929199,
+    "Tone_4": 0.28899991512298584,
+    "Character_ba": 0.9020106792449951,
+    "Character_ma": 0.9595290422439575,
+    "Character_po": 0.43328869342803955,
+    "Vocabulary_baba": 0.828239381313324,
+    "Vocabulary_mama": 0.6858537197113037,
+    "Vocabulary_popo": 0.7099113464355469
+  },
+  "weakest_knowledge_nodes": [
+    "Tone_4",
+    "Initial_p",
+    "Tone_1"
+  ],
+  "personalized_recommendations": [
+    {
+      "item_id": 104,
+      "title": "第四声 (Tone 4) 促跌",
+      "target_node": "Tone_4",
+      "confidence_score": 0.28899991512298584,
+      "reason_rag_enhanced": "系统评估显示，您在【Tone_4】发音上的预测掌握概率仅为 28.9%。特此匹配前置依赖拓扑题目【第四声 (Tone 4) 促跌】。全降调 51 决断促降练习，提升爆发和收音速度。"
+    },
+    {
+      "item_id": 102,
+      "title": "拼读 po 练习",
+      "target_node": "Initial_p",
+      "confidence_score": 0.3980465531349182,
+      "reason_rag_enhanced": "系统评估显示，您在【Initial_p】发音上的预测掌握概率仅为 39.8%。特此匹配前置依赖拓扑题目【拼读 po 练习】。送气双唇爆破音 p 专项练习，掌握爆破气流强弱控制。"
+    },
+    {
+      "item_id": 103,
+      "title": "第一声 (Tone 1) 强化",
+      "target_node": "Tone_1",
+      "confidence_score": 0.40065300464630127,
+      "reason_rag_enhanced": "系统评估显示，您在【Tone_1】发音上的预测掌握概率仅为 40.1%。特此匹配前置依赖拓扑题目【第一声 (Tone 1) 强化】。高平调 55 声调练习，保持起音平稳、尾音不滑落。"
+    }
+  ]
+}

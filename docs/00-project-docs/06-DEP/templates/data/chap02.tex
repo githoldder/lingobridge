@@ -32,7 +32,7 @@
   \centering
   \caption{LingoBridge 系统容器编排参数说明}
   \label{tab:docker-compose-params}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{llX}
     \toprule
     服务组件名称 & 容器网络端口映射 & 挂载宿主机持久化卷 \\
     \midrule
@@ -41,7 +41,7 @@
     lingobridge-nginx & 80:80 \allowbreak , 443:443 & ./nginx/conf:/etc/nginx/conf.d \allowbreak \\
     & & ./dist:/usr/share/nginx/html \allowbreak \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 执行容器化部署的具体步骤如下：首先，在宿主机执行 \texttt{npm run build} 对前端单页应用进行打包，确保生成最新的静态资源。其次，进入项目中的 \texttt{docker} 编排配置目录，运行 \texttt{docker-compose up -d} 命令。该命令将指示 Docker 引擎自动下载基础镜像、构建后端专属运行时镜像、创建私有网桥，并在后台以守护进程模式拉起后端应用容器与 Nginx 服务容器。最后，通过运行容器状态查看命令，确认所有定义的服务均处于运行状态，并检查持久化卷的挂载目录权限，确保后端容器对宿主机挂载的 \texttt{backend/data} 目录具有完整的读写权限，以便本地 JSON 文件数据库能够正确持久化。

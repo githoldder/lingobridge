@@ -1,13 +1,6 @@
-# analysis/ai-learning-recommendation/requirements.txt
-# LingoBridge v2.0 AI 模块 Python 依赖
-# 生成时间: 2026-06-01
-# 默认环境: uv
-
-# P0: 标准库优先，本文件仅记录实际使用的额外依赖
-# 如无需额外依赖则为空文件，保留作为占位和将来扩展记录
-
-# 如使用 pandas（可选，P0 纯 Python 实现优先）：
-# pandas>=2.0.0
-
-# 如使用 scikit-learn（可选，P0 阈值+纯Python KMeans优先）：
-# scikit-learn>=1.4.0
+numpy
+pandas
+scikit-learn
+torch
+networkx
+matplotlib

@@ -49,7 +49,7 @@
   \centering
   \caption{LingoBridge 常见故障自助排查与应急处理表}
   \label{tab:faq_troubleshooting}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{lXX}
     \toprule
     故障现象 & 潜在核心原因 & 推荐排查与应急解决方案 \\
     \midrule
@@ -59,7 +59,7 @@
     直播课件无法同步 & 教师未正式开课或跨国网络信令中断 & 确认开课状态、等待自适应指数退避自动重连、手动刷新页面 \\
     界面显示 502 错误 & 云服务器后端应用进程崩溃宕机 & 运维人员检查健康检查接口、登录服务器重启后端应用或容器 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 通过结合图\ref{fig:faq-flow}的决策路径与表\ref{tab:faq_troubleshooting}的分类对照，用户可以在不依赖技术支持团队的情况下自行解决百分之九十以上的日常使用故障，有力地保障了跨国数字化中文课堂的持续性与高效性。

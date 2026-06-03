@@ -8,7 +8,7 @@
   \centering
   \caption{LingoBridge 测试项目风险评估与控制矩阵表}
   \label{tab:test-risks}
-  \begin{tabular}{lll}
+  \begin{tabularx}{\textwidth}{lXX}
     \toprule
     风险分类与描述 & 潜在影响评估 & 缓解措施与对策预案 \\
     \midrule
@@ -16,7 +16,7 @@
     核心 API 频繁变更或外部打分服务不可用 & 接口用例频繁失效，集成联调测试遭遇大面积阻塞 & 严格实施契约变更审批并基于沙盒构建模拟桩代理 \\
     多终端音视频硬件调用与弱网波动 & 存在设备兼容性死角，弱网下录音打分请求发生超时 & 引入跨端自动化扫描并模拟多级弱网丢包重试机制 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \section{核心风险应对对策详解}
