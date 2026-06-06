@@ -1,0 +1,162 @@
+{
+  "sprint": "13",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-06-06",
+  "objective": "移除学生端、教师端关键 mock 感，补齐国际中文教育平台的首页、看板、学生/班级管理、学习路径、知识图谱追踪和教师干预闭环。",
+  "strategy": {
+    "priority": "Role product depth third",
+    "sequence": [
+      "先升级教师端，因为当前教师首页和学生管理复杂度最低。",
+      "再升级学生端知识追踪、个人排名、首页 AI 学习助手。",
+      "最后让教师端和学生端共享 analytics 数据契约，减少重复 mock。"
+    ]
+  },
+  "references": [
+    {
+      "name": "Skritter classroom progress",
+      "url": "https://docs.skritter.com/article/32-overall-classroom-progress",
+      "use": "教师查看时间范围、学习时长、成功率、学生活动。"
+    },
+    {
+      "name": "Skritter student progress",
+      "url": "https://docs.skritter.com/article/262-streaks-goals-and-progress",
+      "use": "学生 streak、daily/overall progress、activity feed。"
+    },
+    {
+      "name": "HelloChinese features",
+      "url": "https://www.hellochinese.cc/en",
+      "use": "中文学习维度：阅读、写作、口语、词汇、语法、语音识别、SRS、视频。"
+    },
+    {
+      "name": "LingoAce Mandarin platform",
+      "url": "https://www.lingoace.com/",
+      "use": "全球中文学习、课程体系、教师服务、学习报告。"
+    },
+    {
+      "name": "ClassIn integrated classroom/LMS/PLE",
+      "url": "https://apps.apple.com/us/app/classin/id1226361488",
+      "use": "直播课堂、多媒体、作业、讨论、评价数据一体化。"
+    }
+  ],
+  "repoReality": {
+    "teacherDashboard": "src/components/TeacherDashboardView.tsx 当前主要展示学生数、课程数、任务数、课程列表、轻量 engagement。",
+    "teacherStudents": "src/components/TeacherStudentsView.tsx 当前主要展示学生姓名、邮箱、课程数、状态和检查进度按钮。",
+    "studentDashboard": "src/components/DashboardView.tsx 当前以课程/课堂/作业快捷入口为主，缺少 AI 学习助手。",
+    "studentHomework": "src/components/HomeworkView.tsx 已有 KG/排名视觉入口，但没有真正路由和数据。"
+  },
+  "keyResults": [
+    "KR-1: 教师首页升级为教学运营控制台，包含班级健康、弱点地图、待批改/待复查、AI 干预队列。",
+    "KR-2: 教师学生/班级管理页升级为高密度表格+筛选+学生详情抽屉，包含国际中文教育字段。",
+    "KR-3: 学生首页加入 AI 学习助手、下一步练习、知识图谱/排名入口。",
+    "KR-4: 作业页右侧加入 Duolingo-like 知识追踪 rail，连接知识图谱、学习记录、个人排名。",
+    "KR-5: 新增 StudentRankingView，并从学生首页/作业页入口可达。"
+  ],
+  "tasks": [
+    {
+      "id": "S13-T01",
+      "topic": "Teacher dashboard international Chinese operations redesign",
+      "ownerAgentPrompt": "重构教师首页的信息架构，对标竞品研究，但保持 LingoBridge 视觉风格。首页不是营销页，要是教师工作台。加入班级健康、中文技能弱点、作业/录音 review queue、AI intervention queue、课堂/多媒体证据入口。",
+      "targetFiles": [
+        "src/components/TeacherDashboardView.tsx"
+      ],
+      "steps": [
+        "新增 classHealthCards：completionRate、avgRecordingScore、activeStudents、riskStudents。",
+        "新增 skillWeaknessPanel：pinyin、tone、character、vocabulary、listening、speaking。",
+        "新增 interventionQueue：remind、retest、extraPractice、teacherNote。",
+        "新增 evidenceQueue：recordings、captionSegments、coursewareImports、homeworkSubmissions。",
+        "全部文案接入 i18n。"
+      ],
+      "acceptance": [
+        "教师首页一屏能看出国际中文教学场景。",
+        "没有大段功能介绍文案，都是可操作数据模块。",
+        "移动端不重叠。"
+      ]
+    },
+    {
+      "id": "S13-T02",
+      "topic": "Teacher students/class management upgrade",
+      "ownerAgentPrompt": "将 TeacherStudentsView 从简单 roster 升级为班级学情管理界面。增加高密度字段、筛选、学生详情抽屉。不要破坏现有 StudentProgressModal，可在其外层增加 AI/证据维度。",
+      "targetFiles": [
+        "src/components/TeacherStudentsView.tsx"
+      ],
+      "steps": [
+        "表格字段增加 nativeLanguage、timezone、learnerType、level、currentLesson、lastActiveAt、completionRate、avgScore、recordingAttempts、weakKnowledgePoints、riskLevel、interventionStatus。",
+        "增加筛选：班级、风险、薄弱点、未交作业、低录音分。",
+        "增加学生详情抽屉：timeline、KG weak nodes、recordings、assignment evidence、teacher notes。",
+        "保留检查进度与作业入口。"
+      ],
+      "acceptance": [
+        "学生管理界面不再功能单一。",
+        "能支撑教师日常诊断和干预。",
+        "隐私边界明确，不暴露无关班级数据。"
+      ]
+    },
+    {
+      "id": "S13-T03",
+      "topic": "Student dashboard AI learning assistant",
+      "ownerAgentPrompt": "在学生首页加入 AI 学习助手模块，读取 analyticsApi.studentProfile/recommendations fallback。保持页面第一屏是可用学习工作台，不做营销 Hero。",
+      "targetFiles": [
+        "src/components/DashboardView.tsx"
+      ],
+      "steps": [
+        "新增 mastery summary、streak、next best practice、weak nodes、ranking entry。",
+        "将课程/课堂/作业快捷入口与 AI 建议结合。",
+        "入口可导航到 homework 或 student-ranking。"
+      ],
+      "acceptance": [
+        "学生首页能说明 AI 如何赋能学习。",
+        "不遮挡现有课堂/作业主流程。"
+      ]
+    },
+    {
+      "id": "S13-T04",
+      "topic": "Homework knowledge tracing rail and graph entry",
+      "ownerAgentPrompt": "抽离 StudentKnowledgeTraceRail 组件，放到 HomeworkView 的学习路径旁边，展示学习记录、知识图谱、个人排名、推荐练习。不要改录音/提交/草稿核心逻辑。",
+      "targetFiles": [
+        "src/components/HomeworkView.tsx",
+        "src/components/StudentKnowledgeTraceRail.tsx"
+      ],
+      "steps": [
+        "新增 side rail 组件。",
+        "添加 KG preview、learning trace、rank card、recommendations。",
+        "将现有 ranking/records/mindmap 按钮接入新路由或弹窗。"
+      ],
+      "acceptance": [
+        "作业页出现明确的知识图谱追踪体验。",
+        "不影响录音和作业提交。"
+      ]
+    },
+    {
+      "id": "S13-T05",
+      "topic": "Student personal ranking page",
+      "ownerAgentPrompt": "新增 StudentRankingView 和 App 路由 student-ranking。页面要是个人学习分析页，不是单纯排行榜。包含匿名班级分布、个人趋势、掌握雷达、弱点解释、学习记录、推荐练习。",
+      "targetFiles": [
+        "src/components/App.tsx",
+        "src/components/StudentRankingView.tsx",
+        "src/components/Layout.tsx"
+      ],
+      "steps": [
+        "新增受保护 tab student-ranking。",
+        "布局中增加可选入口或从 dashboard/homework 跳转。",
+        "使用 Recharts 或现有图表库展示分布、趋势、雷达。",
+        "同屏避免信息过密，移动端分段展示。"
+      ],
+      "acceptance": [
+        "学生可从首页和作业页进入排名/学习分析页。",
+        "同班同学只显示匿名分布，不显示真实姓名。"
+      ]
+    }
+  ],
+  "guardrails": [
+    "教师端和学生端必须复用 analytics 数据契约，避免每页各自发明 mock。",
+    "不要把教师页做成 landing page。",
+    "不要使用大面积单色渐变或装饰性卡片堆砌。",
+    "HomeworkView 的录音、提交、草稿逻辑禁改。"
+  ],
+  "exitCriteria": [
+    "教师端首页和学生管理页体现国际中文教育复杂度。",
+    "学生端 AI 学习路径、知识图谱和排名形成闭环。",
+    "三端 mock 明显减少，fallback 数据结构统一。"
+  ]
+}

@@ -15,6 +15,10 @@ Use this folder as the canonical source for sprint-numbered execution.
 | Sprint 7 | `sprint-07-public-https-demo-deploy.md` | Markdown | Public domain, trusted HTTPS, camera/microphone demo deployment |
 | Sprint 7 | `sprint-07-public-https-demo-deploy.json` | JSON | Canonical machine-readable execution contract for public HTTPS deployment |
 | Candidate Sprint 7 | `sprint-07-candidate-speech-demo-spike.json` | JSON | Speech demo and subtitle spike candidate |
+| Sprint 11 | `../json/sprint11-prd-260606-v0.1.json` | JSON | Demo-first data console and analytics API integration |
+| Sprint 12 | `../json/sprint12-prd-260606-v0.1.json` | JSON | Public dataset, data pipeline, ML modeling, and report figures |
+| Sprint 13 | `../json/sprint13-prd-260606-v0.1.json` | JSON | Student and teacher product depth, mock reduction, dashboards |
+| Sprint 14 | `../json/sprint14-prd-260606-v0.1.json` | JSON | LingoBridge 2.0 software-engineering document synchronization |
 
 ## Write Rules
 

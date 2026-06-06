@@ -10,6 +10,8 @@ Use this folder for decisions that apply across multiple sprints.
 | `01-current-status-and-guardrails.md` | Current status, risk, anti-regression rules, and phase prompts |
 | `02-product-boundary-and-business-rules.md` | Diagnosis, product boundary, business rules, and module boundaries |
 | `03-api-acceptance-and-next-questions.md` | API boundary, sprint summaries, acceptance checklist, and strategy questions |
+| `04-ai-knowledge-tracing-and-data-console-plan.md` | Student knowledge tracing, ranking page, DKT/KG lightweight plan, and admin AI monitoring |
+| `05-competitive-research-and-teacher-complexity.md` | Competitor research, teacher-side complexity baseline, and staged delivery logic |
 
 ## Write Rules
 
