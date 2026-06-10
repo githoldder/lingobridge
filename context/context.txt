@@ -1,0 +1,120 @@
+# LingoBridge v2.1 Hardening Context
+- Resuming work to harden AI, acoustics and video capabilities.
+- Created context/context.txt to track modifications.
+- Status: Completed. All fixes tested and built successfully.
+- Services: PM2 restarted successfully.
+- Check & Restore: Re-launched apps via ecosystem.config.cjs after detecting out-of-date daemon issue. Backend running on 3001, Frontend Preview on 4174.
+- Frontend Dynamic Refresh: Linked refresh button in TrainingDashboardView.tsx to trigger /run-pipeline POST and pull /training-history GET to fetch and render the actual 100 epochs dynamically.
+- Legend Layout Fix: Shifted Recharts Legends to right-bottom using align/verticalAlign to prevent XAxis tick overlapping.
+- Sidebar Redesign: Removed descriptions. Implemented spring sliding layout animations using motion.div layoutId and scale-up hover animations for buttons.
+
+[Detailed Design - DKT Training Scaling]
+- File: generate_data.py
+  - Change num_students from 100 to 250 to achieve 12,500 interactions (10,000+).
+- File: train_knowledge_tracing.py
+  - Change epochs from 20 to 100.
+  - Implement Early Stopping with patience = 10.
+
+[Detailed Design - Video Transcoding & Praat Pipeline in app.ts]
+- Imports:
+  - Add exec and promisify to run ffmpeg.
+- Helper:
+  - Add transcodeToMp4(webmPath) returning mp4Path.
+- Route /api/v1/lectures:
+  - Call transcodeToMp4 on upload.
+  - Save to DB with videoUrl replacing .webm with .mp4.
+- Route /api/v1/recordings/:id/praat:
+  - Run ffmpeg convert to 16k mono wav.
+  - Spawn phoneme_viz.py on wav.
+  - Save generated plots to backend/storage/praat/{id}/ and return urls.
+
+[Detailed Design - PraatPhonemeChart.tsx Component Rewrite]
+- Properties:
+  - Add optional `recordingId?: string` property.
+- Fetching:
+  - When `recordingId` is passed, query `recordingsApi.praatAnalysis` in a useEffect.
+- Display:
+  - Show spinner during loading.
+  - Render three actual acoustic PNGs (F0, Intensity, Duration) generated from Python Praat pipeline.
+  - Fallback to interactive SVG demo segments if no `recordingId` is supplied.
+
+[Detailed Design - NeuralNetworkFlow.tsx Canvas Rewrite]
+- User Interface:
+  - Add interactive feature selectors (attempts_count, duration, IRT, error_patterns).
+- Core Engine:
+  - Replace static circles with an HTML5 Canvas drawing loop.
+  - Dynamically recalculate layer layouts when features are toggled.
+- Animations:
+  - Implement forward pass signaling (cyan pulse particles traveling L -> R).
+  - Implement backward pass error flow (pink pulse particles traveling R -> L).
+  - Add weights updates simulation (pulsing and stabilization of connection lines thickness).
+  - Float training mathematical formulas (loss gradients, LSTM gates) on screen.
+  - Add a "Simulate Training" button that triggers a convergence loop with dropping loss values.
+
+[Detailed Design - Backend ML Training History API]
+- File: backend/src/app.ts
+  - Create `GET /api/v1/analytics/training-history` to parse `training_history.json` and `metrics.json`.
+  - Expose training loss arrays, metrics, and custom epoch lengths to frontend.
+
+[Detailed Design - Frontend TrainingDashboardView.tsx Hardening]
+- Service Integration:
+  - Add API client wrapper for `/api/v1/analytics/training-history` and `/api/v1/analytics/run-pipeline`.
+  - Handle refresh button action: Trigger POST `/run-pipeline` and pull GET `/training-history`.
+  - Show a "Training in Progress" loader overlay.
+- Visual Fixes (Legend overlapping):
+  - Remove redundant Axis label to save vertical space.
+  - Relocate Recharts `<Legend />` elements to right-bottom: `<Legend align="right" verticalAlign="bottom" layout="horizontal" iconSize={10} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />`.
+
+[Detailed Design - Sidebar Navigation Redesign]
+- File: src/components/AdminDashboardView.tsx
+  - Import `motion` from `motion/react` to enable spring animations.
+  - Remove description fields (`section.desc`) from the sidebar.
+  - Implement a sliding dynamic background button using `<motion.div layoutId="activeNavBg" />` for active sections with neon drop-shadows.
+  - Add micro-animations (scale on hover, text transition to white on active).
+
+[Requirement - Admin Dashboard Refactoring & Refinement]
+- Fix double-bracket syntax issue in AdminDashboardView.tsx.
+- Implement 30-min auto-refresh interval daemon & unified manual refresh for overview metrics.
+- Make charts dynamic: scale scatter plots with student sample counts, adjust curves based on model AUC, and introduce slight random fluctuation on refresh.
+- Redesign home/dashboard layout: place Quick Access navigation cards at the top, clear redundant mock data, and fully i18n all descriptions.
+- Remove the "course design" badge/div from renderSectionHeader.
+- Dynamically update breadcrumbs, page title, and subtitle to reflect the active section name.
+
+[High-Level Design]
+- Create a unified handleRefresh callback calling both loadOverview and loadData. Set up setInterval in useEffect.
+- Update chartData useMemo to depend on analytics and a seed/refresh state to force dynamic recalculation on refresh.
+- Update translations in adminConsoleCopy with new i18n keys for navigation card descriptions.
+- Reorder elements in renderMonitoringOverview: navigation first, then metrics, then pipeline table & model health.
+- Remove courseDesign span from renderSectionHeader.
+
+[Detailed Design]
+- File: src/components/AdminDashboardView.tsx
+  - Update adminBreadcrumb to "数据中台" (zh) / "Data Console" (en).
+  - Modify breadcrumb and page title rendering in layout:
+    - Breadcrumb 1: adminBreadcrumb.
+    - Breadcrumb 2 / Title: sections.find(s => s.id === activeSection).label.
+    - Subtitle: sections.find(s => s.id === activeSection).desc.
+  - Add new translation keys auditDescShort, multimediaDescShort, mlDescShort to adminConsoleCopy.
+  - Remove redundant courseDesign element from renderSectionHeader.
+  - Redesign renderMonitoringOverview layout to highlight navigation entries first.
+  - Clean up double closing brackets at line 1909-1910.
+  - Add refreshNonce state to force charts to regenerate slightly on manual/passive refresh.
+  - Setup setInterval and unified handleRefresh hook.
+  - Delete redundant renderSectionHeader calls in renderDataAuditCenter and renderMultimediaMonitoring to eliminate header label duplication and clean up blank cards.
+- File: src/components/charts/NeuralNetworkFlow.tsx
+  - Rewrite to support lightweight pure JavaScript LSTM forward pass and backpropagation training step simulation.
+  - Implement dynamic 4x10 Knowledge State Heatmap rendering student mastery over 10 steps.
+  - Add interactive time step selection (t_1 to t_10) to inspect LSTM gate values (f_t, i_t, o_t) and embedding weights on HTML5 Canvas.
+  - Track loss history curve decay in real-time.
+
+
+[Requirement - Student Dashboard Refactoring & Hardening v2.2]
+- Fix wait live room logo.svg overflow issue in TeacherClassroomView.tsx.
+- Re-layout Student Dashboard: Place Welcome Banner and AI Mastery Trace (72% mastery, Tone 3/4 0% detail, KG map shortcut) at the top. Put Today's Tasks in the middle. Place Quick Access and Streak/Points Stats at the bottom.
+- Overhaul VocabularyView: Inject 100 mock pinyin cards (Initials, Finals, Tones, Words). Move course selector below header. Support AI Speech correction training on cards.
+- Overhaul HomeworkView: Introduce Path Selector tab (AI Path vs Homework). Render AI-guided learning recommended nodes chain.
+
+[Execution - Git Commit and Verification]
+- Branch: say-hello-feature
+- Action: Perform safe git add for modified files (avoiding dataless files trigger SIGBUS) and commit locally.
+- Verified: npm run build completes successfully with zero compile errors.
