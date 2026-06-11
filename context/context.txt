@@ -114,7 +114,25 @@
 - Overhaul VocabularyView: Inject 100 mock pinyin cards (Initials, Finals, Tones, Words). Move course selector below header. Support AI Speech correction training on cards.
 - Overhaul HomeworkView: Introduce Path Selector tab (AI Path vs Homework). Render AI-guided learning recommended nodes chain.
 
+
 [Execution - Git Commit and Verification]
 - Branch: say-hello-feature
 - Action: Perform safe git add for modified files (avoiding dataless files trigger SIGBUS) and commit locally.
 - Verified: npm run build completes successfully with zero compile errors.
+
+
+
+[Execution - iCloud Dataless Restore]
+- Action: Restart bird daemon and run brctl download on project root.
+- Verification: Create a robust .gitignore to ignore .agent/, node_modules/, dist/, and system files to avoid SIGBUS on untracked folders, then try git add.
+
+[Research - iCloud Sync & Git Collision]
+- Target: Explain iCloud sync mechanism, quota limits, git blocked behavior, and storage cleanup steps.
+- Output: Mermaid fishbone diagram and concise Q&A.
+
+[Execution - Safe Incremental Commit]
+- Action: Safely commit latest .gitignore, .dockerignore, and context.txt updates, keeping other untracked dataless files pending iCloud resolution.
+
+
+
+
