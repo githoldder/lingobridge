@@ -133,6 +133,10 @@
 [Execution - Safe Incremental Commit]
 - Action: Safely commit latest .gitignore, .dockerignore, and context.txt updates, keeping other untracked dataless files pending iCloud resolution.
 
+[Execution - Safe PR Conflict Resolution]
+- Action: Clone project into /tmp/LingoBridge_merge to bypass local iCloud eviction limits and safely resolve PR conflicts.
+
+
 
 
 
