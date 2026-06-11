@@ -1,0 +1,5 @@
+domain,resource_name,url,allowed_basis,attribution_required,usage_notes,verified_date
+data-ai,CRISP-DM Process Diagram - Wikimedia Commons,https://commons.wikimedia.org/wiki/File:CRISP-DM_Process_Diagram.png,CC-BY-SA-3.0,yes,"May copy with attribution and share-alike obligations; record exact image page and license in manifest before adding asset.",2026-06-02
+data-ai,NN-SVG GitHub,https://github.com/alexlenail/NN-SVG,MIT License,yes,"May reuse code/assets under MIT; include copyright/license notice for substantial copied material.",2026-06-02
+data-ai,NN-SVG Online Generator,https://alexlenail.me/NN-SVG/,MIT-backed source repository,yes,"Use generator for project-specific diagrams; generated project diagrams must be labeled as generated, not standard screenshots.",2026-06-02
+software-engineering,PlantUML generated project images,https://raw.githubusercontent.com/plantuml/plantuml/master/license.txt,PlantUML license states generated images are owned by corresponding source-code author,no for generated project images,"This applies to diagrams generated from our own PlantUML sources, not to copying PlantUML documentation images.",2026-06-02

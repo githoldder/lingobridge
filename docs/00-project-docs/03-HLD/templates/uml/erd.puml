@@ -1,0 +1,178 @@
+@startuml erd
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam linetype ortho
+skinparam class {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+  ArrowColor #3B82F6
+  HeaderBackgroundColor #3B82F6
+  HeaderFontColor #FFFFFF
+}
+
+title LingoBridge 实体关系图 (ERD)
+
+entity "users\n用户表" as users {
+  * **id** : UUID <<PK>>
+  --
+  username : VARCHAR(50) <<UNIQUE>>
+  email : VARCHAR(100)
+  password_hash : VARCHAR(255)
+  role : ENUM('admin','teacher','student')
+  display_name : VARCHAR(100)
+  status : ENUM('active','disabled')
+  created_at : TIMESTAMP
+}
+
+entity "courses\n课程表" as courses {
+  * **id** : UUID <<PK>>
+  --
+  * teacher_id : UUID <<FK>>
+  * class_id : UUID <<FK>>
+  title : VARCHAR(200)
+  description : TEXT
+  status : ENUM('draft','published','archived')
+  created_at : TIMESTAMP
+}
+
+entity "classes\n班级表" as classes {
+  * **id** : UUID <<PK>>
+  --
+  * teacher_id : UUID <<FK>>
+  name : VARCHAR(100)
+  created_at : TIMESTAMP
+}
+
+entity "class_members\n班级成员表" as class_members {
+  * **id** : UUID <<PK>>
+  --
+  * class_id : UUID <<FK>>
+  * student_id : UUID <<FK>>
+  joined_at : TIMESTAMP
+}
+
+entity "lesson_nodes\n课时节点表" as lesson_nodes {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  title : VARCHAR(200)
+  sort_order : INT
+  status : ENUM('draft','published')
+  starts_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "assignment_nodes\n作业节点表" as assignment_nodes {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  title : VARCHAR(200)
+  status : ENUM('draft','published')
+  due_date : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "learning_tasks\n学习任务表" as learning_tasks {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  task_key : VARCHAR(100)
+  zh_text : TEXT
+  pinyin : VARCHAR(500)
+  audio_url : VARCHAR(500)
+  sort_order : INT
+}
+
+entity "learning_records\n学习记录表" as learning_records {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  * task_id : UUID <<FK>>
+  score : INT
+  status : ENUM('pending','completed')
+  attempts : INT
+  completed_at : TIMESTAMP
+}
+
+entity "recordings\n录音表" as recordings {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * course_id : UUID <<FK>>
+  lesson_node_id : UUID
+  task_id : UUID
+  slot_index : INT(1..3)
+  audio_url : VARCHAR(500)
+  duration_ms : INT
+  created_at : TIMESTAMP
+}
+
+entity "live_sessions\n直播会话表" as live_sessions {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * teacher_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  status : ENUM('scheduled','waiting',\n'ongoing','closed')
+  started_at : TIMESTAMP
+  ended_at : TIMESTAMP
+}
+
+entity "files\n文件表" as files {
+  * **id** : UUID <<PK>>
+  --
+  * owner_id : UUID <<FK>>
+  * course_id : UUID <<FK>>
+  kind : ENUM('courseware','audio',\n'recording','avatar')
+  original_name : VARCHAR(255)
+  storage_url : VARCHAR(500)
+  mime_type : VARCHAR(100)
+  size_bytes : BIGINT
+  created_at : TIMESTAMP
+}
+
+entity "homework_submissions\n作业提交表" as homework_submissions {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * assignment_node_id : UUID <<FK>>
+  status : ENUM('pending','submitted',\n'graded','returned')
+  submitted_at : TIMESTAMP
+  score : INT
+  feedback : TEXT
+}
+
+users ||--o{ courses : "teacher_id\n教师创建课程"
+users ||--o{ classes : "teacher_id\n教师管理班级"
+users ||--o{ class_members : "student_id\n学生加入班级"
+users ||--o{ learning_records : "student_id\n学生学习记录"
+users ||--o{ recordings : "student_id\n学生录音"
+users ||--o{ live_sessions : "teacher_id\n教师开启直播"
+users ||--o{ files : "owner_id\n文件所有者"
+users ||--o{ homework_submissions : "student_id\n学生提交作业"
+
+classes ||--o{ class_members : "class_id"
+classes ||--o{ courses : "class_id\n班级关联课程"
+
+courses ||--o{ lesson_nodes : "course_id"
+courses ||--o{ assignment_nodes : "course_id"
+courses ||--o{ learning_tasks : "course_id"
+courses ||--o{ recordings : "course_id"
+courses ||--o{ live_sessions : "course_id"
+courses ||--o{ files : "course_id"
+
+lesson_nodes ||--o{ assignment_nodes : "lesson_node_id"
+lesson_nodes ||--o{ learning_tasks : "lesson_node_id"
+lesson_nodes ||--o{ learning_records : "lesson_node_id"
+lesson_nodes ||--o{ live_sessions : "lesson_node_id"
+
+learning_tasks ||--o{ learning_records : "task_id"
+
+assignment_nodes ||--o{ homework_submissions : "assignment_node_id"
+
+@enduml

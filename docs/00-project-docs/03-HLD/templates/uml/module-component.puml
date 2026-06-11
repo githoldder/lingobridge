@@ -1,0 +1,34 @@
+@startuml module-component
+skinparam componentStyle uml2
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBorderColor #10B981
+skinparam ComponentBorderColor #3B82F6
+
+package "LingoBridge Frontend SPA" {
+    [UI Views] ..> [Contexts] : read/write state
+    [UI Views] ..> [apiClient] : call HTTP/WSS
+    [Contexts] ..> [apiClient] : utilize
+}
+
+package "LingoBridge Backend Server" {
+    [Express Router] ..> [JWT Auth Middleware] : guards
+    [JWT Auth Middleware] ..> [Repository Layer] : invokes
+    [Express Router] ..> [Repository Layer] : delegates
+}
+
+package "Data Persistence Layer" {
+    [Repository Layer] ..> [PostgreSQL Pool] : DB_MODE=postgres
+    [Repository Layer] ..> [JSON File Engine] : DB_MODE=json
+}
+
+database "PostgreSQL" {
+    [Physical Tables]
+}
+
+database "JSON Storage" {
+    [Physical Files]
+}
+
+[PostgreSQL Pool] ..> [Physical Tables]
+[JSON File Engine] ..> [Physical Files]
+@endum

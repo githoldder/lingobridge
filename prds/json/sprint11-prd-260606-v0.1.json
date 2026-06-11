@@ -1,0 +1,160 @@
+{
+  "sprint": "11",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-06-06",
+  "objective": "优先保障 LingoBridge 2.0 演示链路：数据中台各模块前后端打通，并建立学生、教师、Admin 三端共享的 analytics 数据契约。",
+  "strategy": {
+    "priority": "Demo stability first",
+    "sequence": [
+      "先让 Admin 数据中台模块可访问、可切换、可读取后端或 mock fallback。",
+      "再建立 analyticsApi 和后端只读接口，服务学生、教师、Admin 三端。",
+      "最后补最小化学生/教师 AI 卡片，证明同一数据契约能跨角色复用。"
+    ]
+  },
+  "repoReality": {
+    "existingFrontend": [
+      "src/components/AdminDashboardView.tsx 已有数据中台 UI、图表和 i18n 基础。",
+      "src/components/HomeworkView.tsx 已有知识图谱/排名视觉入口，但尚未连接真实视图。",
+      "src/components/TeacherDashboardView.tsx 只有轻量统计和最近课程。",
+      "src/components/TeacherStudentsView.tsx 主要是 roster 搜索、课程数和进度弹窗。"
+    ],
+    "existingBackend": [
+      "backend/src/app.ts 已有 /api/v1/admin/recordings、notes、transcripts、coursewares、assignment-imports、learning-progress。",
+      "尚无 /api/v1/analytics/student-profile、class-insights、admin-snapshot、knowledge-graph、student-ranking。",
+      "src/services/apiClient.ts 有 adminApi，尚无 analyticsApi。"
+    ],
+    "existingAI": [
+      "analysis/ai-learning-recommendation/output/metrics.json 已有 DKT 与 baseline 指标。",
+      "analysis/ai-learning-recommendation/output/knowledge_graph.json 已有 NetworkX 知识图谱节点与边。",
+      "analysis/ai-learning-recommendation/output/recommendations.json 已有推荐输出，但还不是产品三端契约。"
+    ]
+  },
+  "references": [
+    {
+      "name": "Duolingo for Schools activity log",
+      "url": "https://duolingoschools.zendesk.com/hc/en-us/articles/6894350549773-What-is-the-Duolingo-for-Schools-activity-log-",
+      "use": "教师端实时活动侧栏、学生进度和作业报告参考。"
+    },
+    {
+      "name": "Canvas instructor course analytics",
+      "url": "https://community.canvaslms.com/t5/Instructor-Guide/How-do-I-view-Course-Analytics-in-a-course-as-an-instructor/ta-p/801",
+      "use": "教师课程分析、周活跃、学生 drill-down、图表/表格切换参考。"
+    },
+    {
+      "name": "Moodle Learning Analytics",
+      "url": "https://docs.moodle.org/en/Using_analytics",
+      "use": "指标、目标、洞察、通知、行动的学习分析模型边界参考。"
+    }
+  ],
+  "keyResults": [
+    "KR-1: 新增 analyticsApi 类型客户端，覆盖 student-profile、student-ranking、knowledge-graph、recommendations、class-insights、teacher-interventions、admin-snapshot。",
+    "KR-2: 后端新增 /api/v1/analytics/* 只读接口，能读取 output JSON 或返回安全 fallback。",
+    "KR-3: Admin 数据中台 dashboard、audit、multimedia、ML、pipeline 等核心模块可正常切换，关键指标来自统一 analytics snapshot。",
+    "KR-4: 学生端和教师端各至少接入一个 analytics mock/fallback 面板，证明数据契约跨角色可用。",
+    "KR-5: 通过浏览器手工验收和 API smoke 验收，演示路径无空白页、无未翻译 mock 英文标题。"
+  ],
+  "tasks": [
+    {
+      "id": "S11-T01",
+      "topic": "Analytics data contract and typed client",
+      "ownerAgentPrompt": "读取 prds/current/04-ai-knowledge-tracing-and-data-console-plan.md 与 05-competitive-research-and-teacher-complexity.md，先在 src/services/apiClient.ts 新增 analytics DTO 和 analyticsApi。保持已有 adminApi 不回退、不破坏登录和录音提交逻辑。",
+      "targetFiles": [
+        "src/services/apiClient.ts"
+      ],
+      "steps": [
+        "定义 StudentLearningProfile、StudentRankingSnapshot、KnowledgeGraphSnapshot、LearningTraceEvent、PracticeRecommendation、ClassInsight、TeacherIntervention、AdminAnalyticsSnapshot。",
+        "新增 analyticsApi.studentProfile、studentRanking、knowledgeGraph、recommendations、classInsights、teacherInterventions、adminSnapshot、runPipeline。",
+        "所有 GET 接口使用 request 封装；runPipeline 仅 admin 使用 POST。"
+      ],
+      "acceptance": [
+        "TypeScript 类型可被学生、教师、Admin 组件导入。",
+        "不改变现有 adminApi、homeworkApi、courseApi 的行为。"
+      ]
+    },
+    {
+      "id": "S11-T02",
+      "topic": "Backend read-only analytics API",
+      "ownerAgentPrompt": "在 backend/src/app.ts 中新增 /api/v1/analytics/* 只读接口。优先读取 analysis/ai-learning-recommendation/output 下的 JSON；文件缺失时返回可演示 fallback。不要读取真实录音内容，不写入 backend/data/db.json。",
+      "targetFiles": [
+        "backend/src/app.ts"
+      ],
+      "steps": [
+        "新增安全 JSON 读取 helper，限制读取 output 目录内白名单文件。",
+        "实现 student-profile、student-ranking、knowledge-graph、recommendations、class-insights、teacher-interventions、admin-snapshot。",
+        "admin-snapshot 和 run-pipeline 使用 requireAdmin；学生自查和教师班级接口按现有 auth 能力做最小权限保护。",
+        "run-pipeline P0 可返回 stub 状态，不实际执行 Python。"
+      ],
+      "acceptance": [
+        "curl 可访问各 GET 接口并返回 JSON。",
+        "文件缺失时返回结构完整 fallback，而不是 500。",
+        "接口不修改业务数据库。"
+      ]
+    },
+    {
+      "id": "S11-T03",
+      "topic": "Admin data-console connectivity hardening",
+      "ownerAgentPrompt": "检查 AdminDashboardView 当前模块，接入 analyticsApi.adminSnapshot 或保持 mock fallback，修复顶部、导航、模块标题中未本地化的 admin/data science console/live 等文案。信息架构保留 dashboard、数据审计中心、多媒体监控、机器学习看板等核心分区。",
+      "targetFiles": [
+        "src/components/AdminDashboardView.tsx"
+      ],
+      "steps": [
+        "确保 zh/en/ru/kk i18n 覆盖顶部标题、live 状态、导航描述、模块标题。",
+        "将 admin snapshot 字段映射到 pipeline/model/KG/ranking/recommendation/multimedia 健康指标。",
+        "避免所有模块挤在首页，保持分区切换。"
+      ],
+      "acceptance": [
+        "中文语言下不出现明显英文 mock 标题。",
+        "切换模块不出现空白页。",
+        "数据中台能展示后端失败时的 fallback 状态。"
+      ]
+    },
+    {
+      "id": "S11-T04",
+      "topic": "Teacher minimal analytics proof panel",
+      "ownerAgentPrompt": "在教师首页或学生管理页加入最小 AI 班级洞察面板，使用 analyticsApi.classInsights fallback。不要大规模重构 UI，只证明教师端也接入同一 analytics 数据契约。",
+      "targetFiles": [
+        "src/components/TeacherDashboardView.tsx",
+        "src/components/TeacherStudentsView.tsx"
+      ],
+      "steps": [
+        "教师首页加入班级健康、弱知识点、待干预学生、待复查录音数量。",
+        "学生管理页表格增加 riskLevel、weakKnowledgePoints、lastActiveAt 的 mock/fallback 字段。",
+        "加入按钮入口到学生详情/进度弹窗，不破坏原有进度弹窗。"
+      ],
+      "acceptance": [
+        "教师首页能看到国际中文教学特征字段，而非只有学生数/课程数。",
+        "学生管理页能按风险/薄弱点表达更复杂的班级管理需求。"
+      ]
+    },
+    {
+      "id": "S11-T05",
+      "topic": "Demo smoke and browser verification",
+      "ownerAgentPrompt": "运行前后端 smoke，使用浏览器验证 Admin、教师、学生关键路径。记录无法运行的命令与原因，不要重置用户未提交改动。",
+      "targetFiles": [
+        "prds/json/sprint11-prd-260606-v0.1.json"
+      ],
+      "steps": [
+        "验证 /api/v1/analytics/admin-snapshot 等接口返回。",
+        "浏览器检查 Admin 数据中台 i18n、导航切换、教师首页 AI 面板。",
+        "如 TypeScript 或 lint 因仓库既有问题无法全量通过，记录具体阻塞。"
+      ],
+      "acceptance": [
+        "演示路径可走通。",
+        "最终说明列出已验证项和剩余风险。"
+      ]
+    }
+  ],
+  "guardrails": [
+    "不得改动 HomeworkView 的录音、提交、草稿核心逻辑。",
+    "不得读取真实音频/PDF 内容用于 AI 建模，P0 只用元数据和 fallback。",
+    "不得把 run-pipeline 做成阻塞式长任务；P0 可 stub。",
+    "不得引入 Neo4j 作为必需依赖。"
+  ],
+  "exitCriteria": [
+    "Admin 数据中台演示无阻塞。",
+    "analytics API 合同可用。",
+    "教师端出现最小 AI 班级洞察能力。",
+    "学生/教师/Admin 三端数据契约统一。"
+  ]
+}

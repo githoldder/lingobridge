@@ -1,0 +1,18 @@
+domain,resource_name,url,pending_reason,next_verification_step,verified_date
+business-market,IBCS Standards,https://www.ibcs.com/IBCS/,copy/license terms unclear,"Check IBCS terms, membership access and whether screenshots/examples may be reused.",2026-06-02
+business-market,IBCS Templates,https://www.ibcs.com/resource/templates/,template download/copy rights unclear,"Check each template page and download license.",2026-06-02
+business-market,IBCS Examples,https://www.ibcs.com/resource/examples/,example image reuse unclear,"Check each example page before screenshot.",2026-06-02
+business-market,IBCS Consultant Work Samples,https://www.ibcs.com/consultants/,consultant-owned content likely mixed,"Verify owner and permission for each work sample.",2026-06-02
+business-market,Urban Institute Data Visualization Style Guide,https://urbaninstitute.github.io/graphics-styleguide/,content license differs from code license,"Check site/content license separately from GitHub GPLv3 code.",2026-06-02
+business-market,The Data Visualisation Catalogue,https://datavizcatalogue.com/,site image reuse terms unclear,"Check terms or contact/usage page; record individual chart page.",2026-06-02
+business-market,Financial Times Visual Vocabulary,https://github.com/Financial-Times/chart-doctor/tree/main/visual-vocabulary,GitHub license not yet recorded,"Open and record repository LICENSE before copying images.",2026-06-02
+software-engineering,Camunda BPMN Reference,https://www.camunda.com/bpmn/reference/,web diagram reuse terms unclear,"Check Camunda website terms and per-image usage.",2026-06-02
+software-engineering,Camunda BPMN Examples,https://www.camunda.com/bpmn/examples/,web diagram reuse terms unclear,"Check Camunda website terms and per-example page.",2026-06-02
+software-engineering,Visual Paradigm UML Gallery,https://www.visual-paradigm.com/VPGallery/diagrams/index.html,commercial gallery terms unclear,"Check Visual Paradigm terms before copying any image.",2026-06-02
+software-engineering,Real World PlantUML,https://real-world-plantuml.com/?type=usecase,aggregates examples from repositories with mixed licenses,"Trace to original repository and check LICENSE.",2026-06-02
+software-engineering,Joel Parker Henderson PlantUML Examples,https://github.com/joelparkerhenderson/plantuml-examples,LICENSE.md present but text not recorded,"Fetch LICENSE.md and record exact license.",2026-06-02
+software-engineering,C4-PlantUML,https://github.com/plantuml-stdlib/C4-PlantUML,license not yet recorded,"Open repository LICENSE and record exact terms.",2026-06-02
+data-ai,CRISP-DM 1.0 Step-by-step data mining guide,https://www.dataprix.com/files/CRISP-DM.pdf,PDF provenance/redistribution terms unclear,"Verify original CRISP-DM PDF source and record page/figure/title before screenshot.",2026-06-02
+data-ai,Evidence-based guidance framework for neural network system diagrams,https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0318800,article license and figure reuse not yet recorded,"Confirm PLOS article license and record figure number/title.",2026-06-02
+data-ai,Kenneth Leung Neural Network Architecture Diagrams,https://github.com/kennethleungty/Neural-Network-Architecture-Diagrams,LICENSE present but exact text not recorded,"Fetch LICENSE and record whether diagrams may be copied.",2026-06-02
+data-ai,PlotNeuralNet,https://github.com/HarisIqbal88/PlotNeuralNet,license not yet recorded,"Fetch LICENSE before copying code/examples.",2026-06-02

@@ -1,0 +1,83 @@
+@startuml presence-state
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam state {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+  ArrowColor #3B82F6
+  ArrowFontColor #64748B
+}
+skinparam note {
+  BackgroundColor #FEF3C7
+  BorderColor #F59E0B
+  FontColor #1E293B
+}
+
+title LingoBridge 直播课堂 Presence 状态图
+
+[*] --> 未创建
+
+state "未创建" as NotCreated #F1F5F9 {
+}
+
+state "已计划\n(Scheduled)" as Scheduled #E0F2FE {
+}
+
+state "等待中\n(Waiting)" as Waiting #FEF3C7 {
+}
+
+state "进行中\n(Ongoing)" as Ongoing #D1FAE5 {
+  state "正常听课" as Listening
+  state "举手申请\n(HandRaised)" as HandRaised #FEF3C7
+  state "已授权连麦\n(Authorized)" as Authorized #10B981
+
+  [*] --> Listening
+
+  Listening --> HandRaised : 学生点击举手按钮\n[role=student]
+  HandRaised --> Listening : 学生取消举手\n/ 教师拒绝
+  HandRaised --> Authorized : 教师批准连麦\n/ 触发 getUserMedia()
+  Authorized --> Listening : 教师收回权限\n/ track.stop()
+  Authorized --> Listening : 学生主动关闭连麦\n/ track.stop()
+}
+
+state "已结束\n(Closed)" as Closed #FEE2E2 {
+}
+
+NotCreated --> Scheduled : 教师创建直播课\n设定开始时间
+
+Scheduled --> Waiting : 到达预定时间 -5min\n或教师手动打开等候室
+
+Waiting --> Ongoing : 教师点击 "开始上课"\n/ 初始化 Presence 频道
+
+Ongoing --> Closed : 教师点击 "结束课堂"\n/ 广播结束事件
+
+Waiting --> Closed : 超时未开始\n(T > 30min)\n/ 自动关闭
+
+Closed --> [*]
+
+note right of Ongoing
+  **媒体轨道生命周期:**
+  1. 进入连麦 → navigator.mediaDevices.getUserMedia()
+  2. 获取 MediaStream (camera/mic)
+  3. 退出连麦 → stream.getTracks().forEach(t => t.stop())
+  4. 断开连接 → 自动清理所有轨道
+end note
+
+note left of Waiting
+  **Presence 心跳机制:**
+  每 15s 发送心跳
+  3 次未响应标记为离线
+  重连后自动恢复状态
+end note
+
+note bottom of Closed
+  **结束清理:**
+  - 释放所有 MediaStream
+  - 断开 Presence 连接
+  - 更新 live_sessions.status = 'closed'
+  - 记录 ended_at 时间戳
+end note
+
+@enduml

@@ -1,0 +1,52 @@
+% !TeX encoding = UTF-8
+% !TeX program = xelatex
+
+\documentclass[
+  fontset=windows,
+  cjk-font=windows-local,
+  windows-font-dir=fonts
+]{thuthesis}
+ 
+\input{thusetup}
+\usepackage{float}
+\setCJKfamilyfont{hwfs}{STZHONGS}[Path=fonts/, Extension=.ttf, AutoFakeBold=3]
+\geometry{top=0.8cm,headheight=0pt,headsep=0pt}
+
+\fancypagestyle{plain}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}\fancyfoot[C]{\thepage}}
+\fancypagestyle{chapter}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}\fancyfoot[C]{\thepage}}
+\pagestyle{plain}
+\ctexset{chapter/pagestyle=plain}
+\ctexset{
+  chapter={format=\centering\heiti\zihao{-2},beforeskip=18pt,afterskip=24pt},
+  section={format=\heiti\zihao{-3},beforeskip=12pt,afterskip=12pt},
+  subsection={format=\heiti\zihao{4},beforeskip=10pt,afterskip=8pt}
+}
+
+\AtBeginDocument{\songti\fontsize{10.5bp}{20bp}\selectfont}
+\begin{document}
+\begin{titlepage}
+\vspace*{3cm}\centering
+{\CJKfamily{hwfs}\zihao{1} LingoBridge}\\[1em]
+{\heiti\zihao{2} 部署说明}\\[3em]
+\vspace*{2cm}
+\hspace*{-1.8cm}
+\begin{tabular}{@{}p{4cm}@{\hspace{-1cm}}p{10cm}@{}}
+{\fontsize{16bp}{20bp}\selectfont 文档编号：} & \underline{\makebox[10cm][c]{DEP\_LingoBridge\_v1.0}} \\[1cm]
+{\fontsize{16bp}{20bp}\selectfont 项目名称：} & \underline{\makebox[10cm][c]{LingoBridge 中文学习平台}} \\[1cm]
+{\fontsize{16bp}{20bp}\selectfont 编\hspace{2em}写：} & \underline{\makebox[10cm][c]{曹磊}} \\[1cm]
+{\fontsize{16bp}{20bp}\selectfont 版本编号：} & \underline{\makebox[10cm][c]{v1.0.0}} \\[1cm]
+{\fontsize{16bp}{20bp}\selectfont 编写日期：} & \underline{\makebox[10cm][c]{2026 年 5 月 18 日}} \\
+\end{tabular}
+\vfill
+{\songti\zihao{-4} 参考标准：GB/T 8567—2006}
+\vfill
+\end{titlepage}
+\frontmatter\tableofcontents
+\mainmatter
+\input{data/chap01}
+\input{data/chap02}
+\input{data/chap03}
+\input{data/chap04}
+\input{data/chap05}
+\bibliography{ref/refs}
+\end{document}

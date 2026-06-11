@@ -1,0 +1,15 @@
+{
+  "purpose": "LingoBridge docs/00-project-docs save-to-build wiring",
+  "note": "Built-in VSCode keybinding override with runCommands. No extension required.",
+  "saveBuild": {
+    "trigger": "Cmd+S",
+    "scope": "current .tex file under docs/00-project-docs/01-07 templates",
+    "mechanism": "keybindings.json overrides Cmd+S when resourcePath matches → runCommands([save, runTask])",
+    "entrypoint": "docs/00-project-docs/build_on_save.sh",
+    "delegatesTo": "docs/00-project-docs/<DOC>/scripts/build_manual.sh",
+    "sameAsManualBuild": true,
+    "fullBuildTrigger": "Cmd+S A",
+    "fullBuildEntrypoint": "docs/00-project-docs/build_all.sh",
+    "requiresExtension": null
+  }
+}

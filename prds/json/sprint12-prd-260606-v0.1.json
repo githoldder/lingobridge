@@ -1,0 +1,150 @@
+{
+  "sprint": "12",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-06-06",
+  "objective": "跑完整公共数据集获取、数据分析、数据管道构建、数据建模、机器学习评估和图表导出流程，充盈课程实验报告的数据科学与工程可追溯性。",
+  "strategy": {
+    "priority": "Data science rigor second",
+    "sequence": [
+      "保留本地 synthetic LingoBridge 数据作为演示 fallback。",
+      "引入至少一个公共教育数据集样本，建立可复现数据管道。",
+      "统一映射到 LearningTraceEvent 和 KnowledgeComponent schema。",
+      "运行 baseline、DKT、聚类、推荐、图谱指标、可视化导出。",
+      "把图表、指标、审计表同步到 docs/05-lecture-delivery/报告。"
+    ]
+  },
+  "references": [
+    {
+      "name": "EdNet large-scale education dataset",
+      "url": "https://arxiv.org/abs/1912.03072",
+      "use": "知识追踪、学习路径推荐、公有大规模行为数据研究依据。"
+    },
+    {
+      "name": "KDD Cup 2010 educational data mining dataset",
+      "url": "https://learning-analytics-toolbox.org/dataset/the-2010-kdd-cup-competition-dataset/",
+      "use": "学生答题正确性预测、教育数据挖掘基准流程依据。"
+    },
+    {
+      "name": "ASSISTments",
+      "url": "https://www.assistments.org/",
+      "use": "教师实时数据、练习数据和教育数据分析产品参考。"
+    },
+    {
+      "name": "Deep Knowledge Tracing",
+      "url": "https://papers.neurips.cc/paper/5654-deep-knowledge-tracing",
+      "use": "DKT 模型理论依据。"
+    }
+  ],
+  "repoReality": {
+    "existingPipeline": [
+      "analysis/ai-learning-recommendation/src/generate_data.py 生成合成学习日志。",
+      "analysis/ai-learning-recommendation/src/build_knowledge_graph.py 生成 NetworkX KG JSON/PNG。",
+      "analysis/ai-learning-recommendation/src/train_knowledge_tracing.py 训练单层 LSTM DKT 并输出 metrics、loss、ROC、recommendations。",
+      "docs/05-lecture-delivery/报告 已经引用 knowledge_graph.png、dkt_training_loss.png、dkt_roc_curve.png。"
+    ],
+    "knownModelResult": {
+      "dkt_auc": 0.5385702351115885,
+      "baseline_auc": 0.5908366153478936,
+      "interpretation": "小样本冷启动下 baseline 强于 DKT，应作为报告讨论点。"
+    }
+  },
+  "keyResults": [
+    "KR-1: 新增公共数据集 ingest/normalize 脚本，能将外部学习交互样本映射到统一 schema。",
+    "KR-2: 输出 data_profile.json、data_quality_report.json、feature_dictionary.json、pipeline_manifest.json。",
+    "KR-3: 完成 baseline、DKT、聚类、推荐、图谱指标的可复现实验输出。",
+    "KR-4: 新增或更新 8 类图：数据生命周期、ETL/特征工程、算法流程、loss/accuracy、ROC/PR、混淆矩阵、聚类散点、知识图谱。",
+    "KR-5: 报告中能说明数据来源、清洗规则、特征、模型、评估、审计追踪和局限性。"
+  ],
+  "tasks": [
+    {
+      "id": "S12-T01",
+      "topic": "Public dataset acquisition plan and sample loader",
+      "ownerAgentPrompt": "在 analysis/ai-learning-recommendation 下新增公共数据集获取说明和 sample loader。不要提交大型原始数据；只提交小样本或下载说明、schema adapter、校验脚本。",
+      "targetFiles": [
+        "analysis/ai-learning-recommendation/README.md",
+        "analysis/ai-learning-recommendation/src"
+      ],
+      "steps": [
+        "选择 EdNet sample 或 ASSISTments/KDD Cup sample 作为首个公共数据源。",
+        "新增 dataset_sources.md，记录许可证、下载地址、字段说明、不可提交大文件规则。",
+        "新增 normalize_public_dataset.py，将外部字段映射到 student_id、skill_id、item_id、timestamp、correct、event_type。",
+        "输出 output/public_learning_events_sample.csv。"
+      ],
+      "acceptance": [
+        "仓库不包含大型原始数据。",
+        "normalize 脚本可对 sample 输入运行并输出统一 schema。"
+      ]
+    },
+    {
+      "id": "S12-T02",
+      "topic": "Data profiling and audit artifacts",
+      "ownerAgentPrompt": "为 synthetic 和 public sample 生成数据画像、质量报告、特征字典和管线 manifest，支撑实验报告可追溯。",
+      "targetFiles": [
+        "analysis/ai-learning-recommendation/src",
+        "analysis/ai-learning-recommendation/output"
+      ],
+      "steps": [
+        "统计行数、学生数、知识点数、缺失率、重复率、时间范围、标签分布。",
+        "生成 feature_dictionary.json，说明每个特征的来源、含义、类型、是否可用于学生/教师/Admin 展示。",
+        "生成 pipeline_manifest.json，记录脚本、输入、输出、运行时间、随机种子、模型版本。"
+      ],
+      "acceptance": [
+        "output/data_quality_report.json 可被 Admin 数据中台读取。",
+        "报告可引用数据画像指标。"
+      ]
+    },
+    {
+      "id": "S12-T03",
+      "topic": "Modeling pipeline upgrade",
+      "ownerAgentPrompt": "扩展当前 DKT 管线，保留现有 DKT 与 non-leakage baseline 对比，增加 accuracy/loss JSON 序列、混淆矩阵、PR 曲线、学习曲线。不要虚构 DKT 优于 baseline。",
+      "targetFiles": [
+        "analysis/ai-learning-recommendation/src/train_knowledge_tracing.py",
+        "analysis/ai-learning-recommendation/output"
+      ],
+      "steps": [
+        "输出 training_history.json。",
+        "输出 confusion_matrix.json 和 PNG。",
+        "输出 precision_recall_curve.png。",
+        "输出 model_comparison.json，包含 DKT、baseline、样本数、冷启动解释。",
+        "可选添加聚类/风险分层脚本，输出 student_profiles.json。"
+      ],
+      "acceptance": [
+        "指标可复现，随机种子固定。",
+        "报告中能看到 DKT 和 baseline 的诚实对比。"
+      ]
+    },
+    {
+      "id": "S12-T04",
+      "topic": "Report figure export and LaTeX sync",
+      "ownerAgentPrompt": "把新增实验图表和数据科学说明同步到 docs/05-lecture-delivery/报告。注意 LaTeX 表格规范，避免 Markdown 泄漏。不要覆盖用户未修改确认的论文内容，先最小增补。",
+      "targetFiles": [
+        "docs/05-lecture-delivery/报告/data/chap03.tex",
+        "docs/05-lecture-delivery/报告/data/chap04.tex",
+        "docs/05-lecture-delivery/报告/data/chap05.tex",
+        "docs/05-lecture-delivery/报告/figures"
+      ],
+      "steps": [
+        "新增数据来源与清洗审计段落。",
+        "新增公共数据集映射与局限性说明。",
+        "新增模型评估图引用和图注。",
+        "新增可追溯 pipeline manifest 描述。"
+      ],
+      "acceptance": [
+        "报告更工程化、数据科学化、可追溯。",
+        "不出现未实现功能完成式表述。"
+      ]
+    }
+  ],
+  "guardrails": [
+    "不得提交大型公共数据原始文件。",
+    "不得为了好看篡改 DKT 指标。",
+    "所有图表必须能从脚本或明确数据源再生成。",
+    "报告必须区分 synthetic、public sample、真实业务数据。"
+  ],
+  "exitCriteria": [
+    "公共数据集样本可被 normalize。",
+    "数据质量、特征字典、pipeline manifest、模型比较产物齐全。",
+    "报告新增图表和文字能支撑答辩的数据科学严谨性。"
+  ]
+}

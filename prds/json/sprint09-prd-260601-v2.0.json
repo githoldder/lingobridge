@@ -1,0 +1,1110 @@
+{
+  "sprint": "09",
+  "version": "2.0",
+  "status": "Planned",
+  "lastUpdated": "2026-06-01 10:46",
+  "milestone": "LingoBridge v2.0",
+  "courseAssignmentTitle": "基于机器学习的国际中文学习行为分析与个性化练习推荐系统",
+  "objective": "在不破坏现有 MVP 教学闭环的前提下，为 LingoBridge 增加可解释的学习行为数据分析、学习画像、风险分层和个性化练习推荐能力，并让学生端、教师端、Admin 端都能呈现清晰的数据分析与智能推荐结果。",
+  "mandatoryAgentDiscipline": {
+    "mustReadBeforeAnyCodeChange": [
+      ".agent/rules/agent-ops-governance.md",
+      ".agent/rules/mvp-scope.md",
+      ".agent/rules/project-map.md",
+      ".agent/rules/security.md",
+      ".agent/workflows/mvp-implementation.md",
+      "prds/md/sprint09-prd-260601-v2.0.md",
+      "prds/json/sprint09-prd-260601-v2.0.json"
+    ],
+    "recommendedSkillsAndWorkflows": [
+      {
+        "path": ".agent/skills/04_vibe_coding_engineering/SKILL.md",
+        "useWhen": "修改 React 前端、Express API、TypeScript 类型或集成逻辑。"
+      },
+      {
+        "path": ".agent/skills/05_lingobridge_docs_standard/SKILL.md",
+        "useWhen": "更新 PRD、SRS、HLD、大作业报告素材或任何正式文档。"
+      },
+      {
+        "path": ".agent/workflows/mvp-implementation.md",
+        "useWhen": "执行任何功能开发任务，必须按单 task、单 step 推进。"
+      },
+      {
+        "path": ".agent/workflows/devops-smoke-test.md",
+        "useWhen": "涉及后端 API、前端页面、演示数据、部署或 smoke test。"
+      },
+      {
+        "path": ".agent/workflows/document-latex-injection-and-delivery.md",
+        "useWhen": "后续将 v2.0 写入 01-FA 至 07-UM 或 08-AI-CW 报告时。"
+      }
+    ],
+    "commitPolicy": [
+      "每完成一个 task 或一个可独立验收的 subtask 后本地提交。",
+      "提交前只 stage 当前 task 相关文件。",
+      "开发阶段禁止 git push，除非用户显式要求。",
+      "不得提交 backend/storage、backend/data 中的真实运行数据、录音、上传文件、.env、test-results、output/playwright 临时截图。"
+    ],
+    "nonDestructiveRules": [
+      "不得重写登录、课程、课堂、作业、录音、TTS、课件上传主流程。",
+      "不得把 AI 推荐做成阻断用户操作的强制逻辑；v2.0 推荐只做辅助提示。",
+      "不得把未实现的 ASR 云评分、实时深度学习训练、多租户 SaaS 写成已完成事实。",
+      "不得读取或提交真实学生隐私数据；演示与模型训练使用合成样例数据或脱敏导出。",
+      "不得将 Python ML 模块耦合进 Vite 构建链路；优先采用离线 JSON 输出或后端只读聚合接口。"
+    ],
+    "requiredValidationCommands": [
+      "python3 -m json.tool prds/json/sprint09-prd-260601-v2.0.json",
+      "npm run lint",
+      "npm run backend:test",
+      "npm run build"
+    ],
+    "pythonEnvironmentPolicy": [
+      "本机演示允许使用 Anaconda 或 uv；默认优先 uv，因为它更适合仓库内可复现脚本和轻量依赖锁定。",
+      "如果使用 uv，Python ML 模块应提供 analysis/ai-learning-recommendation/pyproject.toml 或 requirements.txt，并在 README 写明 uv venv、uv pip install、python run_pipeline.py 的命令。",
+      "如果使用 Anaconda，必须在 README 写明 conda create/conda activate/conda env export 的命令，并提供 environment.yml；不得假设评审机已有同名环境。",
+      "Python 代码不得依赖全局 site-packages 的隐式包；所有依赖必须写入 requirements.txt、pyproject.toml 或 environment.yml。",
+      "上台本地演示前必须跑完整 pipeline，并确认 output/*.json 时间戳为最新。"
+    ],
+    "localProcessPolicy": [
+      "本地演示优先使用 PM2 管理前后端进程，避免 npm run dev、tsx、vite preview 残留僵尸进程。",
+      "使用仓库现有 ecosystem.config.cjs：lingobridge-backend 运行 backend/src/server.ts，lingobridge-frontend-preview 运行 vite preview 4174。",
+      "常用命令：npm run pm2:start、npm run pm2:restart、npm run pm2:logs、npm run pm2:stop。",
+      "每次演示前必须执行 pm2 status 或 pm2 logs 检查服务状态；端口异常时先 pm2 restart，不要手工乱 kill 无关进程。",
+      "如需临时启动 Vite dev server，只能在明确需要热更新时使用 npm run dev；结束后必须清理。"
+    ],
+    "ralphGitPolicy": [
+      "严格遵循 Ralph：Object -> Key-Result -> Task -> Step。",
+      "每次只执行一个 step，完成后记录验证结果。",
+      "每个小 feature 或可回滚功能点都必须本地 commit 留痕，不把多个无关模块塞进一个大 commit。",
+      "commit message 必须包含 taskId 或 stepId，例如 feat/ai-v2: complete S9-T02-S04 (preprocess features)。",
+      "每个 sprint 完成后先进入 review，不直接 push；review 确认无误后再由用户授权最终 push。",
+      "出现方向错误时优先用 git revert 回滚对应小 commit，禁止 git reset --hard 或 checkout 覆盖用户改动，除非用户明确要求。"
+    ],
+    "contextMemoryPolicy": [
+      "context/context.txt 是短期工作记忆和踩坑记录，不默认纳入功能 commit，除非本 task 明确要求更新上下文。",
+      "context/project-brief.md 与 context/directory-map.md 是长期项目记忆，只有当系统边界、目录结构或核心事实变化时才更新。",
+      "每完成一个 task，应在 handoff 或 context/context.txt 记录：做了什么、验证了什么、踩了什么坑、下个 agent 不应重复做什么。",
+      "不得把本地私有路径、token、真实学生隐私、临时截图路径写入长期记忆。",
+      "memory 类信息必须区分短期执行日志和长期规则：短期放 context/context.txt，长期规则沉淀到 .agent/rules 或 prds/current，并经过用户认可。"
+    ],
+    "sprintReviewPolicy": [
+      "Sprint 结束后必须产出 review：完成任务、未完成任务、风险、测试结果、回归范围、建议是否 push。",
+      "review 前必须检查 git status，明确列出未提交文件、未跟踪文件和不应提交的本地输出。",
+      "review 通过前禁止远程 push。",
+      "最终 push 前必须确认 main/当前分支、远程状态和待推 commit 列表。"
+    ]
+  },
+  "currentMvpReality": {
+    "frontendSurfaces": [
+      {
+        "path": "src/components/DashboardView.tsx",
+        "currentRole": "学生首页。已有课程数、作业数、今日任务、课堂入口和作业入口。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "只新增 AI 学习助手模块和推荐任务入口，不改现有课堂/作业导航逻辑。"
+      },
+      {
+        "path": "src/components/HomeworkView.tsx",
+        "currentRole": "学生作业与录音主流程。已有 3-slot 录音、本地草稿、服务端 draft、learningRecords、录音上传和局部 AI 分析卡。",
+        "v2ChangeLevel": "reuse-and-minimize",
+        "v2Guidance": "不要重写录音/提交流程。仅把已有 score、attempts、recordings、learningRecords 作为分析数据来源；必要时补展示入口。"
+      },
+      {
+        "path": "src/components/TeacherStudentsView.tsx",
+        "currentRole": "教师学生总览。已有学生搜索、课程数、分配状态和 StudentProgressModal 入口。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "新增班级 AI 洞察和风险学生列。不要破坏学生搜索、课程成员统计和进度弹窗。"
+      },
+      {
+        "path": "src/components/AdminDashboardView.tsx",
+        "currentRole": "Admin 管理看板。已有 live、recordings、notes、transcripts、coursewares、assignments、progress tabs。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "新增 analytics/overview tab 或首页 summary band。复用 adminApi.learningProgress，不要删除现有 tabs。"
+      },
+      {
+        "path": "src/components/App.tsx",
+        "currentRole": "主路由/视图编排。",
+        "v2ChangeLevel": "touch-only-if-needed",
+        "v2Guidance": "只有新增独立 ranking/analytics 页面时才改；优先在现有 DashboardView、TeacherStudentsView、AdminDashboardView 内增量实现。"
+      },
+      {
+        "path": "src/services/apiClient.ts",
+        "currentRole": "前端 API 类型和请求封装。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "新增 analytics 类型和 analyticsApi/admin analytics API，保持 request、auth、courses、homework、recordings 等已有 API 不变。"
+      }
+    ],
+    "backendSurfaces": [
+      {
+        "path": "backend/src/app.ts",
+        "currentRole": "Express 路由集中入口。已有 /learning-records、/recordings、/homework-submissions、/admin/learning-progress。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "新增只读 analytics 路由。不要改 auth、courseware upload、recording upload、live session 权限逻辑。"
+      },
+      {
+        "path": "backend/src/types.ts",
+        "currentRole": "后端领域类型。已有 Course、Recording、LearningRecord、HomeworkSubmission 等。",
+        "v2ChangeLevel": "optional",
+        "v2Guidance": "若新增 AnalyticsSnapshot 类型，可补充；不要改已有字段含义。"
+      },
+      {
+        "path": "backend/src/db.ts",
+        "currentRole": "JSON DB seed 和兼容入口。",
+        "v2ChangeLevel": "avoid-or-minimal",
+        "v2Guidance": "不建议把大批 AI 样例塞入主 seed。演示数据应放 scripts/demo 或 analysis 目录，由脚本生成。"
+      },
+      {
+        "path": "backend/src/repositories/",
+        "currentRole": "课程、用户、作业、提交等数据访问层。",
+        "v2ChangeLevel": "optional",
+        "v2Guidance": "如果 analytics 逻辑复杂，可新增 analytics repository；不要把聚合逻辑散落到多个已有 repo。"
+      },
+      {
+        "path": "backend/tests/api.test.ts",
+        "currentRole": "后端 API 回归测试。已有 courseware、recording、homework、live、admin cleanup 测试。",
+        "v2ChangeLevel": "extend",
+        "v2Guidance": "新增 analytics 只读接口测试，确保不破坏现有测试。"
+      }
+    ],
+    "dataSourcesAlreadyAvailable": [
+      "db.users: 学生、教师、Admin 基础身份。",
+      "db.courses: 课程和教师归属。",
+      "db.courseMembers / db.teacherStudentLinks: 学生归属关系。",
+      "db.lessonNodes: 课时节点和作业节点关联。",
+      "db.learningTasks: Excel 导入后的作业/词汇/朗读任务，含 pinyin、initial、final、tone、difficulty、unit、lesson。",
+      "db.learningRecords: 学生学习记录，含 status、score、attemptsCount、lastRecordingId、completedAt、lessonNodeId。",
+      "db.recordings: 学生录音，含 durationSec、taskId、lessonNodeId、pageNumber、createdAt。",
+      "db.homeworkSubmissions: 学生作业草稿和提交状态。",
+      "db.liveSessions / presence / signals: 课堂活动数据，可作为后续扩展，不作为 v2 P0 必需。"
+    ],
+    "doNotNeedForV2P0": [
+      "不需要接入真实 ASR 云评分。",
+      "不需要改变 PPT/PDF/Excel 上传转换流程。",
+      "不需要改动 Tencent/Vercel 部署配置。",
+      "不需要新增多租户、支付、学校认证。",
+      "不需要将 Python 服务常驻进生产进程。"
+    ]
+  },
+  "systemBoundaryDesign": {
+    "recommendedArchitecture": "offline-json-first",
+    "flow": [
+      "MVP 业务数据或合成演示数据进入 analysis/ai-learning-recommendation/data。",
+      "Python 预处理脚本生成 feature matrix。",
+      "Python 模型/规则混合推荐脚本生成 profiles、recommendations、classInsights、adminSnapshot。",
+      "后端可选提供 /api/v1/analytics/* 只读接口读取 analysis 输出。",
+      "前端三端页面通过 analyticsApi 读取，失败时使用 mock fallback。",
+      "报告素材从 analysis/output 与页面截图沉淀到 docs/00-project-docs/08-AI-CW。"
+    ],
+    "integrationModes": [
+      {
+        "mode": "offline-json",
+        "priority": "P0",
+        "description": "Python 输出 JSON 到 analysis/ai-learning-recommendation/output。前端 mock 或后端只读接口读取该 JSON。最安全，最适合课程大作业演示。"
+      },
+      {
+        "mode": "backend-aggregation",
+        "priority": "P1",
+        "description": "Express 增加 /api/v1/analytics/student-profile、/teacher/class-insights、/admin/snapshot 等只读路由，聚合现有 DB 与 Python 输出。"
+      },
+      {
+        "mode": "fastapi-service",
+        "priority": "P3",
+        "description": "Python 常驻服务。当前不建议，除非后续明确要做独立 AI 服务部署。"
+      }
+    ],
+    "dataPrivacyBoundary": [
+      "analysis/data/sample_learning_events.csv 必须使用合成学生，不直接复制真实 backend/data/db.json。",
+      "如果提供导出脚本，只导出脱敏字段：studentId 可哈希或使用 demo id，保留统计行为而非真实姓名。",
+      "不得读取 backend/storage/recordings 音频内容；v2.0 只统计录音次数、时长、taskId、createdAt 等元数据。",
+      "不得提交 backend/data/db.json 的真实运行变更。"
+    ]
+  },
+  "dataContract": {
+    "LearningBehaviorEvent": {
+      "description": "面向 Python 预处理的长表事件。可由演示数据脚本生成，也可由脱敏导出脚本从现有 DB 聚合。",
+      "fields": [
+        { "name": "eventId", "type": "string", "required": true },
+        { "name": "studentId", "type": "string", "required": true },
+        { "name": "courseId", "type": "string", "required": true },
+        { "name": "lessonNodeId", "type": "string", "required": false },
+        { "name": "taskId", "type": "string", "required": false },
+        { "name": "eventType", "type": "enum", "values": ["course_view", "homework_started", "recording_uploaded", "task_completed", "homework_submitted", "ranking_viewed"], "required": true },
+        { "name": "score", "type": "number", "required": false },
+        { "name": "durationSec", "type": "number", "required": false },
+        { "name": "attemptsCount", "type": "number", "required": false },
+        { "name": "knowledgePoint", "type": "string", "required": false },
+        { "name": "difficulty", "type": "number", "required": false },
+        { "name": "createdAt", "type": "iso-date", "required": true }
+      ]
+    },
+    "StudentLearningProfile": {
+      "fields": [
+        "studentId",
+        "displayName",
+        "classId",
+        "activityScore",
+        "completionRate",
+        "recordingCoverageRate",
+        "averageScore",
+        "averageRetryCount",
+        "recentActiveDays",
+        "weakKnowledgePoints",
+        "riskLevel",
+        "clusterLabel",
+        "progressTrend",
+        "rankPercentile",
+        "generatedAt"
+      ]
+    },
+    "PracticeRecommendation": {
+      "fields": [
+        "recommendationId",
+        "studentId",
+        "targetType",
+        "targetId",
+        "title",
+        "reason",
+        "priority",
+        "expectedImpact",
+        "sourceSignals",
+        "sourceModel",
+        "generatedAt"
+      ],
+      "hardRule": "reason、priority、sourceSignals 必须存在；禁止只输出一个神秘分数。"
+    },
+    "ClassInsight": {
+      "fields": [
+        "courseId",
+        "classId",
+        "totalStudents",
+        "activeStudents7d",
+        "averageCompletionRate",
+        "highRiskStudents",
+        "commonWeakKnowledgePoints",
+        "recommendedTeacherActions",
+        "generatedAt"
+      ]
+    },
+    "AdminAnalyticsSnapshot": {
+      "fields": [
+        "totalStudents",
+        "totalTeachers",
+        "totalCourses",
+        "totalAssignments",
+        "totalRecordings",
+        "activeStudents7d",
+        "recommendationCount",
+        "highRiskStudentCount",
+        "modelVersion",
+        "modelRunAt",
+        "invalidSampleCount"
+      ]
+    }
+  },
+  "tasks": [
+    {
+      "id": "S9-T00",
+      "title": "执行环境、PM2 进程、Git/Ralph 与上下文记忆治理",
+      "priority": "P0",
+      "type": "execution-governance",
+      "owns": [
+        "prds/json/sprint09-prd-260601-v2.0.json",
+        "prds/md/sprint09-prd-260601-v2.0.md",
+        "analysis/ai-learning-recommendation/README.md",
+        "docs/03-testing-deployment/ai-v2-demo-runbook.md",
+        "context/context.txt"
+      ],
+      "mustNotTouch": [
+        "backend/storage/",
+        "backend/data/db.json",
+        ".env",
+        ".env.local",
+        "output/playwright/",
+        "test-results/"
+      ],
+      "steps": [
+        {
+          "id": "S9-T00-S01",
+          "name": "确认 Python 环境策略",
+          "inputs": [
+            "用户说明：本机有 Anaconda，也可以使用 uv。",
+            "package.json",
+            "analysis/README.md"
+          ],
+          "actions": [
+            "在 analysis/ai-learning-recommendation/README.md 中写明两套可选环境：uv 和 Anaconda。",
+            "默认推荐 uv：uv venv、uv pip install -r requirements.txt、python run_pipeline.py。",
+            "同时提供 conda 方案：conda env create -f environment.yml、conda activate lingobridge-ai-v2。",
+            "新增 requirements.txt 和 environment.yml 时必须只包含实际使用依赖，不预装大型深度学习框架。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/README.md",
+            "analysis/ai-learning-recommendation/requirements.txt",
+            "analysis/ai-learning-recommendation/environment.yml"
+          ],
+          "validation": [
+            "rg -n \"uv|conda|Anaconda|environment.yml|requirements.txt\" analysis/ai-learning-recommendation/README.md"
+          ]
+        },
+        {
+          "id": "S9-T00-S02",
+          "name": "确认 PM2 本地演示进程管理",
+          "inputs": [
+            "ecosystem.config.cjs",
+            "package.json",
+            ".agent/workflows/devops-smoke-test.md"
+          ],
+          "actions": [
+            "在 docs/03-testing-deployment/ai-v2-demo-runbook.md 中写入 PM2 演示启动、重启、日志、停止命令。",
+            "明确优先使用 npm run pm2:start、npm run pm2:restart、npm run pm2:logs、npm run pm2:stop。",
+            "写明避免僵尸进程：演示前检查 pm2 status，端口异常先 pm2 restart，不要手工 kill 无关进程。",
+            "如需要热更新使用 npm run dev，必须在 runbook 中说明演示后清理。"
+          ],
+          "outputs": [
+            "docs/03-testing-deployment/ai-v2-demo-runbook.md"
+          ],
+          "validation": [
+            "rg -n \"pm2|pm2:start|pm2:restart|pm2:logs|pm2:stop|僵尸进程\" docs/03-testing-deployment/ai-v2-demo-runbook.md"
+          ]
+        },
+        {
+          "id": "S9-T00-S03",
+          "name": "写入 Ralph 小 feature commit 纪律",
+          "inputs": [
+            ".agent/rules/ralph-execution-framework.md",
+            ".agent/rules/agent-ops-governance.md"
+          ],
+          "actions": [
+            "在本 JSON 的 handoffTemplateForFutureAgents 中要求每个小 feature 完成本地 commit。",
+            "在 docs/03-testing-deployment/ai-v2-demo-runbook.md 或 PRD 附录记录 Sprint 结束 review -> 用户确认 -> 最终 push 的流程。",
+            "明确禁止在 sprint 执行中直接 git push；push 只在 review 后由用户确认。"
+          ],
+          "outputs": [
+            "prds/json/sprint09-prd-260601-v2.0.json",
+            "docs/03-testing-deployment/ai-v2-demo-runbook.md"
+          ],
+          "validation": [
+            "rg -n \"Ralph|commit|review|push|回滚|git revert\" prds/json/sprint09-prd-260601-v2.0.json docs/03-testing-deployment/ai-v2-demo-runbook.md"
+          ]
+        },
+        {
+          "id": "S9-T00-S04",
+          "name": "建立 context 与 memory 记录规范",
+          "inputs": [
+            "context/context.txt",
+            "context/project-brief.md",
+            "context/directory-map.md",
+            ".agent/rules/project-map.md"
+          ],
+          "actions": [
+            "在 context/context.txt 追加 v2.0 AI sprint 当前决策、环境策略、PM2 策略、禁止提交项和踩坑提醒。",
+            "短期踩坑写入 context/context.txt；长期规则只在用户认可后沉淀到 .agent/rules 或 prds/current。",
+            "不得把本地私有绝对路径、密钥、真实学生隐私写入 context。",
+            "如果 context/context.txt 已有用户本地未提交内容，追加时必须保留，不覆盖。"
+          ],
+          "outputs": [
+            "context/context.txt"
+          ],
+          "validation": [
+            "rg -n \"v2.0 AI|PM2|uv|conda|Ralph|memory|踩坑\" context/context.txt"
+          ]
+        },
+        {
+          "id": "S9-T00-S05",
+          "name": "Sprint 结束 review 闸门",
+          "actions": [
+            "实现完 S9-T01 至 S9-T09 后，不直接 push。",
+            "先运行 python/json 校验、npm run lint、npm run backend:test、npm run build、AI v2 smoke。",
+            "整理 review：完成项、未完成项、风险、测试结果、未提交文件、不应提交文件、建议是否 push。",
+            "用户确认后再执行最终 push。"
+          ],
+          "outputs": [
+            "Sprint review message or docs/03-testing-deployment/ai-v2-demo-runbook.md review section"
+          ],
+          "validation": [
+            "git status --short --branch",
+            "git log --oneline --decorate -10"
+          ]
+        }
+      ],
+      "acceptance": [
+        "后续 agent 开工前能明确 Python 环境、PM2 进程、Git/Ralph、context/memory 和 sprint review/push 规则。",
+        "本地演示进程可用 PM2 管理，避免僵尸进程。",
+        "每个小 feature 都能 commit 留痕，错误可用 git revert 精确回滚。",
+        "context 记录短期踩坑，不污染长期规则和仓库隐私。"
+      ]
+    },
+    {
+      "id": "S9-T01",
+      "title": "冻结 v2.0 数据指标体系与系统边界",
+      "priority": "P0",
+      "type": "prd-data-design",
+      "owns": [
+        "prds/current/00-latest-product-decisions.md",
+        "prds/current/02-product-boundary-and-business-rules.md",
+        "docs/00-project-docs/08-AI-CW/report-outline.md"
+      ],
+      "mustNotTouch": [
+        "src/components/TeacherClassroomView.tsx",
+        "src/components/StudentClassroomView.tsx",
+        "backend/src/providers/",
+        "docker/",
+        "vercel.json"
+      ],
+      "steps": [
+        {
+          "id": "S9-T01-S01",
+          "name": "读取规则和现状",
+          "inputs": [
+            ".agent/rules/mvp-scope.md",
+            ".agent/rules/project-map.md",
+            "src/services/apiClient.ts",
+            "backend/src/app.ts"
+          ],
+          "actions": [
+            "确认 v2.0 只做学习行为分析与推荐，不扩展到 ASR 自动评分或多租户。",
+            "列出现有可复用数据源：learningRecords、recordings、homeworkSubmissions、learningTasks、courseMembers、admin learning-progress。"
+          ],
+          "outputs": [
+            "在 prds/current/00-latest-product-decisions.md 追加 v2.0 决策摘要。",
+            "在 prds/current/02-product-boundary-and-business-rules.md 追加 v2.0 in-scope/out-of-scope 边界。"
+          ],
+          "validation": [
+            "rg -n \"v2.0|机器学习|推荐|数据分析\" prds/current"
+          ]
+        },
+        {
+          "id": "S9-T01-S02",
+          "name": "定义指标字典",
+          "actions": [
+            "定义 completionRate = completed learningRecords / visible learningTasks。",
+            "定义 recordingCoverageRate = 有录音 task 数 / 需录音 task 数。",
+            "定义 averageRetryCount = learningRecords.attemptsCount 均值。",
+            "定义 weakKnowledgePoints 从 learningTasks.initial/final/tone/rhymeGroup/difficulty 与低分记录聚合。",
+            "定义 riskLevel = low/medium/high，先用可解释阈值，后续可替换为模型预测。"
+          ],
+          "outputs": [
+            "docs/00-project-docs/08-AI-CW/data-metric-dictionary.md"
+          ],
+          "validation": [
+            "确认每个指标都有 source table/source field/formula 三列。"
+          ]
+        },
+        {
+          "id": "S9-T01-S03",
+          "name": "确定不改动清单",
+          "actions": [
+            "在文档里明确不改登录、媒体权限、录音上传、课件上传、TTS provider、部署配置。",
+            "明确 Python ML 模块输出是辅助建议，不写回核心业务表。"
+          ],
+          "outputs": [
+            "docs/00-project-docs/08-AI-CW/system-boundary.md"
+          ],
+          "validation": [
+            "文档中必须包含 must-not-touch 文件列表。"
+          ]
+        }
+      ],
+      "acceptance": [
+        "v2.0 指标和边界写入 prds/current 或 docs。",
+        "后续 agent 能通过文档判断哪些文件可改、哪些文件不能动。",
+        "未产生任何代码行为变更。"
+      ]
+    },
+    {
+      "id": "S9-T02",
+      "title": "设计并实现 Python 数据收集、清洗、特征工程和推荐输出",
+      "priority": "P0",
+      "type": "python-ml-module",
+      "owns": [
+        "analysis/ai-learning-recommendation/",
+        "scripts/demo/export-ai-v2-learning-events.mjs"
+      ],
+      "mustNotTouch": [
+        "backend/storage/",
+        "backend/data/db.json",
+        "src/components/HomeworkView.tsx"
+      ],
+      "steps": [
+        {
+          "id": "S9-T02-S01",
+          "name": "创建目录和 README",
+          "actions": [
+            "创建 analysis/ai-learning-recommendation/README.md。",
+            "创建 data、src、output、reports 四个子目录。",
+            "README 写明运行顺序：generate_sample_data.py -> preprocess.py -> train_model.py -> recommend.py -> export_report_assets.py。",
+            "README 写明 Python 依赖策略：优先标准库；如使用 pandas/scikit-learn 必须提供 requirements.txt 和 fallback 说明。",
+            "README 必须同时写 uv 与 Anaconda 两套本地演示环境命令，且说明默认推荐 uv、课堂展示可用 conda 环境兜底。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/README.md",
+            "analysis/ai-learning-recommendation/requirements.txt",
+            "analysis/ai-learning-recommendation/environment.yml",
+            "analysis/ai-learning-recommendation/data/.gitkeep",
+            "analysis/ai-learning-recommendation/src/.gitkeep",
+            "analysis/ai-learning-recommendation/output/.gitkeep",
+            "analysis/ai-learning-recommendation/reports/.gitkeep"
+          ],
+          "validation": [
+            "find analysis/ai-learning-recommendation -maxdepth 2 -type f | sort"
+          ]
+        },
+        {
+          "id": "S9-T02-S02",
+          "name": "生成合成学习事件数据",
+          "actions": [
+            "实现 src/generate_sample_data.py。",
+            "生成 1 个班级、1 名教师、1 名 Admin、12 名学生、4 个 lessonNode、24 个 learningTask、120-200 条 behavior events。",
+            "覆盖五类学生画像：高活跃、低活跃风险、拼音薄弱、录音不足、近期进步。",
+            "输出 data/sample_learning_events.csv、data/sample_students.csv、data/sample_tasks.csv。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/src/generate_sample_data.py",
+            "analysis/ai-learning-recommendation/data/sample_learning_events.csv",
+            "analysis/ai-learning-recommendation/data/sample_students.csv",
+            "analysis/ai-learning-recommendation/data/sample_tasks.csv"
+          ],
+          "validation": [
+            "python3 analysis/ai-learning-recommendation/src/generate_sample_data.py",
+            "python3 - <<'PY'\nimport csv\nfor path in ['analysis/ai-learning-recommendation/data/sample_learning_events.csv','analysis/ai-learning-recommendation/data/sample_students.csv','analysis/ai-learning-recommendation/data/sample_tasks.csv']:\n    rows=list(csv.DictReader(open(path, encoding='utf-8')))\n    assert rows, path\nprint('sample data ok')\nPY"
+          ]
+        },
+        {
+          "id": "S9-T02-S03",
+          "name": "实现脱敏导出脚本设计",
+          "actions": [
+            "实现 scripts/demo/export-ai-v2-learning-events.mjs。",
+            "从 backend/data/db.json 只读导出 learningRecords、recordings、learningTasks、courses、users 的脱敏统计事件。",
+            "禁止导出真实 displayName、email、audioUrl、storageUrl、filename。",
+            "studentId 使用 demo-student-N 或 hash，不泄露真实 ID。",
+            "如果 backend/data/db.json 不存在或字段不完整，脚本必须提示并退出，不得创建脏数据。"
+          ],
+          "outputs": [
+            "scripts/demo/export-ai-v2-learning-events.mjs"
+          ],
+          "validation": [
+            "node scripts/demo/export-ai-v2-learning-events.mjs --dry-run"
+          ],
+          "notes": [
+            "该脚本是 P1，可在合成数据稳定后实现；P0 不依赖真实 DB 导出。"
+          ]
+        },
+        {
+          "id": "S9-T02-S04",
+          "name": "数据清洗与特征工程",
+          "actions": [
+            "实现 src/preprocess.py。",
+            "读取 sample_learning_events.csv、sample_students.csv、sample_tasks.csv。",
+            "清洗缺失值：缺 score 用 0 或空值规则，缺 durationSec 用 0，非法日期剔除到 invalid_samples.csv。",
+            "聚合到 student_features.csv：completionRate、recordingCoverageRate、averageScore、averageRetryCount、recentActiveDays、weakInitials、weakTones、activityScore。",
+            "输出 output/student_features.csv 和 output/preprocess_summary.json。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/src/preprocess.py",
+            "analysis/ai-learning-recommendation/output/student_features.csv",
+            "analysis/ai-learning-recommendation/output/preprocess_summary.json"
+          ],
+          "validation": [
+            "python3 analysis/ai-learning-recommendation/src/preprocess.py",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/preprocess_summary.json"
+          ]
+        },
+        {
+          "id": "S9-T02-S05",
+          "name": "风险分层与画像聚类",
+          "actions": [
+            "实现 src/train_model.py。",
+            "P0 可采用可解释阈值 + 纯 Python KMeans；若使用 scikit-learn，必须在 requirements.txt 说明并保留纯 Python fallback。",
+            "输出 riskLevel: low/medium/high。",
+            "输出 clusterLabel: steady_leader、needs_recording_practice、tone_weakness、low_activity、fast_improver。",
+            "输出 model_metrics.json，至少包含样本数、特征列表、risk 分布、cluster 分布。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/src/train_model.py",
+            "analysis/ai-learning-recommendation/output/student_profiles.json",
+            "analysis/ai-learning-recommendation/output/model_metrics.json"
+          ],
+          "validation": [
+            "python3 analysis/ai-learning-recommendation/src/train_model.py",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/student_profiles.json",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/model_metrics.json"
+          ]
+        },
+        {
+          "id": "S9-T02-S06",
+          "name": "生成个性化推荐",
+          "actions": [
+            "实现 src/recommend.py。",
+            "根据 weakKnowledgePoints、recordingCoverageRate、completionRate、averageRetryCount 生成推荐。",
+            "每条推荐必须包含 title、reason、priority、expectedImpact、sourceSignals、targetType、targetId。",
+            "推荐类型至少包括 practice_task、review_lesson、recording_retry、teacher_attention。",
+            "输出 recommendations.json、class_insights.json、admin_snapshot.json。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/src/recommend.py",
+            "analysis/ai-learning-recommendation/output/recommendations.json",
+            "analysis/ai-learning-recommendation/output/class_insights.json",
+            "analysis/ai-learning-recommendation/output/admin_snapshot.json"
+          ],
+          "validation": [
+            "python3 analysis/ai-learning-recommendation/src/recommend.py",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/recommendations.json",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/class_insights.json",
+            "python3 -m json.tool analysis/ai-learning-recommendation/output/admin_snapshot.json"
+          ]
+        },
+        {
+          "id": "S9-T02-S07",
+          "name": "端到端运行脚本",
+          "actions": [
+            "实现 run_pipeline.py 或 Makefile，串联生成数据、预处理、建模、推荐。",
+            "失败时退出非 0，并打印失败步骤。",
+            "在 README 中记录命令。"
+          ],
+          "outputs": [
+            "analysis/ai-learning-recommendation/run_pipeline.py"
+          ],
+          "validation": [
+            "python3 analysis/ai-learning-recommendation/run_pipeline.py"
+          ]
+        }
+      ],
+      "acceptance": [
+        "Python 管线可独立运行并输出 profiles、recommendations、classInsights、adminSnapshot。",
+        "不依赖真实录音文件或私有数据。",
+        "输出 JSON 符合 dataContract。"
+      ]
+    },
+    {
+      "id": "S9-T03",
+      "title": "后端 analytics 只读接口与前端 API 契约",
+      "priority": "P0",
+      "type": "backend-frontend-contract",
+      "owns": [
+        "backend/src/app.ts",
+        "src/services/apiClient.ts",
+        "backend/tests/api.test.ts"
+      ],
+      "mustNotTouch": [
+        "backend/src/storage.ts",
+        "backend/src/providers/",
+        "backend/src/excelParser.ts",
+        "src/context/AuthContext.tsx"
+      ],
+      "steps": [
+        {
+          "id": "S9-T03-S01",
+          "name": "新增前端类型",
+          "actions": [
+            "在 src/services/apiClient.ts 末尾新增 StudentLearningProfile、PracticeRecommendation、ClassInsight、AdminAnalyticsSnapshot 类型。",
+            "新增 analyticsApi，包含 studentProfile(studentId?)、recommendations(studentId?)、classInsights(courseId?)、adminSnapshot()。",
+            "不要修改 request 函数、authApi、coursesApi、recordingsApi、learningRecordsApi。"
+          ],
+          "validation": [
+            "npm run lint"
+          ]
+        },
+        {
+          "id": "S9-T03-S02",
+          "name": "新增后端只读路由",
+          "actions": [
+            "在 backend/src/app.ts 增加 /api/v1/analytics/student-profile、/api/v1/analytics/recommendations、/api/v1/analytics/class-insights。",
+            "Admin 全局数据使用 /api/v1/admin/analytics/snapshot，并加 requireAdmin。",
+            "P0 路由可读取 analysis/ai-learning-recommendation/output/*.json；如果文件缺失，返回基于现有 db.learningRecords 的降级聚合。",
+            "所有接口只读，不写 db。"
+          ],
+          "validation": [
+            "npm run backend:test"
+          ]
+        },
+        {
+          "id": "S9-T03-S03",
+          "name": "补后端 API 测试",
+          "actions": [
+            "在 backend/tests/api.test.ts 增加 analytics 接口 smoke 测试。",
+            "测试学生/教师可读非 admin analytics，admin snapshot 需要 admin token。",
+            "测试接口返回 code=0 且 data 字段包含推荐 reason 或 snapshot modelVersion。"
+          ],
+          "validation": [
+            "npm run backend:test"
+          ]
+        }
+      ],
+      "acceptance": [
+        "前端有强类型 analyticsApi。",
+        "后端 analytics 路由只读且有降级数据。",
+        "backend:test 通过。"
+      ]
+    },
+    {
+      "id": "S9-T04",
+      "title": "学生首页 AI 学习助手模块",
+      "priority": "P0",
+      "type": "frontend-student-dashboard",
+      "owns": [
+        "src/components/DashboardView.tsx"
+      ],
+      "mustNotTouch": [
+        "src/components/HomeworkView.tsx 的录音、提交、草稿逻辑",
+        "src/components/StudentClassroomView.tsx",
+        "src/services/entryResolver.ts"
+      ],
+      "steps": [
+        {
+          "id": "S9-T04-S01",
+          "name": "读取 profile 与 recommendations",
+          "actions": [
+            "在 DashboardView 中调用 analyticsApi.studentProfile 和 analyticsApi.recommendations。",
+            "失败时使用本地 fallback：根据 courses.length、totalHomework、totalPages 显示温和空态。",
+            "不要阻塞现有 dashboard 渲染。"
+          ],
+          "validation": [
+            "npm run lint"
+          ]
+        },
+        {
+          "id": "S9-T04-S02",
+          "name": "新增 AI 学习助手卡片",
+          "actions": [
+            "在 dashboard hero 下方或 today tasks 前新增一个全宽/两列 AI helper section。",
+            "展示 riskLevel、progressTrend、weakKnowledgePoints 前 3 个、推荐任务前 2 条。",
+            "使用 lucide-react 图标，例如 TrendingUp、Star、BookOpen、ArrowRight。",
+            "按钮点击复用 onNavigate('homework') 或 onNavigate('courses')，不要新增未接线页面。"
+          ],
+          "validation": [
+            "npm run lint",
+            "npm run build"
+          ]
+        },
+        {
+          "id": "S9-T04-S03",
+          "name": "移动端与空态检查",
+          "actions": [
+            "确保卡片在 375px 宽度不溢出。",
+            "无 profile 或无 recommendation 时显示 '完成一次作业后生成学习建议' 之类空态。",
+            "不得使用夸张绝对化文案。"
+          ],
+          "validation": [
+            "npm run build"
+          ]
+        }
+      ],
+      "acceptance": [
+        "学生首页能看到数据分析和智能推荐。",
+        "现有课堂入口和作业入口仍可用。",
+        "移动端布局不重叠。"
+      ]
+    },
+    {
+      "id": "S9-T05",
+      "title": "学生个人排名与学习趋势模块",
+      "priority": "P1",
+      "type": "frontend-student-ranking",
+      "owns": [
+        "src/components/DashboardView.tsx",
+        "src/components/HomeworkView.tsx"
+      ],
+      "mustNotTouch": [
+        "src/components/App.tsx unless a new route is strictly required"
+      ],
+      "steps": [
+        {
+          "id": "S9-T05-S01",
+          "name": "确认页面落点",
+          "actions": [
+            "优先在 DashboardView 增加 '个人排名与趋势' section。",
+            "如果现有 HomeworkView stats 中已有 ranking 入口，可只把入口接到 dashboard section，不创建新路由。",
+            "只有用户明确要求独立排名页时，才修改 App.tsx 增加 view。"
+          ],
+          "validation": [
+            "rg -n \"ranking|排名|rank\" src/components"
+          ]
+        },
+        {
+          "id": "S9-T05-S02",
+          "name": "展示排名指标",
+          "actions": [
+            "展示 rankPercentile、completionRate、连续练习天数、progressTrend。",
+            "展示与下一目标的差距，例如 '再完成 2 个声调练习可进入前 30%'。",
+            "同伴对比必须匿名或聚合，不显示羞辱性排名文案。"
+          ],
+          "validation": [
+            "npm run lint",
+            "npm run build"
+          ]
+        }
+      ],
+      "acceptance": [
+        "学生能看到个人趋势和下一目标。",
+        "数据来自 StudentLearningProfile 或 recommendations。",
+        "不引入社交排名攻击性文案。"
+      ]
+    },
+    {
+      "id": "S9-T06",
+      "title": "教师学生总览 AI 班级洞察",
+      "priority": "P0",
+      "type": "frontend-teacher-analytics",
+      "owns": [
+        "src/components/TeacherStudentsView.tsx"
+      ],
+      "mustNotTouch": [
+        "src/components/TeacherCourseDetailView.tsx 的 StudentProgressModal 内部主流程",
+        "courseMembersApi.add/remove 逻辑"
+      ],
+      "steps": [
+        {
+          "id": "S9-T06-S01",
+          "name": "加载班级洞察数据",
+          "actions": [
+            "在 TeacherStudentsView 中调用 analyticsApi.classInsights。",
+            "若接口失败，根据 students 和 courseCount 生成降级统计。",
+            "不要改变 teacherStudentsApi.search、coursesApi.list、courseMembersApi.list 的现有加载顺序，避免破坏 roster。"
+          ],
+          "validation": [
+            "npm run lint"
+          ]
+        },
+        {
+          "id": "S9-T06-S02",
+          "name": "新增班级洞察 summary",
+          "actions": [
+            "在表格上方新增 3-4 个小指标：高风险学生数、平均完成率、共性薄弱点、建议干预数。",
+            "避免把 summary 做成大面积营销 hero，应保持教师端工具型布局。",
+            "使用已有 Metric 组件风格或扩展轻量组件。"
+          ],
+          "validation": [
+            "npm run lint",
+            "npm run build"
+          ]
+        },
+        {
+          "id": "S9-T06-S03",
+          "name": "学生行增加风险与建议",
+          "actions": [
+            "在 students table 增加风险等级列或在状态列内展示 risk badge。",
+            "每个 risk badge 有简短 reason，例如 '录音覆盖不足'、'声调练习低分'。",
+            "保留原 '检查进度与作业' 按钮。"
+          ],
+          "validation": [
+            "npm run build"
+          ]
+        }
+      ],
+      "acceptance": [
+        "教师能看到谁需要关注、为什么、建议做什么。",
+        "学生搜索和进度弹窗不回退。",
+        "教师端保持工作台风格。"
+      ]
+    },
+    {
+      "id": "S9-T07",
+      "title": "Admin 数据中台升级",
+      "priority": "P0",
+      "type": "frontend-admin-analytics",
+      "owns": [
+        "src/components/AdminDashboardView.tsx",
+        "src/services/apiClient.ts"
+      ],
+      "mustNotTouch": [
+        "adminApi.cleanupZombieLearningRecords",
+        "adminApi.deleteRecording",
+        "现有 live/recordings/notes/transcripts/coursewares/assignments/progress tabs 的数据加载逻辑"
+      ],
+      "steps": [
+        {
+          "id": "S9-T07-S01",
+          "name": "新增 analytics tab 类型",
+          "actions": [
+            "将 AdminTab 扩展为包含 'analytics'。",
+            "tabs 数组新增 analytics，图标可用 TrendingUp 或 BarChart。",
+            "activeTab 默认值可以保持 live，不强行改成 analytics，避免影响老用户习惯。"
+          ],
+          "validation": [
+            "npm run lint"
+          ]
+        },
+        {
+          "id": "S9-T07-S02",
+          "name": "加载 AdminAnalyticsSnapshot",
+          "actions": [
+            "在 activeTab === 'analytics' 时调用 analytics/admin snapshot API。",
+            "保留 progress tab 原有 adminApi.learningProgress。",
+            "接口失败时展示 'AI 数据暂未生成' 空态，并提示运行 Python pipeline。"
+          ],
+          "validation": [
+            "npm run lint"
+          ]
+        },
+        {
+          "id": "S9-T07-S03",
+          "name": "实现数据中台看板",
+          "actions": [
+            "展示 totalStudents、totalTeachers、totalCourses、totalAssignments、totalRecordings、recommendationCount、highRiskStudentCount。",
+            "展示 modelVersion、modelRunAt、invalidSampleCount。",
+            "增加 '演示数据闭环' 说明：数据采集、清洗、建模、推荐、三端展示。",
+            "不要加入大面积装饰性 hero；Admin 是运营监控工具。"
+          ],
+          "validation": [
+            "npm run build"
+          ]
+        }
+      ],
+      "acceptance": [
+        "Admin 端成为 v2.0 答辩数据中台入口。",
+        "现有 Admin tabs 不丢失。",
+        "没有伪造实时训练能力，模型运行状态可解释。"
+      ]
+    },
+    {
+      "id": "S9-T08",
+      "title": "演示数据种子、端到端 smoke 与可视化验收",
+      "priority": "P1",
+      "type": "qa-demo",
+      "owns": [
+        "scripts/demo/seed-ai-v2-demo-data.mjs",
+        "tests/regression/ai-v2-smoke.mjs",
+        "docs/03-testing-deployment/ai-v2-demo-runbook.md"
+      ],
+      "mustNotTouch": [
+        "scripts/demo/seed-pinyin-demo-data.mjs unless extending with backward-compatible flags",
+        "backend/storage/"
+      ],
+      "steps": [
+        {
+          "id": "S9-T08-S01",
+          "name": "设计演示数据",
+          "actions": [
+            "建立 12 名学生画像：高活跃、风险、拼音薄弱、录音不足、进步明显。",
+            "数据写入脚本应可重复运行，避免重复插入脏数据。",
+            "不要提交运行后产生的 backend/data/db.json。"
+          ],
+          "validation": [
+            "node scripts/demo/seed-ai-v2-demo-data.mjs --dry-run"
+          ]
+        },
+        {
+          "id": "S9-T08-S02",
+          "name": "实现 smoke test",
+          "actions": [
+            "新增 tests/regression/ai-v2-smoke.mjs。",
+            "检查 analytics API 返回。",
+            "检查学生 Dashboard、教师 Students、Admin Analytics 页面关键 data-testid 或文本存在。",
+            "如无 dev server，测试脚本应给出清晰提示，不要静默失败。"
+          ],
+          "validation": [
+            "npm run backend:test",
+            "node tests/regression/ai-v2-smoke.mjs"
+          ]
+        },
+        {
+          "id": "S9-T08-S03",
+          "name": "写演示 runbook",
+          "actions": [
+            "写 docs/03-testing-deployment/ai-v2-demo-runbook.md。",
+            "包含启动后端、启动前端、运行 Python pipeline、访问学生/教师/Admin 三端的步骤。",
+            "标明推荐系统是离线分析结果，不是实时训练。"
+          ],
+          "validation": [
+            "rg -n \"Python|学生|教师|Admin|推荐|数据中台\" docs/03-testing-deployment/ai-v2-demo-runbook.md"
+          ]
+        }
+      ],
+      "acceptance": [
+        "有可重复演示的数据和脚本。",
+        "三端 smoke 覆盖 v2.0 关键入口。",
+        "runbook 可以直接给答辩演示使用。"
+      ]
+    },
+    {
+      "id": "S9-T09",
+      "title": "人工智能大作业报告素材沉淀",
+      "priority": "P1",
+      "type": "academic-docs",
+      "owns": [
+        "docs/00-project-docs/08-AI-CW/"
+      ],
+      "mustNotTouch": [
+        "docs/00-project-docs/01-FA/templates/data/*.tex",
+        "docs/00-project-docs/02-SRS/templates/data/*.tex",
+        "docs/00-project-docs/03-HLD/templates/data/*.tex unless explicitly assigned"
+      ],
+      "steps": [
+        {
+          "id": "S9-T09-S01",
+          "name": "创建报告目录",
+          "actions": [
+            "创建 docs/00-project-docs/08-AI-CW/README.md。",
+            "创建 report-outline.md、evidence-index.md、division-of-work.md。",
+            "写明该目录是人工智能大作业素材，不替代 01-FA 至 07-UM 生命周期文档。"
+          ],
+          "validation": [
+            "find docs/00-project-docs/08-AI-CW -maxdepth 1 -type f | sort"
+          ]
+        },
+        {
+          "id": "S9-T09-S02",
+          "name": "对齐指导书章节",
+          "actions": [
+            "report-outline.md 必须覆盖：背景及现状综述、设计指标、总体方案、可行性分析、数据预处理、功能设计、算法设计、交互设计、编码实现、运行测试、成员分工。",
+            "每节下写明对应代码/数据/页面证据路径。"
+          ],
+          "validation": [
+            "rg -n \"数据预处理|算法设计|交互设计|运行与测试|成员分工\" docs/00-project-docs/08-AI-CW/report-outline.md"
+          ]
+        },
+        {
+          "id": "S9-T09-S03",
+          "name": "建立证据索引",
+          "actions": [
+            "evidence-index.md 记录 Python 输出 JSON、模型评估、三端截图、smoke test 输出、关键代码文件。",
+            "不得引用本地私有绝对路径。",
+            "截图应使用仓库内 output 或 docs 路径，但最终是否提交由用户决定。"
+          ],
+          "validation": [
+            "rg -n \"/Users/|file:///Users\" docs/00-project-docs/08-AI-CW || true"
+          ]
+        }
+      ],
+      "acceptance": [
+        "报告素材能直接转写为课程大作业报告。",
+        "每个报告章节都有对应代码或数据证据。",
+        "不把未实现能力写成已完成事实。"
+      ]
+    }
+  ],
+  "implementationOrder": [
+    "S9-T00",
+    "S9-T01",
+    "S9-T02",
+    "S9-T03",
+    "S9-T04",
+    "S9-T06",
+    "S9-T07",
+    "S9-T05",
+    "S9-T08",
+    "S9-T09"
+  ],
+  "globalAcceptance": [
+    "JSON PRD 中每个 task 都包含 owns、mustNotTouch、steps 和 acceptance，且每个 step 都包含 validation。",
+    "学生端、教师端、Admin 端都能展示可解释的数据分析和智能推荐。",
+    "Python ML 模块可独立运行，不依赖真实私有数据。",
+    "后端 analytics 接口只读，不改变核心业务表。",
+    "不破坏现有 MVP 主流程：登录、课程、课堂、课件上传、Excel 作业导入、录音、作业提交、Admin 既有 tabs。",
+    "npm run lint、npm run backend:test、npm run build 在最终集成后通过。"
+  ],
+  "handoffTemplateForFutureAgents": {
+    "beforeStart": [
+      "说明正在执行的 taskId 和 stepId。",
+      "列出将修改的文件和明确不修改的文件。",
+      "确认已阅读 mandatoryAgentDiscipline.mustReadBeforeAnyCodeChange。",
+      "如果涉及本地演示，先确认 PM2 状态和 Python 环境选择。"
+    ],
+    "afterFinish": [
+      "列出实际修改文件。",
+      "列出运行过的验证命令和结果。",
+      "说明是否影响 MVP 主流程。",
+      "记录踩坑和后续注意事项；短期信息写入 context/context.txt，长期规则经用户认可后写入 .agent/rules 或 prds/current。",
+      "本地提交，提交信息包含 taskId 或 stepId。",
+      "Sprint 未 review 前不得 push。"
+    ]
+  }
+}

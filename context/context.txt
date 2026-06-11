@@ -1,11 +1,33 @@
-# LingoBridge Current Context Snapshot
+# Sprint 10 LingoBridge Docs Expansion & Report Injection
 
-Date: 2026-05-14
+Date: 2026-06-02
 Workspace: `/Users/caolei/Desktop/LingoBridge`
-Source PRD: `/Users/caolei/Desktop/Obsidian_root/011_项目经验/互联网+/lingobridge/Records&Drafts/03-02-LingoBridge MVP PRD v2.0.md`
 
-## Current Commit Scope
+## Previous Sprint (Sprint 9)
+- Create Sprint 10 PRD (md + json) [Completed]
+- Expansion of 04-LLD, 05-TP, 06-DEP, 07-UM documents [Completed]
+- Align chapter inputs and remove nocite from main entries of 05-TP, 06-DEP, 07-UM [Completed]
+- Fix illegal macro \GB by replacing it with \text{GB} in 06-DEP chap01.tex [Completed]
+- Fix image paths in 04-LLD, 05-TP, 07-UM by removing the figures/ prefix from \includegraphics [Completed]
+- Generate a 100% valid blank PDF using XeLaTeX and distribute it to all 18 placeholder PDF paths [Completed]
+- Fix undefined \Mbps unit in 06-DEP chap01.tex by replacing it with \text{Mbps} [Completed]
+- Verified all 7 project documents compiled successfully with 0 errors via build_all.sh [Completed]
+- Refactored all tables in 04-LLD to 07-UM using tabularx and longtable width constraints. Fixed cover makebox overflow. All LaTeX warnings >5.0pt eliminated. [Completed]
 
+## Current Sprint (Sprint 10)
+- Localized distribution of UML standards: Created standard/ subdirectories in 01-FA, 02-SRS, 03-HLD templates with tailored markdown guidelines and checklists [Completed]
+- Visual benchmarking deployment: Generated and staged 4 high-quality publishing-grade benchmark illustrations (GB/T DFD, UML UseCase, Sequence, Class diagrams) under standard_illustrations/ [Completed]
+- Python automatic injection pipeline (scripts/inject_project_docs.py): Implemented clean preamble removal, header auto-downgrading, figure sniffing/migration, and duplicate bibtex entry merging [Completed]
+- Quad-pass regression XeLaTeX compile: Successfully compiled Tsinghua thesis template to generate a flawless 77-page academic course report PDF with 0 errors and zero undefined references [Completed]
+- Localized LaTeX compiling automation: Created Makefile, build.sh, clean.sh in docs/05-lecture-delivery/报告/ [Completed]
+- Self-contained Python AI recommendation core (analysis/ai-learning-recommendation/): Developed simulated student logs, NetworkX Chinese Knowledge Graph topological analyzer, PyTorch DKT LSTM network, and voice subtitle RAG calibration pipeline [Completed]
+- Rigorous DKT training alignment: Refactored DKT to perform genuine Next-Step prediction with active skill masking [Completed]
+- Leak-free Baseline realignment: Implemented cumulative historical accuracy in Baseline to completely prevent data leakage [Completed]
+- Dynamic Levenshtein distance RAG: Programmed a DP Levenshtein pinyin-matching aligner in calibrate_subtitles.py to execute dynamic similarity calibration [Completed]
+- Academic report de-inflation: Fully rewrote Chapter 3 and Chapter 4 of the Tsinghua academic thesis report, injecting real metrics (DKT AUC: 0.5386, Base AUC: 0.5915), adding scholarly discussions on small-sample learning constraints, and realigning overfull tables using tabularx and makecell [Completed]
+- Flawless compilation validation: Executed compile script to generate a beautiful 28-page PDF report with 0 errors [Completed]
+- Report title alignment: Compressed the academic report cover title fields from three lines to two lines and verified output [Completed]
+- Final Title Update: Changed cover title to '基于 DKT 知识追踪与 Levenshtein 距离校准的国际中文自适应学习推荐系统' across two balanced lines [Completed]
 This checkpoint saves the first MVP backend/frontend API integration slice plus the light project-structure refactor.
 
 ## Project Structure
@@ -572,6 +594,7 @@ Action: Resolve global centering overflow in vocabulary practice feedback panel 
 [Status] | All changes integrated, committed, pushed & E2E regression passed green | Done
 
 ---
+
 
 # 2026-05-24 S5-T03 & S5-T04: Class-Lesson-Live Fusion and Default Courseware Selection
 Date: 2026-05-24

@@ -1,0 +1,56 @@
+@startuml LingoBridge Data Flow Diagram (Level 1)
+skinparam packageStyle rectangle
+skinparam roundcorner 10
+
+rectangle "外部实体" {
+  actor "中文教师 (Teacher)" as teacher
+  actor "留学生 (Student)" as student
+  actor "系统管理员 (Admin)" as admin
+}
+
+rectangle "处理过程" {
+  usecase "1.0 身份认证与路由" as p_auth
+  usecase "2.0 课程与课件管理" as p_course
+  usecase "3.0 作业分发与映射" as p_homework
+  usecase "4.0 语音朗读与录音管理" as p_audio
+  usecase "5.0 在线课堂与 Presence" as p_live
+  usecase "6.0 积分统计与排行" as p_rank
+}
+
+database "数据存储" {
+  folder "D1: 用户及角色数据" as db_user
+  folder "D2: 课程与班级元数据" as db_course
+  folder "D3: 课件静态文件库" as db_slide
+  folder "D4: 作业及节点库" as db_homework
+  folder "D5: 学生录音与评测文件" as db_audio
+  folder "D6: 积分排行榜" as db_rank
+}
+
+' 教师数据流
+teacher --> p_auth : 1. 登录凭证 (Username, Pwd)
+p_auth --> db_user : 2. 身份验证 & 令牌鉴权
+teacher --> p_course : 3. 创建课程 / 上传 PDF 课件
+p_course --> db_course : 4. 存储课程元数据
+p_course --> db_slide : 5. 存储课件物理文件
+teacher --> p_homework : 6. 导入作业 Excel (声母韵脚映射)
+p_homework --> db_homework : 7. 写入作业节点数据 (Upsert 去重)
+teacher --> p_live : 8. 授课翻页 / 连麦授权信令
+p_live --> db_course : 9. 更新/获取课堂 Presence 状态
+
+' 学生数据流
+student --> p_auth : 10. 登录凭证 (三语路由)
+student --> p_course : 11. 请求课程与课件列表
+p_course <-- db_course : 12. 返回班级对应课程
+p_course <-- db_slide : 13. 加载 Canvas 课件图片
+student --> p_audio : 14. 点击 TTS 播放 / 麦克风录音上传
+p_audio --> db_audio : 15. 持久化存储 WebM 音频文件
+p_audio --> db_rank : 16. 上报作业提交状态 & 基础积分
+student --> p_rank : 17. 请求班级积分排行榜
+p_rank <-- db_rank : 18. 返回 ZSET 排行数据
+student --> p_live : 19. 举手申请 / 同步翻页信令
+
+' 管理员数据流
+admin --> p_auth : 20. 登录管理后台
+admin --> p_rank : 21. 重置/预置演示数据
+p_rank --> db_rank : 22. 一键注入初始演示积分
+@enduml

@@ -1,0 +1,380 @@
+@startuml database-erd
+
+skinparam backgroundColor #FFFFFF
+skinparam entity {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam linetype ortho
+skinparam defaultFontName "Microsoft YaHei"
+
+title LingoBridge 物理数据库 ERD (PostgreSQL)
+
+entity "users\n用户表" as users {
+  * **id** : UUID <<PK>>
+  --
+  username : VARCHAR(50) <<UNIQUE>>
+  email : VARCHAR(255)
+  password_hash : VARCHAR(255)
+  role : VARCHAR(20)
+  display_name : VARCHAR(100)
+  status : VARCHAR(20)
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "sessions\n会话表" as sessions {
+  * **id** : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  token_hash : VARCHAR(255)
+  expires_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "teacher_profiles\n教师档案表" as teacher_profiles {
+  * **user_id** : UUID <<PK, FK>>
+  --
+  title : VARCHAR(100)
+  bio : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "student_profiles\n学生档案表" as student_profiles {
+  * **user_id** : UUID <<PK, FK>>
+  --
+  student_no : VARCHAR(50)
+  grade : VARCHAR(20)
+  created_at : TIMESTAMP
+}
+
+entity "teacher_student_links\n师生绑定表" as teacher_student_links {
+  * **id** : UUID <<PK>>
+  --
+  * teacher_id : UUID <<FK>>
+  * student_id : UUID <<FK>>
+  created_at : TIMESTAMP
+}
+
+entity "classes\n班级表" as classes {
+  * **id** : UUID <<PK>>
+  --
+  * teacher_id : UUID <<FK>>
+  name : VARCHAR(100)
+  description : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "class_members\n班级成员表" as class_members {
+  * **id** : UUID <<PK>>
+  --
+  * class_id : UUID <<FK>>
+  * student_id : UUID <<FK>>
+  joined_at : TIMESTAMP
+}
+
+entity "courses\n课程表" as courses {
+  * **id** : UUID <<PK>>
+  --
+  * teacher_id : UUID <<FK>>
+  class_id : UUID <<FK>>
+  default_courseware_file_id : UUID <<FK>>
+  title : VARCHAR(200)
+  description : TEXT
+  status : VARCHAR(20)
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "course_members\n课程成员表" as course_members {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * user_id : UUID <<FK>>
+  role : VARCHAR(20)
+  joined_at : TIMESTAMP
+}
+
+entity "lesson_nodes\n课时节点表" as lesson_nodes {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  title : VARCHAR(200)
+  sort_order : INTEGER
+  description : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "assignment_nodes\n作业节点表" as assignment_nodes {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  title : VARCHAR(200)
+  description : TEXT
+  due_date : TIMESTAMP
+  sort_order : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "learning_tasks\n学习任务表" as learning_tasks {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  assignment_node_id : UUID <<FK>>
+  type : VARCHAR(50)
+  content : JSONB
+  sort_order : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "vocabulary_items\n词汇表" as vocabulary_items {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  task_id : UUID <<FK>>
+  word : VARCHAR(200)
+  translation : VARCHAR(200)
+  phonetic : VARCHAR(100)
+  audio_url : TEXT
+  sort_order : INTEGER
+}
+
+entity "files\n文件表" as files {
+  * **id** : UUID <<PK>>
+  --
+  * owner_id : UUID <<FK>>
+  course_id : UUID <<FK>>
+  lesson_node_id : UUID <<FK>>
+  file_name : VARCHAR(255)
+  mime_type : VARCHAR(100)
+  file_path : TEXT
+  size : BIGINT
+  created_at : TIMESTAMP
+}
+
+entity "courseware_files\n课件文件表" as courseware_files {
+  * **id** : UUID <<PK, FK>>
+  --
+  * course_id : UUID <<FK>>
+  lesson_node_id : UUID <<FK>>
+  file_name : VARCHAR(255)
+  file_path : TEXT
+  mime_type : VARCHAR(100)
+  page_count : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "course_pages\n课程页面表" as course_pages {
+  * **id** : UUID <<PK>>
+  --
+  * courseware_file_id : UUID <<FK>>
+  * course_id : UUID <<FK>>
+  page_number : INTEGER
+  content_snapshot : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "assignment_imports\n作业导入表" as assignment_imports {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  lesson_node_id : UUID <<FK>>
+  file_name : VARCHAR(255)
+  status : VARCHAR(20)
+  imported_count : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "learning_records\n学习记录表" as learning_records {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * lesson_node_id : UUID <<FK>>
+  * task_id : UUID <<FK>>
+  score : DECIMAL(5,2)
+  status : VARCHAR(20)
+  attempts : INTEGER
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "homework_submissions\n作业提交表" as homework_submissions {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * assignment_node_id : UUID <<FK>>
+  status : VARCHAR(20)
+  submitted_at : TIMESTAMP
+  graded_at : TIMESTAMP
+  feedback : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "homework_recording_attempts\n作业录音尝试表" as homework_recording_attempts {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * task_id : UUID <<FK>>
+  slot_index : INTEGER
+  audio_file_path : TEXT
+  duration : DECIMAL(8,2)
+  score : DECIMAL(5,2)
+  is_best : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "vocabulary_progress\n词汇学习进度表" as vocabulary_progress {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  * task_id : UUID <<FK>>
+  mastery_level : INTEGER
+  last_reviewed_at : TIMESTAMP
+  review_count : INTEGER
+  created_at : TIMESTAMP
+}
+
+entity "recordings\n通用录音表" as recordings {
+  * **id** : UUID <<PK>>
+  --
+  * student_id : UUID <<FK>>
+  course_id : UUID <<FK>>
+  audio_file_path : TEXT
+  duration : DECIMAL(8,2)
+  type : VARCHAR(50)
+  created_at : TIMESTAMP
+}
+
+entity "live_sessions\n直播会话表" as live_sessions {
+  * **id** : UUID <<PK>>
+  --
+  * course_id : UUID <<FK>>
+  * teacher_id : UUID <<FK>>
+  lesson_node_id : UUID <<FK>>
+  status : VARCHAR(20)
+  started_at : TIMESTAMP
+  ended_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "lecture_recordings\n讲课录音表" as lecture_recordings {
+  * **id** : UUID <<PK>>
+  --
+  * live_session_id : UUID <<FK>>
+  * course_id : UUID <<FK>>
+  audio_file_path : TEXT
+  duration : DECIMAL(8,2)
+  created_at : TIMESTAMP
+}
+
+entity "classroom_comments\n课堂评论表" as classroom_comments {
+  * **id** : UUID <<PK>>
+  --
+  * live_session_id : UUID <<FK>>
+  * student_id : UUID <<FK>>
+  content : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "transcript_segments\n转录片段表" as transcript_segments {
+  * **id** : UUID <<PK>>
+  --
+  * live_session_id : UUID <<FK>>
+  start_time : DECIMAL(8,2)
+  end_time : DECIMAL(8,2)
+  text : TEXT
+  speaker : VARCHAR(100)
+  created_at : TIMESTAMP
+}
+
+entity "admin_audit_logs\n管理员审计日志表" as admin_audit_logs {
+  * **id** : UUID <<PK>>
+  --
+  * actor_id : UUID <<FK>>
+  action : VARCHAR(100)
+  target_type : VARCHAR(50)
+  target_id : UUID
+  details : JSONB
+  created_at : TIMESTAMP
+}
+
+' ===== 关系定义 =====
+
+users ||--o{ sessions : "1..* 会话"
+users ||--o| teacher_profiles : "0..1 教师档案"
+users ||--o| student_profiles : "0..1 学生档案"
+users ||--o{ teacher_student_links : "teacher_id\n1..*"
+users ||--o{ teacher_student_links : "student_id\n1..*"
+
+users ||--o{ classes : "teacher_id\n创建班级 1..*"
+users ||--o{ class_members : "student_id\n加入班级 0..*"
+classes ||--o{ class_members : "1..*"
+
+users ||--o{ courses : "teacher_id\n创建课程 1..*"
+classes ||--o{ courses : "0..* 关联班级"
+courses ||--o{ course_members : "1..*"
+users ||--o{ course_members : "user_id\n0..*"
+
+courses ||--o{ lesson_nodes : "1..* 课时"
+courses ||--o{ assignment_nodes : "1..*"
+lesson_nodes ||--o{ assignment_nodes : "1..*"
+
+courses ||--o{ learning_tasks : "1..*"
+lesson_nodes ||--o{ learning_tasks : "1..*"
+assignment_nodes ||--o{ learning_tasks : "0..*"
+
+courses ||--o{ vocabulary_items : "0..*"
+lesson_nodes ||--o{ vocabulary_items : "0..*"
+learning_tasks ||--o{ vocabulary_items : "0..* task_id"
+
+users ||--o{ files : "owner_id\n0..*"
+courses ||--o{ files : "0..*"
+lesson_nodes ||--o{ files : "0..*"
+
+files ||--o| courseware_files : "id\n0..1"
+courses ||--o{ courseware_files : "1..*"
+courses |o--o| courseware_files : "default_courseware_file_id"
+
+courseware_files ||--o{ course_pages : "1..*"
+courses ||--o{ course_pages : "1..*"
+
+courses ||--o{ assignment_imports : "0..*"
+lesson_nodes ||--o{ assignment_imports : "0..*"
+
+users ||--o{ learning_records : "student_id\n0..*"
+lesson_nodes ||--o{ learning_records : "1..*"
+learning_tasks ||--o{ learning_records : "1..*"
+
+users ||--o{ homework_submissions : "student_id\n0..*"
+assignment_nodes ||--o{ homework_submissions : "1..*"
+
+users ||--o{ homework_recording_attempts : "student_id\n0..*"
+learning_tasks ||--o{ homework_recording_attempts : "1..*"
+
+users ||--o{ vocabulary_progress : "student_id\n0..*"
+learning_tasks ||--o{ vocabulary_progress : "0..*"
+
+users ||--o{ recordings : "student_id\n0..*"
+courses ||--o{ recordings : "0..*"
+
+courses ||--o{ live_sessions : "1..*"
+users ||--o{ live_sessions : "teacher_id\n1..*"
+lesson_nodes ||--o{ live_sessions : "0..*"
+
+live_sessions ||--o{ lecture_recordings : "0..*"
+courses ||--o{ lecture_recordings : "0..*"
+
+live_sessions ||--o{ classroom_comments : "0..*"
+users ||--o{ classroom_comments : "student_id\n0..*"
+
+live_sessions ||--o{ transcript_segments : "0..*"
+
+users ||--o{ admin_audit_logs : "actor_id\n0..*"
+
+@enduml

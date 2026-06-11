@@ -1,0 +1,75 @@
+{
+  "sprint": "10",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-06-01 19:15",
+  "object": "完成 04-LLD、05-TP、06-DEP、07-UM 四份生命周期文档扩写与门禁验收",
+  "key_results": [
+    "KR-1: 04-LLD 详细设计说明书重构扩写为 6 章，编译通过",
+    "KR-2: 05-TP 测试计划重构扩写为 5 章，编译通过",
+    "KR-3: 06-DEP 部署说明重构扩写为 5 章，编译通过",
+    "KR-4: 07-UM 用户手册重构扩写为 4 章，编译通过",
+    "KR-5: 全量运行 Gate 1~4 门禁，零 LaTeX 错误，零 Markdown 泄漏，零 Overfull 溢出"
+  ],
+  "tasks": [
+    {
+      "id": "S10-T01",
+      "topic": "详细设计说明书 (04-LLD) 学术级扩写",
+      "target_dir": "docs/00-project-docs/04-LLD/templates/data",
+      "steps": [
+        {
+          "step_id": "S10-T01-STEP01",
+          "action": "rewrite_chapters",
+          "description": "编写并重构 chap01.tex 到 chap06.tex，确保所有列表转换为流畅学术段落，表全部改用 booktabs 三线表，图引用 local/figures 的已就位 PDF 占位图。"
+        }
+      ]
+    },
+    {
+      "id": "S10-T02",
+      "topic": "测试计划 (05-TP) 学术级扩写",
+      "target_dir": "docs/00-project-docs/05-TP/templates/data",
+      "steps": [
+        {
+          "step_id": "S10-T02-STEP01",
+          "action": "rewrite_chapters",
+          "description": "编写并重构 chap01.tex 到 chap05.tex，编写测试用例表、准入准出表、测试环境和风险矩阵，引用 defect-lifecycle-state 等 4 个 UML PDF 图。"
+        }
+      ]
+    },
+    {
+      "id": "S10-T03",
+      "topic": "部署说明 (06-DEP) 学术级扩写",
+      "target_dir": "docs/00-project-docs/06-DEP/templates/data",
+      "steps": [
+        {
+          "step_id": "S10-T03-STEP01",
+          "action": "rewrite_chapters",
+          "description": "编写并重构 chap01.tex 到 chap05.tex，详细罗列 Docker 容器拓扑、服务器准备流程、本地及腾讯云部署命令、部署验证健康检查和故障备份回滚操作。"
+        }
+      ]
+    },
+    {
+      "id": "S10-T04",
+      "topic": "用户手册 (07-UM) 学术级扩写",
+      "target_dir": "docs/00-project-docs/07-UM/templates/data",
+      "steps": [
+        {
+          "step_id": "S10-T04-STEP01",
+          "action": "rewrite_chapters",
+          "description": "编写并重构 chap01.tex 到 chap04.tex，从教师端、学生端和管理员端描述完整的课程、作业、录音、直播 danmaku、FAQ，引出 4 个操作流程与排障 PDF。"
+        }
+      ]
+    },
+    {
+      "id": "S10-T05",
+      "topic": "门禁扫描与全量 XeLaTeX 编译验收",
+      "steps": [
+        {
+          "step_id": "S10-T05-STEP01",
+          "action": "run_gates",
+          "description": "运行污染扫描、表格竖线审计、LaTeX 编译，最终消除所有 undefined citations、Overfull 溢出和大面积断页留白。"
+        }
+      ]
+    }
+  ]
+}

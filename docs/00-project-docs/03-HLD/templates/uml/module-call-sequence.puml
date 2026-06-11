@@ -1,0 +1,37 @@
+@startuml module-call-sequence
+autonumber
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam SequenceLifeLineBorderColor #10B981
+
+actor Student as "留学生 (Student)"
+participant "Frontend SPA" as FE
+participant "Express Router" as Router
+participant "Auth Middleware" as Auth
+participant "Repository Layer" as Repo
+database "Database / Storage" as DB
+participant "Speech Provider" as Speech
+
+Student -> FE: 触发跟读录音上报 (15秒内 Opus)
+FE -> Router: POST /api/v1/recordings (Multipart FormData, JWT)
+activate Router
+Router -> Auth: 拦截并提取 JWT (assertHomeworkAccess)
+activate Auth
+Auth --> Router: 鉴权通过 (Identity Verified)
+deactivate Auth
+Router -> Speech: 上传跟读音频数据执行评测
+activate Speech
+Speech --> Router: 返回音素级评测百分制成绩
+deactivate Speech
+Router -> Repo: upsertLearningRecord(RecordDto)
+activate Repo
+Repo -> DB: 比对并无损保存最佳成绩 (ACID 事务)
+activate DB
+DB --> Repo: 事务执行成功
+deactivate DB
+Repo --> Router: 返回最佳成绩记录 DTO
+deactivate Repo
+Router --> FE: 返回 RecordingDto & 评测高亮反馈包
+deactivate Router
+FE --> Student: 界面渲染 ASR 发音盲区高亮与得分
+@endum

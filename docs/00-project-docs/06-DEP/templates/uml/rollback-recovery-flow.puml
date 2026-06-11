@@ -1,0 +1,108 @@
+@startuml rollback-recovery-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #FFF1F2
+skinparam PartitionBorderColor #F43F5E
+
+title 回滚与灾难恢复流程图
+
+start
+
+#F43F5E:触发条件检测;
+note right
+  · 服务崩溃 (进程退出)
+  · 磁盘满 (存储空间不足)
+  · 数据库连接池耗尽
+  · 冒烟测试失败
+end note
+
+:确认故障范围;
+
+fork
+  partition "前端回滚" {
+    :Vercel 回退至上一部署版本;
+    note right
+      vercel rollback
+      自动切换至上一个
+      stable deployment
+    end note
+    :验证前端页面可访问;
+  }
+
+fork again
+  partition "后端回滚" {
+    :TAT 推送上一后端快照至 CVM;
+    note right
+      从备份目录恢复
+      backend-snapshot-<date>.tar.gz
+    end note
+    :解压覆盖 backend/ 目录;
+    :PM2 restart backend;
+    note right
+      pm2 restart lingoBridge
+      检查进程状态
+      pm2 status
+    end note
+    :验证后端 API 响应;
+  }
+
+fork again
+  partition "数据库恢复" {
+    :定位最近的 pg_dump 备份;
+    note right
+      备份文件:
+      pg_backup_<timestamp>.sql
+      每日自动备份
+    end note
+    :执行数据库恢复;
+    note right
+      psql -d lingobridge
+      < pg_backup_<timestamp>.sql
+    end note
+    :验证数据完整性;
+    note right
+      检查关键表行数
+      验证外键约束
+      抽样比对数据
+    end note
+  }
+
+end fork
+
+partition "恢复后验证" #F0FDF4 {
+  :重新执行冒烟测试;
+  note right
+    GET /api/v1/health
+    POST /auth/login
+    GET /courses
+  end note
+
+  if (冒烟测试通过?) then (是)
+    #10B981:确认服务恢复;
+  else (否)
+    #F43F5E:升级告警\n联系运维团队;
+    stop
+  endif
+
+  :记录事故报告;
+  note right
+    · 故障时间线
+    · 根因分析 (Root Cause)
+    · 影响范围
+    · 恢复措施
+    · 改进计划
+  end note
+}
+
+stop
+
+@enduml

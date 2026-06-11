@@ -1,0 +1,146 @@
+@startuml auth-security-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam sequence {
+  ArrowColor #3B82F6
+  ArrowFontColor #64748B
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #E0F2FE
+  ParticipantBorderColor #3B82F6
+  ParticipantBackgroundColor #E0F2FE
+  ParticipantFontColor #1E293B
+  GroupBorderColor #3B82F6
+  DividerBorderColor #94A3B8
+  DividerFontColor #64748B
+}
+skinparam note {
+  BackgroundColor #FEF3C7
+  BorderColor #F59E0B
+  FontColor #1E293B
+}
+
+title LingoBridge JWT 认证与权限控制时序图
+
+participant "客户端\n(Client)" as client
+participant "Express Router\n(/auth, /api)" as router
+participant "JWT 认证\n中间件" as jwt_mw
+participant "角色鉴权\n中间件" as role_mw
+participant "usersRepo" as users_repo
+database "PostgreSQL" as pg
+
+== 一、登录流程 (Login Flow) ==
+
+client -> router : POST /auth/login\n{ username, password }
+activate router #E0F2FE
+
+router -> users_repo : findByUsername(username)
+activate users_repo #E0F2FE
+
+users_repo -> pg : SELECT * FROM users\nWHERE username = ?
+activate pg #FFF7ED
+pg --> users_repo : 用户记录 (含 password_hash)
+deactivate pg
+
+users_repo --> router : user 对象
+deactivate users_repo
+
+router -> router : bcrypt.compare(\n  password,\n  user.password_hash\n)
+
+alt 密码验证成功
+
+  router -> router : jwt.sign(\n  { id, role, username },\n  JWT_SECRET,\n  { expiresIn: '7d' }\n)
+
+  note right of router
+    **JWT Payload 结构:**
+    {
+      id: "uuid",
+      role: "teacher",
+      username: "zhang_laoshi",
+      iat: 1748512658,
+      exp: 1749117458
+    }
+  end note
+
+  router --> client : **200 OK**\n{\n  token: "<jwt_token>",\n  user: { id, role, displayName }\n}
+
+else 密码验证失败
+
+  router --> client : **401 Unauthorized**\n{ error: "用户名或密码错误" }
+
+end
+
+deactivate router
+
+client -> client : localStorage.setItem(\n  'token', jwt_token\n)
+
+== 二、受保护请求流程 (Protected Request) ==
+
+client -> router : GET /api/courses\nAuthorization: Bearer <token>
+activate router #E0F2FE
+
+router -> jwt_mw : 进入 JWT 中间件
+activate jwt_mw #E0F2FE
+
+jwt_mw -> jwt_mw : 提取 Authorization Header\ntoken = header.split(' ')[1]
+
+jwt_mw -> jwt_mw : decoded = jwt.verify(\n  token, JWT_SECRET\n)
+
+alt Token 有效
+
+  jwt_mw -> jwt_mw : req.user = {\n  id: decoded.id,\n  role: decoded.role\n}
+  jwt_mw --> router : next() 放行
+  deactivate jwt_mw
+
+  router -> users_repo : 执行路由处理逻辑\ncoursesRepo.findByTeacher(req.user.id)
+  activate users_repo #E0F2FE
+  users_repo -> pg : SQL 查询
+  activate pg #FFF7ED
+  pg --> users_repo : 结果集
+  deactivate pg
+  users_repo --> router : 课程列表 DTO
+  deactivate users_repo
+
+  router --> client : **200 OK**\n{ data: [...courses] }
+
+else Token 无效或过期
+
+  jwt_mw --> router : **401 Unauthorized**\n{ error: "无效的访问令牌" }
+
+end
+
+deactivate router
+
+== 三、角色权限控制 (Role-Based Access) ==
+
+client -> router : DELETE /api/admin/users/123\nAuthorization: Bearer <teacher_token>
+activate router #E0F2FE
+
+router -> jwt_mw : JWT 验证
+activate jwt_mw #E0F2FE
+jwt_mw -> jwt_mw : 验证通过\nreq.user.role = "teacher"
+jwt_mw --> router : next()
+deactivate jwt_mw
+
+router -> role_mw : requireRole('admin')
+activate role_mw #FDF2F8
+
+role_mw -> role_mw : 检查 req.user.role\n"teacher" ≠ "admin"
+
+role_mw --> router : **403 Forbidden**\n{ error: "权限不足，需要管理员角色" }
+deactivate role_mw
+
+router --> client : **403 Forbidden**\n{ error: "权限不足，需要管理员角色" }
+deactivate router
+
+note right of client #FEE2E2
+  **角色权限矩阵:**
+  | 接口 | admin | teacher | student |
+  | 用户管理 | ✓ | ✗ | ✗ |
+  | 课程创建 | ✓ | ✓ | ✗ |
+  | 作业提交 | ✗ | ✗ | ✓ |
+  | 录音上传 | ✗ | ✗ | ✓ |
+  | 直播开启 | ✗ | ✓ | ✗ |
+end note
+
+@enduml

@@ -1,0 +1,114 @@
+@startuml error-recovery-sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam sequence {
+  ArrowColor #3B82F6
+  ArrowFontColor #64748B
+  LifeLineBorderColor #3B82F6
+  LifeLineBackgroundColor #E0F2FE
+  ParticipantBorderColor #3B82F6
+  ParticipantBackgroundColor #E0F2FE
+  ParticipantFontColor #1E293B
+  GroupBorderColor #F43F5E
+  GroupFontColor #F43F5E
+  DividerBorderColor #94A3B8
+  DividerFontColor #64748B
+}
+skinparam note {
+  BackgroundColor #FEF3C7
+  BorderColor #F59E0B
+  FontColor #1E293B
+}
+
+title LingoBridge 弱网错误恢复时序图
+
+participant "学生浏览器\n(Student Browser)" as browser
+participant "前端 SPA\n(React)" as spa
+participant "Vercel Proxy" as vercel
+participant "后端 API\n(Express)" as backend
+
+== 初始连接失败 ==
+
+browser -> spa : 触发网络请求\n(如: Presence 心跳)
+activate spa #E0F2FE
+
+spa -> vercel : HTTPS 请求
+activate vercel #F0FDF4
+vercel ->x backend : 连接超时 / 网络不可达
+vercel --> spa : **ERR_CONNECTION_TIMED_OUT**
+deactivate vercel
+
+spa -> spa : 检测到网络错误\n启动重试机制
+
+note right of spa
+  **指数退避策略:**
+  T_wait = min(1000 × 2^n, 30000) ms
+  n = 重试次数 (0..9)
+  最大重试: 10 次
+  抖动: ±20% 随机偏移
+end note
+
+== 指数退避重试过程 ==
+
+loop 重试 n = 0..9 (最多 10 次)
+
+  spa -> spa : 等待 T_wait ms\nT_wait = 1s → 2s → 4s → 8s → ...
+
+  spa -> browser : 显示重连提示\n"正在重新连接... (第 n+1 次)"
+
+  spa -> vercel : 重试请求
+  activate vercel #F0FDF4
+
+  alt 网络恢复 (成功路径)
+
+    vercel -> backend : 转发请求
+    activate backend #D1FAE5
+    backend --> vercel : 200 OK
+    deactivate backend
+    vercel --> spa : 成功响应
+    deactivate vercel
+
+    == 成功路径: 重连与恢复 ==
+
+    spa -> spa : 重置重试计数器 n = 0
+    spa -> backend : 恢复 Presence 连接\n重新同步在线状态
+    activate backend #D1FAE5
+    backend --> spa : Presence 状态同步完成\n返回当前会话快照
+    deactivate backend
+
+    spa -> browser : 隐藏重连提示\n显示 "已恢复连接" ✓
+    deactivate spa
+
+  else 仍然失败 (继续重试)
+
+    vercel -->x spa : 连接失败
+    deactivate vercel
+    spa -> spa : n++ 继续下一轮
+
+  end
+
+end
+
+== 失败路径: 超过最大重试次数 ==
+
+spa -> spa : n > 9\n重试耗尽
+
+spa -> spa : **清理 MediaStream 资源**\nstream.getTracks().forEach(\n  t => t.stop()\n)
+
+note right of spa #FEE2E2
+  **媒体轨道清理:**
+  1. 停止所有音频轨道 (mic)
+  2. 停止所有视频轨道 (camera)
+  3. 释放 MediaStream 引用
+  4. 更新本地连麦状态为 "断开"
+end note
+
+spa -> browser : 显示超时警告弹窗\n"网络连接失败，请检查网络后重试"
+
+browser -> spa : 用户点击 "返回首页"
+spa -> browser : 导航至首页\nrouter.push('/')
+
+deactivate spa
+
+@enduml

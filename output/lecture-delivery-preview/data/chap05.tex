@@ -1,0 +1,57 @@
+% !TeX root = ../thuthesis-example.tex
+\chapter{总结与展望}
+
+\section{全文总结}
+
+% injected sources: prds/md/sprint09-prd-260601-v2.0.md
+本文围绕国际中文学习场景，完成了 LingoBridge 平台的数据分析与个性化练习推荐方案设计。项目的核心价值不在于堆叠复杂模型，而在于把人工智能课程中的数据处理、特征分析、推荐策略和可视化反馈落到一个可运行的教学平台中。
+
+通过教师端、学生端和管理端的协同展示，系统能够体现“数据分析”和“智能推荐”的课程主题：学生获得更具体的练习建议，教师获得班级学习状态判断，管理端获得平台级运行与教学数据总览。后续工作应继续补充真实教学数据、完善模型评估，并将推荐解释与教师反馈结合起来。
+
+\section{系统运行效果展示}
+
+图 \ref{fig:system_screenshots} 展示了本系统在实际场景下的运行效果。其中，“系统封面”体现了简洁直观的 UI 设计；“单人检测画面”展示了系统在强光环境下依然能保持稳定的特征锁定；“多人场景检测”则验证了系统在边缘服务器支持下，对多个目标同时执行身份识别的并发处理能力。实验证明，系统能够精准处理多人的位置偏移与镜像翻转，标签悬浮效果丝滑平顺。
+
+\begin{figure}[htbp]
+  \centering
+  % 第一行
+  \begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.25]{figures/cover.pdf}
+    \caption*{图 5-1(a) 系统封面} 
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.25]{figures/single.pdf}
+    \caption*{图 5-1(b) 单人检测画面}
+  \end{minipage}
+
+  \vspace{1em} % 垂直间距
+
+  % 第二行
+  \begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.25]{figures/multiA.pdf}
+    \caption*{图 5-1(c) 多人场景检测 A}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.25]{figures/multiB.pdf}
+    \caption*{图 5-1(d) 多人场景检测 B}
+  \end{minipage}
+
+  \caption{人脸识别与活体检测系统界面演示}
+  \label{fig:system_screenshots}
+\end{figure}
+
+\section{研究不足与未来展望}
+
+尽管本系统在实验环境下达到了预期的设计指标，但在复杂的工程化落地过程中仍存在一定的优化空间。首先，在环境自适应性方面，目前系统所采用的基于物理深度标准差 $\sigma$ 的活体算法主要依托于预设的固定阈值。虽然该机制在标准室内光照下表现稳健，但在极端强光（产生红外干扰）或极暗环境下，TrueDepth 传感器的散斑投射精度会受到物理噪声的影响，导致深度矩阵的信噪比下降，从而引起判定指标的瞬时波动。未来的研究可尝试引入基于环境感知强度的动态阈值调节机制，或者构建轻量级的神经网络判别器替代人工硬编码逻辑，利用深度学习提取更具鲁棒性的 3D 纹理特征，以应对更加极端的物理环境挑战。
+
+
+
+从系统架构的演进方向来看，目前核心的特征提取与比对逻辑高度依赖于云端边缘服务器。虽然这种架构确保了高性能神经网络的算力支撑，但在网络环境较差或处于离线状态时，系统的可用性将受到极大限制。随着移动端算力平台的飞速发展，利用 CoreML、TensorRT 等推理优化工具对 \textit{InsightFace} 等重型模型进行量化压缩与剪枝，实现核心识别功能在移动端本地的部署，将是本研究的重要演进方向。通过将推理任务下放至端侧神经引擎（Neural Engine），不仅可以进一步消除网络往返时延，还能实现在断网环境下的基础验证，显著提升系统的全天候服务能力。
+
+生物特征数据的隐私保护与安全性是系统迈向生产环境必须解决的伦理挑战。目前的特征指纹以加密张量的形式存储于服务器侧，未来可进一步探索联邦学习（Federated Learning）与差分隐私技术，实现在原始数据不出本端的前提下进行特征提取与模型更新。结合移动端硬件层面的安全隔离区（Secure Enclave）存储敏感的特征质心向量，可以从架构设计上根除隐私泄露的风险。通过上述方向的持续优化，本系统有望从一个高性能的实验原型演进为具备高安全性、高适应性以及强隐私保障的工业级身份认证解决方案。

@@ -36,7 +36,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
-import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, homeworkSubmissionsApi, mediaUrl, type LearningTask, type LearningRecord, type Course } from '../services/apiClient.ts';
+import { homeworkApi, learningRecordsApi, recordingsApi, coursesApi, homeworkSubmissionsApi, lessonNodesApi, mediaUrl, type LearningTask, type LearningRecord, type Course, type LessonNodeData } from '../services/apiClient.ts';
 
 // ─── L1 Cache (Browser localStorage) — S5-T06 三级缓存 ───
 const L1_KEY = 'lingobridge_hw_draft';
@@ -509,18 +509,16 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
     setLoading(true);
     setError(null);
 
-    const recordsContext = activeLessonNodeId
-      ? { context: 'homework' as const, lessonNodeId: activeLessonNodeId }
-      : { context: 'homework' as const };
-
-    const tasksPromise = activeLessonNodeId
-      ? homeworkApi.tasks(selectedCourseId, { lessonNodeId: activeLessonNodeId })
-      : homeworkApi.tasks(selectedCourseId, { includeAll: true });
+    // 永远拉取该课程下的全部学情记录与任务，以完整渲染通关大地图，落实“一条路走到底”的心智模型
+    const recordsContext = { context: 'homework' as const };
+    const tasksPromise = homeworkApi.tasks(selectedCourseId, { includeAll: true });
+    const lessonNodesPromise = lessonNodesApi.list(selectedCourseId).catch(() => [] as LessonNodeData[]);
 
     Promise.all([
+      lessonNodesPromise,
       tasksPromise,
       learningRecordsApi.list(selectedCourseId, recordsContext)
-    ]).then(([tasks, records]) => {
+    ]).then(([lessonNodes, tasks, records]) => {
       if (tasks) {
         for (const t of tasks) {
           if (t && !t.taskId) t.taskId = (t as any).taskKey;
@@ -528,30 +526,76 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
       }
       setAllTasks(tasks);
       setLearningRecords(records);
-      const lessonMap = new Map<string, LearningTask[]>();
-      for (const task of tasks) {
-        const key = `${task.unit}-${task.lesson}`;
-        if (!lessonMap.has(key)) lessonMap.set(key, []);
-        lessonMap.get(key)!.push(task);
-      }
-      const result: LessonGroup[] = [];
-      for (const [key, taskList] of lessonMap) {
-        const [unit, lesson] = key.split('-').map(Number);
-        const completedCount = taskList.filter(t =>
-          records.some(r => r.taskId === t.taskId && r.status === 'completed')
-        ).length;
-        result.push({
-          unit,
-          lesson,
-          lessonTitle: taskList[0].lessonTitle || '',
-          tasks: taskList.sort((a, b) => a.sortOrder - b.sortOrder),
-          completedCount,
-          totalCount: taskList.length
+
+      let result: LessonGroup[] = [];
+
+      if (lessonNodes && lessonNodes.length > 0) {
+        // 优先基于实际创建的课时节点进行路径聚合排序，保证“一条路走到底”的课时节点心智
+        const sortedNodes = [...lessonNodes].sort((a, b) => {
+          const timeA = a.startsAt ? new Date(a.startsAt).getTime() : 0;
+          const timeB = b.startsAt ? new Date(b.startsAt).getTime() : 0;
+          return timeA - timeB || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         });
+
+        sortedNodes.forEach((node, idx) => {
+          const nodeTasks = tasks.filter(t => t.lessonNodeId === node.id);
+          const completedCount = nodeTasks.filter(t =>
+            records.some(r => r.taskId === t.taskId && r.status === 'completed')
+          ).length;
+
+          result.push({
+            unit: 1,
+            lesson: idx + 1,
+            lessonTitle: node.title,
+            tasks: nodeTasks.sort((a, b) => a.sortOrder - b.sortOrder),
+            completedCount,
+            totalCount: nodeTasks.length
+          });
+        });
+      } else {
+        // 安全降级兜底：当课程无任何课时节点时，使用原来的单元课时聚合，确保老环境测试数据的 100% 兼容性
+        const lessonMap = new Map<string, LearningTask[]>();
+        for (const task of tasks) {
+          const key = `${task.unit}-${task.lesson}`;
+          if (!lessonMap.has(key)) lessonMap.set(key, []);
+          lessonMap.get(key)!.push(task);
+        }
+        for (const [key, taskList] of lessonMap) {
+          const [unit, lesson] = key.split('-').map(Number);
+          const completedCount = taskList.filter(t =>
+            records.some(r => r.taskId === t.taskId && r.status === 'completed')
+          ).length;
+          result.push({
+            unit,
+            lesson,
+            lessonTitle: taskList[0].lessonTitle || '',
+            tasks: taskList.sort((a, b) => a.sortOrder - b.sortOrder),
+            completedCount,
+            totalCount: taskList.length
+          });
+        }
+        result.sort((a, b) => a.unit - b.unit || a.lesson - b.lesson);
       }
-      result.sort((a, b) => a.unit - b.unit || a.lesson - b.lesson);
+
       setGroups(result);
       setLoading(false);
+
+      // 智能自动高亮定位：如果指定了课时节点，全自动定位并展开该课时的作业任务面板
+      if (activeLessonNodeId) {
+        let matched = result.find(g =>
+          g.tasks.some(t => t.lessonNodeId === activeLessonNodeId)
+        );
+        if (!matched && lessonNodes) {
+          const node = lessonNodes.find(n => n.id === activeLessonNodeId);
+          if (node) {
+            matched = result.find(g => g.lessonTitle === node.title);
+          }
+        }
+        if (matched) {
+          console.log(`[Focus Locator] Automatically focusing and expanding lesson node: ${activeLessonNodeId}`);
+          setSelectedGroup(matched);
+        }
+      }
 
       // S5-T06: Restore L1 cache after data loaded
       if (activeLessonNodeId && selectedCourseId) {
@@ -917,23 +961,6 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
         </select>
       </div>
 
-      {activeLessonNodeId && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
-          <BookOpen size={14} className="text-[#0056D2]" />
-          <span className="text-sm font-semibold text-[#0056D2]">
-            {t('homework.lesson_context', { title: groups[0]?.lessonTitle || t('dashboard.schedule_label') })}
-          </span>
-          <button
-            onClick={() => {
-              setActiveLessonNodeId(undefined);
-              setGroups([]);
-            }}
-            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            {t('homework.back_path')}
-          </button>
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-screen">
@@ -972,11 +999,17 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
             <div className="flex justify-center pb-32 relative">
               <div className="flex flex-col items-center w-full max-w-md">
-                {groups.map((g, i) => (
-                  <div key={`${g.unit}-${g.lesson}`}>
-                    <PathNode group={g} index={i} onSelect={(grp) => setSelectedGroup(grp)} allCompleted={i < currentGroupIndex} isLast={i === groups.length - 1} />
-                  </div>
-                ))}
+                {groups.map((g, i) => {
+                  const isCompleted = i < currentGroupIndex;
+                  const isCurrent = i === currentGroupIndex;
+                  const status = isCompleted ? 'completed' : isCurrent ? 'current' : 'locked';
+                  return (
+                    <div key={`${g.unit}-${g.lesson}-${g.lessonTitle}`} className="relative flex flex-col items-center">
+                      <PathNode group={g} index={i} onSelect={(grp) => setSelectedGroup(grp)} allCompleted={i < currentGroupIndex} isLast={i === groups.length - 1} />
+                      {i < groups.length - 1 && <PathArrow index={i} status={status} />}
+                    </div>
+                  );
+                })}
 
                 {/* Visual End Indicator */}
                 {groups.length > 0 && (
@@ -1062,6 +1095,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
                            </div>
                          ) : (
                            <button
+                             data-testid="homework-enter-task"
                              onClick={() => { setView('task'); setCurrentIndex(selectedGroup.tasks.indexOf(task)); }}
                              className="w-12 h-12 bg-[#0056D2] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-blue-700 transition-all active:scale-95"
                            >

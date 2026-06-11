@@ -1,0 +1,131 @@
+{
+  "sprint": "14",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-06-06",
+  "objective": "将迭代完成的 LingoBridge 2.0 同步到 docs/00-project-docs 软件工程规范文档，确保需求、设计、测试、部署、用户手册与真实系统一致。",
+  "strategy": {
+    "priority": "Documentation sync last",
+    "sequence": [
+      "先冻结 Sprint 11-13 的真实实现差异。",
+      "再更新 SRS/HLD/LLD/TP/DEP/UM 的功能边界、接口、数据流、测试和用户操作。",
+      "最后运行文档门禁和编译，避免报告与系统不一致。"
+    ]
+  },
+  "references": [
+    {
+      "name": "Project current PRD baseline",
+      "url": "prds/current/00-latest-product-decisions.md",
+      "use": "产品决策同步源。"
+    },
+    {
+      "name": "AI/KG/Data console plan",
+      "url": "prds/current/04-ai-knowledge-tracing-and-data-console-plan.md",
+      "use": "AI 数据中台、学生知识追踪、教师智能干预同步源。"
+    },
+    {
+      "name": "Competitive research baseline",
+      "url": "prds/current/05-competitive-research-and-teacher-complexity.md",
+      "use": "国际中文教育复杂度和竞品依据同步源。"
+    }
+  ],
+  "repoReality": {
+    "docsRoot": "docs/00-project-docs",
+    "lectureReport": "docs/05-lecture-delivery/报告",
+    "existingRisk": "当前文档中存在大量先前生成的图、PDF、LaTeX 产物，更新时必须避免无关二进制 churn。"
+  },
+  "keyResults": [
+    "KR-1: 01-FA/02-SRS 更新 LingoBridge 2.0 范围、三端角色、AI/数据中台/教师智能化需求。",
+    "KR-2: 03-HLD 更新系统架构、数据流、AI 管线、analytics API、Neo4j optional adapter 边界。",
+    "KR-3: 04-LLD 更新组件、接口、数据契约、前端路由、后端 analytics 模块设计。",
+    "KR-4: 05-TP 更新测试计划，覆盖数据中台、AI 管线、教师端、学生端、隐私权限和报告复现。",
+    "KR-5: 06-DEP/07-UM 更新部署和用户操作，明确 Python 管线、公共数据集样本、三端使用路径。"
+  ],
+  "tasks": [
+    {
+      "id": "S14-T01",
+      "topic": "Requirements and scope sync",
+      "ownerAgentPrompt": "更新 docs/00-project-docs/01-FA 和 02-SRS，使其反映 LingoBridge 2.0 的学生、教师、Admin 数据科学化能力。不要写未实现功能为已完成，使用规划/可选/演示能力区分。",
+      "targetDirs": [
+        "docs/00-project-docs/01-FA",
+        "docs/00-project-docs/02-SRS"
+      ],
+      "steps": [
+        "补充国际中文教育平台复杂度：拼音、声调、汉字、词汇、听说、字幕、多媒体。",
+        "补充教师端需求：班级学情、干预队列、学生风险、作业/录音证据。",
+        "补充数据中台需求：审计、管道、模型、图表、公共数据集、报告复现。"
+      ],
+      "acceptance": [
+        "需求文档与实际 sprint 实现一致。",
+        "未完成项不使用完成式措辞。"
+      ]
+    },
+    {
+      "id": "S14-T02",
+      "topic": "Architecture and detailed design sync",
+      "ownerAgentPrompt": "更新 03-HLD 和 04-LLD，补充 analytics API、AI 管线、知识图谱、教师干预、学生排名、Admin 数据中台的模块/接口/数据流。尽量复用现有图件，必要时只新增文本级图件清单。",
+      "targetDirs": [
+        "docs/00-project-docs/03-HLD",
+        "docs/00-project-docs/04-LLD"
+      ],
+      "steps": [
+        "更新模块架构描述。",
+        "更新数据流：业务事件 -> 数据清洗 -> 特征 -> 模型 -> 三端展示。",
+        "更新接口表：/api/v1/analytics/*。",
+        "更新 optional Neo4j adapter 说明。"
+      ],
+      "acceptance": [
+        "架构文档能解释当前代码结构。",
+        "不引入与 repo 不符的生产级承诺。"
+      ]
+    },
+    {
+      "id": "S14-T03",
+      "topic": "Testing/deployment/user manual sync",
+      "ownerAgentPrompt": "更新 05-TP、06-DEP、07-UM，加入数据中台演示、Python 管线、公共数据集样本、学生/教师 AI 看板、权限隐私、报告复现的测试和操作流程。",
+      "targetDirs": [
+        "docs/00-project-docs/05-TP",
+        "docs/00-project-docs/06-DEP",
+        "docs/00-project-docs/07-UM"
+      ],
+      "steps": [
+        "05-TP 增加 API smoke、浏览器 UI、数据质量、模型指标、权限泄漏测试。",
+        "06-DEP 增加 Python 管线、output JSON、可选 Neo4j、不提交大数据文件说明。",
+        "07-UM 增加学生排名/知识图谱、教师班级洞察、Admin 数据中台操作。"
+      ],
+      "acceptance": [
+        "用户手册可指导三端演示。",
+        "测试计划覆盖 Sprint 11-13 新能力。"
+      ]
+    },
+    {
+      "id": "S14-T04",
+      "topic": "Documentation gates and consistency audit",
+      "ownerAgentPrompt": "运行文档污染扫描、LaTeX 编译或项目已有文档门禁。若仓库既有二进制/PDF 差异导致 git diff 噪声，记录而不清理用户改动。",
+      "targetDirs": [
+        "docs/00-project-docs",
+        "docs/05-lecture-delivery/报告"
+      ],
+      "steps": [
+        "扫描 Markdown 泄漏、TODO、英文 mock、未实现完成式表述。",
+        "检查表格规范和图片引用。",
+        "运行可行的编译/预览命令并记录结果。"
+      ],
+      "acceptance": [
+        "文档更新有验收记录。",
+        "未能运行的门禁有明确原因。"
+      ]
+    }
+  ],
+  "guardrails": [
+    "不得重置或清理用户已有 docs 生成文件改动。",
+    "不得承诺真实生产级在线 ML 服务已经完成。",
+    "不得把 Neo4j 写成必需部署项，除非 Sprint 13 之后已实际落地。",
+    "不得提交大型公共数据集原始文件。"
+  ],
+  "exitCriteria": [
+    "docs/00-project-docs 与 LingoBridge 2.0 实际实现一致。",
+    "报告、PRD、软件工程文档之间无明显冲突。",
+    "后续答辩材料能从需求、设计、实现、测试、部署、用户手册形成闭环。"
+  ]
+}

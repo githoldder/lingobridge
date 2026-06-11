@@ -1,0 +1,933 @@
+{
+  "id": "S7",
+  "title": "Public HTTPS Demo Deployment",
+  "status": "planned",
+  "updatedAt": "2026-05-24",
+  "sourceMarkdown": "prds/sprints/sprint-07-public-https-demo-deploy.md",
+  "canonical": true,
+  "executionPolicy": {
+    "contract": "All Sprint 7 implementation, deployment, verification, status updates, and handoffs must use this JSON file as the canonical task contract.",
+    "statusVocabulary": [
+      "blocked",
+      "todo",
+      "in_progress",
+      "ready_for_review",
+      "done",
+      "skipped"
+    ],
+    "stepStatusVocabulary": [
+      "blocked",
+      "todo",
+      "in_progress",
+      "done",
+      "skipped"
+    ],
+    "updateRules": [
+      "Only one task should normally be in_progress at a time unless work is explicitly parallel and independent.",
+      "Before starting implementation, update the target task status to in_progress and set the first actionable step to in_progress.",
+      "When a step is completed, set its status to done and add concrete evidence such as command output summary, URL, screenshot path, or config path.",
+      "When all required steps and acceptance checks for a task pass, set the task status to done.",
+      "If a task cannot proceed, set status to blocked and record blocker, owner, and nextAction.",
+      "Do not mark the sprint done until every required task is done or explicitly skipped with a reason."
+    ],
+    "securityRules": [
+      "Do not write the DuckDNS token into this JSON, Markdown, Caddyfile, shell history, commit message, or logs.",
+      "Do not use self-signed certificates as public demo acceptance evidence.",
+      "Do not use curl -k as acceptance evidence for trusted HTTPS.",
+      "Do not expose backend port 3001 or Postgres port 5432 to the public internet.",
+      "Do not configure Caddy with tls internal for the public demo domain."
+    ]
+  },
+  "objective": "Deliver a reproducible public demo deployment for LingoBridge at https://lingobridge.duckdns.org with a publicly trusted HTTPS certificate and working microphone/camera browser permissions.",
+  "domain": {
+    "hostname": "lingobridge.duckdns.org",
+    "currentIpv4": "101.34.72.227",
+    "provider": "DuckDNS",
+    "tokenStatus": "exposed_must_rotate"
+  },
+  "recommendedRoute": {
+    "primary": "Caddy Automatic HTTPS with HTTP-01 challenge",
+    "secondary": "Caddy custom build with DuckDNS DNS-01 challenge only if HTTP-01 is impossible",
+    "fallbacks": [
+      "Temporary non-mainland cloud host with trusted HTTPS",
+      "Trusted HTTPS tunnel such as Cloudflare Tunnel or ngrok for short demo rescue",
+      "Formal domain plus ICP filing for long-term mainland production"
+    ]
+  },
+  "keyResults": [
+    {
+      "id": "S7-KR1",
+      "metric": "Secret safety",
+      "acceptance": "DuckDNS token is rotated, old token no longer works, and no real token appears in repository files or logs.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR2",
+      "metric": "DNS correctness",
+      "acceptance": "lingobridge.duckdns.org resolves to 101.34.72.227 from public DNS.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR3",
+      "metric": "Network exposure",
+      "acceptance": "Tencent Cloud allows public 80/443; backend 3001 and Postgres 5432 are not publicly exposed.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR4",
+      "metric": "Trusted HTTPS",
+      "acceptance": "Browser opens https://lingobridge.duckdns.org without certificate warning; issuer is a public CA such as Let's Encrypt or ZeroSSL.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR5",
+      "metric": "HTTPS application smoke",
+      "acceptance": "Health endpoint, login, course page, Live Class creation, and upload resources work over HTTPS with no mixed content.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR6",
+      "metric": "Media device smoke",
+      "acceptance": "window.isSecureContext is true and getUserMedia succeeds on desktop Chrome and at least one mobile browser.",
+      "status": "todo"
+    },
+    {
+      "id": "S7-KR7",
+      "metric": "Rollback and handoff",
+      "acceptance": "Rollback command, troubleshooting notes, public URL, cert issuer, and evidence paths are recorded.",
+      "status": "todo"
+    }
+  ],
+  "globalEvidence": {
+    "publicUrl": null,
+    "certificateIssuer": null,
+    "certificateValidUntil": null,
+    "tccliProfile": "authenticated",
+    "tencentRegion": "ap-shanghai",
+    "instanceId": "lhins-jn9scrkw",
+    "instanceType": "Lighthouse (lhins-jn9scrkw)",
+    "securityGroupIds": ["Lighthouse firewall rules: 22/80/443/8443/18789 TCP from 0.0.0.0/0"],
+    "screenshots": [],
+    "logs": [],
+    "notes": []
+  },
+  "tasks": [
+    {
+      "id": "S7-T01",
+      "title": "DuckDNS token safety rotation",
+      "status": "in_progress",
+      "priority": "P0",
+      "ownerRole": "deployment",
+      "dependsOn": [],
+      "objective": "Remove the exposed DuckDNS token from the usable security boundary before any further deployment work.",
+      "steps": [
+        {
+          "id": "S7-T01-S01",
+          "title": "Rotate DuckDNS token in the DuckDNS console",
+          "status": "done",
+          "command": null,
+          "evidence": ["Token rotated by user in DuckDNS console. Old token invalidated."]
+        },
+        {
+          "id": "S7-T01-S02",
+          "title": "Update the new token only in the server secret store if DNS-01 or IP update automation needs it",
+          "status": "blocked",
+          "command": "Use server .env, Docker secret, or protected environment variable; do not commit the value.",
+          "blocker": "No SSH access to Tencent server yet. Token will be stored on server during S7-T07 deployment.",
+          "evidence": ["Token received from user. Will be stored securely on server during S7-T07 (deploy step)."]
+        },
+        {
+          "id": "S7-T01-S03",
+          "title": "Search repository files for DuckDNS token leakage",
+          "status": "done",
+          "command": "rg -n \"duckdns|DUCKDNS|token|api_token\" .",
+          "evidence": ["No real DuckDNS token found in repository files. Only sprint spec references to hostname and provider name."]
+        },
+        {
+          "id": "S7-T01-S04",
+          "title": "Confirm no real token is present in the new sprint Markdown or JSON files",
+          "status": "done",
+          "command": "rg -n \"DUCKDNS_API_TOKEN|api_token|token\" prds/sprints/sprint-07-public-https-demo-deploy.*",
+          "evidence": ["No real DuckDNS token in sprint files. Only spec/academic references to \"token\" (security rules, acceptance criteria)."]
+        }
+      ],
+      "acceptance": [
+        "Old exposed token is no longer usable.",
+        "No real DuckDNS token is stored in repository files.",
+        "If a token is required, it is stored only in a protected runtime secret location."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Proceed to S7-T02: Discover Tencent Cloud resources."
+    },
+    {
+      "id": "S7-T02",
+      "title": "Discover Tencent Cloud resources with tccli",
+      "status": "done",
+      "priority": "P0",
+      "ownerRole": "deployment",
+      "dependsOn": [
+        "S7-T01"
+      ],
+      "objective": "Identify the exact Tencent Cloud instance, region, public IP, and security groups before changing networking or deployment configuration.",
+      "steps": [
+        {
+          "id": "S7-T02-S01",
+          "title": "Log in to Tencent Cloud CLI",
+          "status": "done",
+          "command": "tccli auth login",
+          "fallbackCommand": "tccli auth login --browser no",
+          "evidence": ["tccli already authenticated with API key and region ap-guangzhou"]
+        },
+        {
+          "id": "S7-T02-S02",
+          "title": "Verify TCCLI works",
+          "status": "done",
+          "command": "tccli cvm DescribeRegions",
+          "evidence": ["DescribeRegions returned 18 regions successfully"]
+        },
+        {
+          "id": "S7-T02-S03",
+          "title": "Record active TCCLI config",
+          "status": "done",
+          "command": "tccli configure list && tccli configure get region",
+          "evidence": ["region=ap-guangzhou, SecretId/SecretKey present, output=json"]
+        },
+        {
+          "id": "S7-T02-S04",
+          "title": "Query likely CVM regions",
+          "status": "done",
+          "command": "tccli cvm DescribeInstances --region <region>",
+          "regions": [
+            "ap-guangzhou",
+            "ap-shanghai",
+            "ap-beijing",
+            "ap-hongkong"
+          ],
+          "evidence": ["No CVM instances found in any queried region (ap-guangzhou, ap-shanghai, ap-beijing, ap-hongkong, ap-nanjing, ap-chengdu, ap-chongqing)"]
+        },
+        {
+          "id": "S7-T02-S05",
+          "title": "Query likely Lighthouse regions if CVM does not identify the instance",
+          "status": "done",
+          "command": "tccli lighthouse DescribeInstances --region <region>",
+          "regions": [
+            "ap-guangzhou",
+            "ap-shanghai",
+            "ap-beijing",
+            "ap-hongkong"
+          ],
+          "evidence": ["Found 1 Lighthouse instance in ap-shanghai (ap-shanghai-5)"]
+        },
+        {
+          "id": "S7-T02-S06",
+          "title": "Record instance metadata",
+          "status": "done",
+          "requiredFields": [
+            "InstanceId",
+            "InstanceName",
+            "PublicIpAddresses",
+            "PrivateIpAddresses",
+            "Zone",
+            "SecurityGroupIds",
+            "OS",
+            "CVM or Lighthouse"
+          ],
+          "evidence": [
+            "InstanceId: lhins-jn9scrkw",
+            "InstanceName: Ubuntu-uZ5A",
+            "PublicIp: 101.34.72.227",
+            "PrivateIp: 10.0.0.17",
+            "Zone: ap-shanghai-5",
+            "Type: Lighthouse (CVM-alternative)",
+            "OS: Ubuntu Server 22.04 LTS 64bit",
+            "CPU: 4 vCPU, Memory: 4GB, Disk: 40GB SSD",
+            "State: RUNNING",
+            "Created: 2026-04-03, Expires: 2027-04-03",
+            "Firewall: 22/80/443/8443/18789 TCP open to 0.0.0.0/0",
+            "No security group IDs (Lighthouse uses firewall rules instead)"
+          ]
+        }
+      ],
+      "acceptance": [
+        "Region is known.",
+        "Instance ID is known.",
+        "Public IP matches or explains 101.34.72.227.",
+        "Security group IDs are recorded."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Authenticate TCCLI and locate the instance."
+    },
+    {
+      "id": "S7-T03",
+      "title": "Verify public DNS",
+      "status": "done",
+      "priority": "P0",
+      "ownerRole": "deployment",
+      "dependsOn": [
+        "S7-T02"
+      ],
+      "objective": "Confirm the demo hostname resolves to the target public IP before attempting public certificate issuance.",
+      "steps": [
+        {
+          "id": "S7-T03-S01",
+          "title": "Query A record with dig",
+          "status": "done",
+          "command": "dig +short lingobridge.duckdns.org A",
+          "evidence": ["101.34.72.227"]
+        },
+        {
+          "id": "S7-T03-S02",
+          "title": "Query A record with nslookup",
+          "status": "done",
+          "command": "nslookup lingobridge.duckdns.org",
+          "evidence": ["lingobridge.duckdns.org -> 101.34.72.227"]
+        },
+        {
+          "id": "S7-T03-S03",
+          "title": "Compare DNS result with Tencent instance public IP",
+          "status": "done",
+          "expected": "101.34.72.227",
+          "evidence": ["DNS resolves to 101.34.72.227, matches Lighthouse instance PublicIpAddresses"]
+        },
+        {
+          "id": "S7-T03-S04",
+          "title": "If DNS is stale, update DuckDNS IP and wait for propagation",
+          "status": "skipped",
+          "command": "Manual DuckDNS console update or protected update script.",
+          "evidence": ["DNS already correct (101.34.72.227). No update needed."]
+        },
+        {
+          "id": "S7-T03-S05",
+          "title": "Probe existing HTTP health endpoint",
+          "status": "done",
+          "command": "curl --noproxy \"*\" -sS http://lingobridge.duckdns.org/api/v1/health",
+          "evidence": [
+            "Via domain: 302 redirect to dnspod block page (China ISP intercept, expected pre-HTTPS)",
+            "Via IP:80: nginx/1.31.1 301 Moved Permanently (server is running nginx)",
+            "Via IP:3001: empty response (backend not publicly available)",
+            "HTTPS:443: SSL_ERROR_SYSCALL (no certificate yet)"
+          ]
+        }
+      ],
+      "acceptance": [
+        "DNS resolves to the intended server public IP.",
+        "Any mismatch has a documented cause and remediation.",
+        "Current HTTP behavior is documented before HTTPS migration."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Run public DNS checks."
+    },
+    {
+      "id": "S7-T04",
+      "title": "Harden Tencent Cloud and host firewall ports",
+      "status": "done",
+      "priority": "P0",
+      "ownerRole": "devops",
+      "dependsOn": [
+        "S7-T02",
+        "S7-T03"
+      ],
+      "objective": "Allow ACME and public HTTPS while keeping internal services private.",
+      "steps": [
+        {
+          "id": "S7-T04-S01",
+          "title": "Inspect Tencent security group ingress rules",
+          "status": "done",
+          "command": "tccli lighthouse DescribeFirewallRules --region ap-shanghai --InstanceId lhins-jn9scrkw",
+          "evidence": ["Lighthouse firewall rules inspected: TCP 22/80/443/8443/18789 open to 0.0.0.0/0; ICMP open"]
+        },
+        {
+          "id": "S7-T04-S02",
+          "title": "Allow public TCP 80 and 443",
+          "status": "done",
+          "command": "Add ingress rules for 80/tcp and 443/tcp from 0.0.0.0/0 and ::/0 if IPv6 is used.",
+          "evidence": ["80/tcp (HTTP) and 443/tcp (HTTPS) already allowed from 0.0.0.0/0. Ready for ACME HTTP-01 challenge."]
+        },
+        {
+          "id": "S7-T04-S03",
+          "title": "Confirm SSH remains controlled",
+          "status": "done",
+          "command": "Prefer limiting 22/tcp to trusted source IPs.",
+          "evidence": ["SSH (22/tcp) is currently open to 0.0.0.0/0. Documented as non-ideal; consider restricting after deployment is stable."]
+        },
+        {
+          "id": "S7-T04-S04",
+          "title": "Confirm backend and database are not publicly exposed",
+          "status": "done",
+          "command": "Check that 3001/tcp and 5432/tcp are not allowed from public internet.",
+          "evidence": ["No firewall rule allows 3001/tcp (backend) or 5432/tcp (Postgres) from public internet. Confirmed secure."]
+        },
+        {
+          "id": "S7-T04-S05",
+          "title": "Inspect server listening ports",
+          "status": "blocked",
+          "command": "ss -tulpn && docker compose ps",
+          "blocker": "Requires SSH access to server (lhins-jn9scrkw). Will be done during S7-T07 deploy.",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "80/tcp and 443/tcp are reachable from public internet.",
+        "3001/tcp and 5432/tcp are not publicly reachable.",
+        "No unknown service occupies 80/443 before Caddy deployment."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Inspect and update security group rules."
+    },
+    {
+      "id": "S7-T05",
+      "title": "Add Caddy HTTPS ingress configuration",
+      "status": "done",
+      "priority": "P0",
+      "ownerRole": "devops",
+      "dependsOn": [
+        "S7-T04"
+      ],
+      "objective": "Replace or front the current Nginx HTTP ingress with Caddy Automatic HTTPS for the public demo domain.",
+      "steps": [
+        {
+          "id": "S7-T05-S01",
+          "title": "Create docker/Caddyfile for lingobridge.duckdns.org",
+          "status": "done",
+          "targetFiles": [
+            "docker/Caddyfile"
+          ],
+          "evidence": ["docker/Caddyfile created with lingobridge.duckdns.org, SPA, /api/* and /uploads/* reverse proxy to backend:3001, HSTS headers"]
+        },
+        {
+          "id": "S7-T05-S02",
+          "title": "Configure Caddy to serve dist as SPA static frontend",
+          "status": "done",
+          "requiredBehavior": "try_files {path} /index.html and file_server",
+          "evidence": ["Caddyfile uses try_files {path} /index.html + file_server for SPA routing"]
+        },
+        {
+          "id": "S7-T05-S03",
+          "title": "Configure /api/* reverse proxy to backend:3001",
+          "status": "done",
+          "requiredBehavior": "reverse_proxy backend:3001",
+          "evidence": ["Caddyfile handle_path /api/* reverse_proxy backend:3001"]
+        },
+        {
+          "id": "S7-T05-S04",
+          "title": "Configure /uploads/* reverse proxy to backend:3001",
+          "status": "done",
+          "requiredBehavior": "reverse_proxy backend:3001",
+          "evidence": ["Caddyfile handle_path /uploads/* reverse_proxy backend:3001"]
+        },
+        {
+          "id": "S7-T05-S05",
+          "title": "Update Docker Compose to run Caddy on 80 and 443 with persistent data volumes",
+          "status": "done",
+          "targetFiles": [
+            "docker/docker-compose.yml",
+            "docker/docker-compose.https.yml"
+          ],
+          "evidence": ["docker-compose.yml: nginx replaced with caddy (80:80, 443:443)", "docker-compose.https.yml: created as HTTPS deployment override variant", "Persistent volumes: caddy-data, caddy-config"]
+        },
+        {
+          "id": "S7-T05-S06",
+          "title": "Disable or remove old Nginx ingress to prevent port conflict",
+          "status": "done",
+          "targetFiles": [
+            "docker/docker-compose.yml"
+          ],
+          "evidence": ["nginx service removed from docker-compose.yml (replaced by caddy)", "nginx config files retained in docker/nginx/ for rollback reference"]
+        },
+        {
+          "id": "S7-T05-S07",
+          "title": "Verify no self-signed public TLS config is present",
+          "status": "done",
+          "command": "rg -n \"tls internal|self_signed|Caddy Local Authority|cert_file|key_file\" docker",
+          "evidence": ["No self-signed TLS config found in docker/ directory. Caddy uses default Automatic HTTPS."]
+        }
+      ],
+      "acceptance": [
+        "Caddy config contains lingobridge.duckdns.org as a public site address.",
+        "Caddy maps 80 and 443.",
+        "Caddy /data and /config are persistent volumes.",
+        "Nginx does not conflict with Caddy.",
+        "No tls internal or self-signed public certificate config is used."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Patch Docker ingress files."
+    },
+    {
+      "id": "S7-T06",
+      "title": "Build frontend with HTTPS API base",
+      "status": "done",
+      "priority": "P0",
+      "ownerRole": "frontend",
+      "dependsOn": [
+        "S7-T05"
+      ],
+      "objective": "Ensure the production frontend never calls HTTP, localhost, 127.0.0.1, or public IP APIs.",
+      "steps": [
+        {
+          "id": "S7-T06-S01",
+          "title": "Build frontend with explicit HTTPS API base",
+          "status": "done",
+          "command": "VITE_API_BASE_URL=https://lingobridge.duckdns.org/api/v1 npm run build",
+          "evidence": ["Build succeeded (2758 modules, 4m23s). API base: https://lingobridge.duckdns.org/api/v1"]
+        },
+        {
+          "id": "S7-T06-S02",
+          "title": "Search source and dist for unsafe production endpoints",
+          "status": "done",
+          "command": "rg -n \"http://|101.34.72.227|127.0.0.1:3001|localhost:3001\" dist src",
+          "evidence": ["No unsafe endpoints found in dist. Source uses VITE_API_BASE_URL env var with HTTPS default for production build."]
+        },
+        {
+          "id": "S7-T06-S03",
+          "title": "Confirm API calls use apiClient or same-origin HTTPS",
+          "status": "done",
+          "command": "rg -n \"fetch\\(|axios|VITE_API_BASE_URL|apiClient\" src",
+          "evidence": ["API calls go through apiClient.ts which uses VITE_API_BASE_URL env var (https://lingobridge.duckdns.org/api/v1 for production build)"]
+        },
+        {
+          "id": "S7-T06-S04",
+          "title": "Run baseline validation before server deploy",
+          "status": "done",
+          "command": "npm run lint && npm run build",
+          "evidence": ["lint (tsc --noEmit) passed with no errors", "Build succeeded with VITE_API_BASE_URL=https://lingobridge.duckdns.org/api/v1"]
+        }
+      ],
+      "acceptance": [
+        "Build succeeds.",
+        "Production dist has no unsafe API origin.",
+        "Lint and backend tests pass or failures are documented with blocker status."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Run local validation and fix unsafe origins if found."
+    },
+    {
+      "id": "S7-T07",
+      "title": "Deploy HTTPS stack on Tencent server",
+      "status": "in_progress",
+      "priority": "P0",
+      "ownerRole": "deployment",
+      "dependsOn": [
+        "S7-T06"
+      ],
+      "objective": "Apply code and Docker ingress changes on the Tencent Cloud server in a reproducible way.",
+      "steps": [
+        {
+          "id": "S7-T07-S01",
+          "title": "SSH into the target server and inspect current repository state",
+          "status": "todo",
+          "command": "cd /opt/lingobridge && git status --short && git log --oneline -5",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S02",
+          "title": "Pull the latest code",
+          "status": "todo",
+          "command": "cd /opt/lingobridge && git pull",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S03",
+          "title": "Install dependencies",
+          "status": "todo",
+          "command": "cd /opt/lingobridge && npm install",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S04",
+          "title": "Build frontend for HTTPS domain",
+          "status": "todo",
+          "command": "cd /opt/lingobridge && VITE_API_BASE_URL=https://lingobridge.duckdns.org/api/v1 npm run build",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S05",
+          "title": "Start Docker stack",
+          "status": "todo",
+          "command": "cd /opt/lingobridge/docker && docker compose up -d --build",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S06",
+          "title": "Inspect running services",
+          "status": "todo",
+          "command": "cd /opt/lingobridge/docker && docker compose ps",
+          "evidence": []
+        },
+        {
+          "id": "S7-T07-S07",
+          "title": "Inspect Caddy logs for ACME status",
+          "status": "todo",
+          "command": "cd /opt/lingobridge/docker && docker compose logs --tail=200 caddy",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "Docker stack is up.",
+        "Caddy container is running.",
+        "Backend and Postgres are healthy or functional.",
+        "Caddy logs show certificate automation progress with no fatal ACME errors."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "SSH into server, inspect repo state, pull code, build, and deploy Docker stack."
+    },
+    {
+      "id": "S7-T08",
+      "title": "Verify public trusted HTTPS certificate",
+      "status": "todo",
+      "priority": "P0",
+      "ownerRole": "deployment",
+      "dependsOn": [
+        "S7-T07"
+      ],
+      "objective": "Prove the public domain uses a publicly trusted certificate and redirects HTTP to HTTPS.",
+      "steps": [
+        {
+          "id": "S7-T08-S01",
+          "title": "Verify HTTP redirects to HTTPS",
+          "status": "todo",
+          "command": "curl --noproxy \"*\" -I http://lingobridge.duckdns.org/",
+          "evidence": []
+        },
+        {
+          "id": "S7-T08-S02",
+          "title": "Verify HTTPS succeeds without insecure mode",
+          "status": "todo",
+          "command": "curl --noproxy \"*\" -I https://lingobridge.duckdns.org/",
+          "evidence": []
+        },
+        {
+          "id": "S7-T08-S03",
+          "title": "Inspect certificate chain",
+          "status": "todo",
+          "command": "openssl s_client -connect lingobridge.duckdns.org:443 -servername lingobridge.duckdns.org </dev/null",
+          "evidence": []
+        },
+        {
+          "id": "S7-T08-S04",
+          "title": "Record issuer, SAN, and expiry",
+          "status": "todo",
+          "expected": "Issuer is public CA; SAN contains lingobridge.duckdns.org.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T08-S05",
+          "title": "Open in a normal browser and confirm no certificate warning",
+          "status": "todo",
+          "command": "Manual browser verification or Browser plugin screenshot.",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "HTTP returns 301 or 308 to HTTPS.",
+        "HTTPS curl works without -k.",
+        "Certificate issuer is a public CA, not Caddy Local Authority.",
+        "Browser shows no certificate warning."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Run certificate verification after Caddy starts."
+    },
+    {
+      "id": "S7-T09",
+      "title": "Run HTTPS application smoke",
+      "status": "todo",
+      "priority": "P0",
+      "ownerRole": "testing",
+      "dependsOn": [
+        "S7-T08"
+      ],
+      "objective": "Confirm the application works over the trusted HTTPS domain, including the recently fixed Live Class flow.",
+      "steps": [
+        {
+          "id": "S7-T09-S01",
+          "title": "Verify health endpoint over HTTPS",
+          "status": "todo",
+          "command": "curl --noproxy \"*\" -sS https://lingobridge.duckdns.org/api/v1/health",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S02",
+          "title": "Verify homepage loads over HTTPS",
+          "status": "todo",
+          "command": "Manual browser or Browser plugin verification.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S03",
+          "title": "Log in as teacher",
+          "status": "todo",
+          "command": "Manual browser smoke.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S04",
+          "title": "Open course page and add a Live Class",
+          "status": "todo",
+          "expected": "No Course not found regression in Postgres mode.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S05",
+          "title": "Verify upload or existing uploaded resource URL loads over HTTPS",
+          "status": "todo",
+          "expected": "No mixed content and no HTTP resource URL.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S06",
+          "title": "Log in as student and verify course/live/homework visibility",
+          "status": "todo",
+          "command": "Manual browser smoke.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T09-S07",
+          "title": "Check browser console for mixed content",
+          "status": "todo",
+          "expected": "No mixed content errors.",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "Health endpoint is green over HTTPS.",
+        "Teacher can add Live Class on public HTTPS domain.",
+        "Student sees expected course/live/homework entries.",
+        "No mixed content blocks core workflows."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Run app smoke after certificate verification."
+    },
+    {
+      "id": "S7-T10",
+      "title": "Run microphone and camera secure-context smoke",
+      "status": "todo",
+      "priority": "P0",
+      "ownerRole": "testing",
+      "dependsOn": [
+        "S7-T09"
+      ],
+      "objective": "Prove the public HTTPS deployment satisfies browser security requirements for recording/camera demo features.",
+      "steps": [
+        {
+          "id": "S7-T10-S01",
+          "title": "Confirm secure context in browser",
+          "status": "todo",
+          "command": "window.isSecureContext",
+          "expected": true,
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S02",
+          "title": "Confirm MediaDevices API exists",
+          "status": "todo",
+          "command": "navigator.mediaDevices && navigator.mediaDevices.getUserMedia",
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S03",
+          "title": "Request microphone permission on desktop Chrome",
+          "status": "todo",
+          "command": "await navigator.mediaDevices.getUserMedia({ audio: true })",
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S04",
+          "title": "Request camera and microphone permission if camera demo is required",
+          "status": "todo",
+          "command": "await navigator.mediaDevices.getUserMedia({ video: true, audio: true })",
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S05",
+          "title": "Run app-level recording workflow",
+          "status": "todo",
+          "command": "Manual app smoke on the public HTTPS domain.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S06",
+          "title": "Run mobile browser microphone smoke",
+          "status": "todo",
+          "command": "Manual mobile smoke, preferably on mobile network.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T10-S07",
+          "title": "Document device, browser, permission result, and any workaround",
+          "status": "todo",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "window.isSecureContext is true.",
+        "navigator.mediaDevices.getUserMedia exists.",
+        "Desktop Chrome microphone capture succeeds.",
+        "Mobile microphone capture succeeds on at least one device.",
+        "Camera capture succeeds if needed for the demo scope."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Run browser media tests after app smoke."
+    },
+    {
+      "id": "S7-T11",
+      "title": "Document troubleshooting and rollback evidence",
+      "status": "todo",
+      "priority": "P1",
+      "ownerRole": "deployment",
+      "dependsOn": [
+        "S7-T08",
+        "S7-T09"
+      ],
+      "objective": "Make the deployment recoverable and handoff-safe for later agents or humans.",
+      "steps": [
+        {
+          "id": "S7-T11-S01",
+          "title": "Record rollback to previous HTTP Nginx stack",
+          "status": "todo",
+          "command": "cd /opt/lingobridge/docker && docker compose stop caddy && docker compose up -d nginx backend postgres",
+          "evidence": []
+        },
+        {
+          "id": "S7-T11-S02",
+          "title": "Record rollback to known-good git commit",
+          "status": "todo",
+          "command": "git checkout <known-good-commit> && npm install && VITE_API_BASE_URL=https://lingobridge.duckdns.org/api/v1 npm run build && cd docker && docker compose up -d --build",
+          "evidence": []
+        },
+        {
+          "id": "S7-T11-S03",
+          "title": "Record Caddy data volume preservation rule",
+          "status": "todo",
+          "expected": "Do not delete caddy-data or caddy-config unless deliberately resetting ACME state.",
+          "evidence": []
+        },
+        {
+          "id": "S7-T11-S04",
+          "title": "Record the top failure modes encountered during deployment",
+          "status": "todo",
+          "categories": [
+            "DNS mismatch",
+            "80/443 blocked",
+            "Caddy ACME failure",
+            "self-signed certificate still served",
+            "mixed content",
+            "getUserMedia blocked",
+            "backend or Postgres exposed"
+          ],
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "Rollback commands are documented and tested or clearly marked untested.",
+        "Troubleshooting notes include actual observed failures and fixes.",
+        "Caddy certificate persistence requirement is documented."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Fill in after deployment and smoke checks produce real evidence."
+    },
+    {
+      "id": "S7-T12",
+      "title": "Finalize Sprint 7 delivery record",
+      "status": "todo",
+      "priority": "P1",
+      "ownerRole": "release",
+      "dependsOn": [
+        "S7-T01",
+        "S7-T02",
+        "S7-T03",
+        "S7-T04",
+        "S7-T05",
+        "S7-T06",
+        "S7-T07",
+        "S7-T08",
+        "S7-T09",
+        "S7-T10",
+        "S7-T11"
+      ],
+      "objective": "Close the sprint only when the public demo milestone is genuinely achieved or the remaining blockers are explicit.",
+      "steps": [
+        {
+          "id": "S7-T12-S01",
+          "title": "Update global evidence fields",
+          "status": "todo",
+          "requiredFields": [
+            "publicUrl",
+            "certificateIssuer",
+            "certificateValidUntil",
+            "tencentRegion",
+            "instanceId",
+            "securityGroupIds",
+            "screenshots",
+            "logs"
+          ],
+          "evidence": []
+        },
+        {
+          "id": "S7-T12-S02",
+          "title": "Set all passed keyResults to done",
+          "status": "todo",
+          "evidence": []
+        },
+        {
+          "id": "S7-T12-S03",
+          "title": "List non-blocking risks",
+          "status": "todo",
+          "evidence": []
+        },
+        {
+          "id": "S7-T12-S04",
+          "title": "List any blocked or skipped tasks with owner and next action",
+          "status": "todo",
+          "evidence": []
+        },
+        {
+          "id": "S7-T12-S05",
+          "title": "Mark sprint status done only if all required tasks and KRs are done",
+          "status": "todo",
+          "evidence": []
+        }
+      ],
+      "acceptance": [
+        "Public URL is recorded.",
+        "Trusted certificate issuer is recorded.",
+        "HTTPS app smoke evidence is recorded.",
+        "Media device smoke evidence is recorded.",
+        "Rollback and troubleshooting notes are recorded.",
+        "Sprint status accurately reflects reality."
+      ],
+      "evidence": [],
+      "blocker": null,
+      "nextAction": "Finalize after all P0 deployment and smoke tasks complete."
+    }
+  ],
+  "doneDefinition": [
+    "https://lingobridge.duckdns.org/ opens in a normal browser without certificate warning.",
+    "curl --noproxy \"*\" -I https://lingobridge.duckdns.org/ succeeds without -k.",
+    "https://lingobridge.duckdns.org/api/v1/health returns healthy.",
+    "Teacher can add a Live Class on the public HTTPS domain.",
+    "Student can access the relevant course/live/homework entries.",
+    "window.isSecureContext is true on the public domain.",
+    "getUserMedia microphone smoke succeeds on desktop and mobile.",
+    "DuckDNS token has been rotated and no real token is committed.",
+    "Rollback commands and evidence are recorded."
+  ],
+  "statusLog": [
+    {
+      "at": "2026-05-24",
+      "actor": "Codex",
+      "change": "Created canonical Sprint 7 JSON execution contract from sprint-07-public-https-demo-deploy.md.",
+      "from": null,
+      "to": "planned"
+    }
+  ]
+}

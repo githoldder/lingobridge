@@ -1,0 +1,201 @@
+{
+  "sprint": "07",
+  "version": "0.1",
+  "status": "Ready / Pending Execution",
+  "lastUpdated": "2026-05-26 10:05",
+  "object": "完成 01-FA 可行性研究报告全部章节的学术出版级重构",
+  "key_results": [
+    "KR-1: chap02 经济可行性通过 7 维度对抗审核",
+    "KR-2: chap03 操作可行性通过 7 维度对抗审核",
+    "KR-3: chap04 结论章通过 7 维度对抗审核",
+    "KR-4: 01-FA.pdf 4-pass 编译零 warning"
+  ],
+  "tasks": [
+    {
+      "id": "S7-T01",
+      "topic": "经济可行性 — 云基础设施成本段落重构",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap02.tex",
+      "target_chapter": "chapter{经济可行性}",
+      "target_section": "section{云基础设施及运行成本}",
+      "target_lines": "34-40",
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S7-T01-STEP01",
+          "action": "research",
+          "skill_ref": "02_research_and_sourcing",
+          "description": "检索 Vercel 免费层真实限额(带宽 100GB/月、构建 6000 分钟/月)、腾讯云 Lighthouse 实例 lhins-jn9scrkw 的真实年费(约 ¥408/年)、PostgreSQL 容器化冷启动测算",
+          "input_refs": [
+            "docs/01-reference/azure-speech-tts-provider.md",
+            "docs/01-reference/spike-plan.md"
+          ],
+          "output": "调研摘要存入 scratch 或直接用于下一步"
+        },
+        {
+          "step_id": "S7-T01-STEP02",
+          "action": "rewrite_latex",
+          "description": "基于调研数据重构 section{云基础设施及运行成本} 段落：植入 Vercel 真实限额数据、CVM 年费真实数字、Postgres 连接池配置指标，替换当前泛泛的 itemize 列表为金字塔学术段落",
+          "output_format": "latex_paragraph",
+          "cite_required": ["Ref-AzureTTS", "Ref-SpikePlan"]
+        },
+        {
+          "step_id": "S7-T01-STEP03",
+          "action": "audit",
+          "auditor": "latex-auditor",
+          "description": "提交重构后的段落给审核 Agent 执行 7 维度扫描"
+        }
+      ]
+    },
+    {
+      "id": "S7-T02",
+      "topic": "经济可行性 — TTS 缓存费用优化段落重构",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap02.tex",
+      "target_chapter": "chapter{经济可行性}",
+      "target_section": "section{ASR/TTS 费用优化与双层缓存机制}",
+      "target_lines": "42-96",
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S7-T02-STEP01",
+          "action": "research",
+          "skill_ref": "02_research_and_sourcing",
+          "description": "交叉验证 Azure F0 50万字符/月限额、CJK 双倍计费规则、85%缓存命中率测算来源、342→34.2美元节约率计算过程",
+          "input_refs": [
+            "docs/01-reference/azure-speech-tts-provider.md",
+            "docs/01-reference/speech-provider-audit.md"
+          ]
+        },
+        {
+          "step_id": "S7-T02-STEP02",
+          "action": "rewrite_latex",
+          "description": "重构缓存机制描述段落：确保 L1/L2 缓存的技术实现细节有代码级事实支撑(如 Buffer Map 容量策略、LRU 淘汰规则)，补充缺失的并发限制数据",
+          "output_format": "latex_paragraph",
+          "cite_required": ["Ref-AzureTTS", "Ref-SpeechAudit"]
+        },
+        {
+          "step_id": "S7-T02-STEP03",
+          "action": "verify_tikz",
+          "description": "验证现有 TikZ 费用对比图的数学公式是否与正文数据一致(无缓存线性斜率 vs 缓存对数收敛曲线的参数)",
+          "output_format": "pass_or_fix"
+        },
+        {
+          "step_id": "S7-T02-STEP04",
+          "action": "audit",
+          "auditor": "latex-auditor",
+          "description": "提交重构后的段落+图表给审核 Agent"
+        }
+      ]
+    },
+    {
+      "id": "S7-T03",
+      "topic": "操作可行性 — 多端响应式与国际化段落重构",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap03.tex",
+      "target_chapter": "chapter{操作可行性}",
+      "target_section": "section{多端响应式与国际化支持}",
+      "target_lines": "100-105",
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S7-T03-STEP01",
+          "action": "research",
+          "skill_ref": "02_research_and_sourcing",
+          "description": "从前端源码提取真实的断点配置(如 @media 断点值)、LanguageContext 的四语资源键数量、i18n 覆盖率数据",
+          "input_refs": [
+            "src/App.tsx",
+            "src/contexts/LanguageContext.tsx"
+          ]
+        },
+        {
+          "step_id": "S7-T03-STEP02",
+          "action": "rewrite_latex",
+          "description": "将当前 itemize 列表重构为学术段落：植入具体断点数据、四语资源覆盖率、首屏加载实测时延(Lighthouse Performance Score)",
+          "output_format": "latex_paragraph",
+          "cite_required": []
+        },
+        {
+          "step_id": "S7-T03-STEP03",
+          "action": "audit",
+          "auditor": "latex-auditor",
+          "description": "提交重构后的段落给审核 Agent"
+        }
+      ]
+    },
+    {
+      "id": "S7-T04",
+      "topic": "操作可行性 — 双角色交互门槛段落重构",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap03.tex",
+      "target_chapter": "chapter{操作可行性}",
+      "target_section": "section{双角色交互门槛分析}",
+      "target_lines": "107-111",
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S7-T04-STEP01",
+          "action": "research",
+          "skill_ref": "02_research_and_sourcing",
+          "description": "从后端源码提取 Excel 解析的 Upsert Whitelist 机制实现细节(唯一索引字段名、去重算法)、3-slot 录音覆盖算法的代码级事实",
+          "input_refs": [
+            "backend/src/app.ts",
+            "src/views/StudentClassroomView.tsx"
+          ]
+        },
+        {
+          "step_id": "S7-T04-STEP02",
+          "action": "rewrite_latex",
+          "description": "重构为金字塔学术段落：教师端零运维论证需绑定 Excel 解析的具体错误容忍率数据，学生端即入即学论证需绑定登录→进课堂的平均操作步骤数",
+          "output_format": "latex_paragraph",
+          "cite_required": []
+        },
+        {
+          "step_id": "S7-T04-STEP03",
+          "action": "audit",
+          "auditor": "latex-auditor",
+          "description": "提交重构后的段落给审核 Agent"
+        }
+      ]
+    },
+    {
+      "id": "S7-T05",
+      "topic": "结论章重构",
+      "target_file": "docs/00-project-docs/01-FA/templates/data/chap04.tex",
+      "target_chapter": "chapter{结论}",
+      "target_lines": "113-121",
+      "audit_required": true,
+      "steps": [
+        {
+          "step_id": "S7-T05-STEP01",
+          "action": "rewrite_latex",
+          "description": "重构结论章：去除'综上评估'等 AI 腔开头词，改为直接以三维度可行性判定开篇，每个维度用一句话总结核心论据(附 cite)，末句给出明确的可行性判定结论",
+          "output_format": "latex_paragraph",
+          "cite_required": ["gb8567", "Ref-AzureTTS", "Ref-TeamsTencent"]
+        },
+        {
+          "step_id": "S7-T05-STEP02",
+          "action": "audit",
+          "auditor": "latex-auditor",
+          "description": "提交重构后的结论给审核 Agent"
+        }
+      ]
+    },
+    {
+      "id": "S7-T06",
+      "topic": "全文编译回归验证",
+      "target_file": "docs/00-project-docs/01-FA/templates/01-FA.tex",
+      "audit_required": false,
+      "steps": [
+        {
+          "step_id": "S7-T06-STEP01",
+          "action": "compile",
+          "description": "运行 bash build_manual.sh 进行 4-pass XeLaTeX 编译",
+          "acceptance": "零 undefined citation warning，PDF 正常生成"
+        },
+        {
+          "step_id": "S7-T06-STEP02",
+          "action": "commit",
+          "description": "git add + git commit -m 'docs/01-FA: complete chap02-04 academic rewrite (S7)'",
+          "push": false
+        }
+      ]
+    }
+  ]
+}

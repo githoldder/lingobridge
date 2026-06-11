@@ -1,0 +1,70 @@
+\chapter{附录}
+
+\section{需求追踪矩阵}
+为保障 LingoBridge 从业务需求到软件开发、集成测试以及演示交付的全生命周期可追溯性，项目组建立了需求追踪矩阵，用于追踪核心功能需求（FR）与非功能需求（NFR）在后续概要设计（HLD）与测试用例（TC）中的对应关系。需求追踪关系如表 4.1 所示。
+
+\begin{longtable}{l p{4cm} l l l}
+\caption{LingoBridge 需求追踪矩阵} \label{tab:traceability} \\
+\toprule
+\textbf{需求 ID} & \textbf{需求名称} & \textbf{优先级} & \textbf{设计模块 (HLD)} & \textbf{测试用例 ID (TC)} \\
+\midrule
+\endfirsthead
+\multicolumn{5}{r}{续表 4.1} \\
+\toprule
+\textbf{需求 ID} & \textbf{需求名称} & \textbf{优先级} & \textbf{设计模块 (HLD)} & \textbf{测试用例 ID (TC)} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+FR-001 & 身份认证模块 & P0 & HLD-MD-AUTH & TC-AUTH-001 \\
+FR-002 & 课程管理模块 & P0 & HLD-MD-COURSE & TC-CRS-001 \\
+FR-003 & 课件管理模块 & P0 & HLD-MD-MEDIA & TC-CWS-001 \\
+FR-004 & 作业管理模块 & P0 & HLD-MD-EXCEL & TC-HW-001 \\
+FR-005 & 中文语音朗读模块 & P0 & HLD-MD-TTS & TC-TTS-001 \\
+FR-006 & 录音采集模块 & P0 & HLD-MD-RECORD & TC-REC-001 \\
+FR-007 & 直播课堂模块 & P1 & HLD-MD-LIVE & TC-LIVE-001 \\
+FR-008 & 管理后台模块 & P2 & HLD-MD-ADMIN & TC-ADM-001 \\
+FR-009 & 状态反馈模块 & P0 & HLD-MD-UI & TC-UI-001 \\
+NFR-001 & 页面加载时延性能 & P0 & HLD-MD-PERF & TC-NFR-001 \\
+NFR-002 & 录音音频体积控制 & P0 & HLD-MD-PERF & TC-NFR-002 \\
+NFR-003 & 账户与会话安全鉴权 & P0 & HLD-MD-SEC & TC-NFR-003 \\
+NFR-004 & 物理硬件设备停用 & P0 & HLD-MD-SEC & TC-NFR-004 \\
+NFR-005 & 网络重连自适应恢复 & P0 & HLD-MD-RELI & TC-NFR-005 \\
+NFR-006 & 三语热切换一致性 & P0 & HLD-MD-I18N & TC-NFR-006 \\
+NFR-007 & 数据合规与删除保护 & P0 & HLD-MD-COMP & TC-NFR-007 \\
+\end{longtable}
+
+\section{未决问题清单}
+由于项目目前处于快速迭代试点阶段，对于部分中远期的生产级需求，项目组采取了“审慎记录、有条件搁置、后续解决”的对策，列出的关键未决问题及后续对策如表 4.2 所示。
+
+\begin{table}[H]
+\centering
+\caption{系统关键未决问题清单}
+\begin{tabularx}{\textwidth}{l p{5cm} X}
+\toprule
+\textbf{问题编号} & \textbf{问题描述与技术难点} & \textbf{中远期对策与计划} \\
+\midrule
+ISS-01 & ASR 口语声调评测的真实端侧 WER/CER 边界测算。 & 暂不在 MVP 引入，后续阶段评估接入第三方成熟 API 接口。 \\
+ISS-02 & 跨境大带宽下在线视频录屏的存储容量与性能开销。 & 测试阶段通过限制课件页数以降低存储开销，中远期上线云端清理策略。 \\
+ISS-03 & 国际信用卡跨境收单的合规与多机构结算解耦。 & MVP 阶段为 0 元试用，V3.0 商业化阶段独立引入国际支付收单商。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{版本变更记录}
+本规格说明书的历史版本记录及本次扩写的修订单如表 4.3 所示。
+
+\begin{table}[H]
+\centering
+\caption{SRS 规格说明书版本变更记录}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{版本号} & \textbf{修订日期} & \textbf{修订人} & \textbf{变更内容概述与状态说明} \\
+\midrule
+v0.1 & 2026-05-18 & 曹磊 & 创建初始需求分析大纲骨架，文档以 TODO 结构占位。 \\
+v1.0 & 2026-05-27 & 曹磊 & \textbf{当前基线}：按照 GB/T 9385 规范完成全文学术级深度扩写，整改 Markdown 表述并完成 XeLaTeX 编译。 \\
+\bottomrule
+\end{tabularx}
+\end{table}

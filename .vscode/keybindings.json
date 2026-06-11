@@ -1,0 +1,7 @@
+[
+  {
+    "key": "cmd+s a",
+    "command": "workbench.action.tasks.runTask",
+    "args": "docs: build all 01-07 documents"
+  }
+]

@@ -79,10 +79,11 @@ interface ApiEnvelope<T> {
 
 async function request<T>(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
@@ -170,15 +171,13 @@ export const coursesApi = {
   pages: (courseId: string) => request<CoursePage[]>(`/courses/${courseId}/pages`),
   exercises: (courseId: string, page?: number) => request<Exercise[]>(`/exercises?courseId=${courseId}${page ? `&page=${page}` : ''}`),
   async uploadCourseware(courseId: string, file: File, lessonNodeId?: string) {
+    const formData = new FormData();
+    formData.append('courseId', courseId);
+    if (lessonNodeId) formData.append('lessonNodeId', lessonNodeId);
+    formData.append('file', file, file.name);
     return request<{ file: unknown; pages: CoursePage[]; exercises: Exercise[]; tasks: LearningTask[]; vocabulary: VocabularyItem[]; warnings?: string[] }>('/coursewares', {
       method: 'POST',
-      body: JSON.stringify({
-        courseId,
-        lessonNodeId,
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        base64: await fileToBase64(file)
-      })
+      body: formData
     });
   }
 };
@@ -522,6 +521,31 @@ export interface LiveSessionData {
   endedAt: string;
 }
 
+export interface LivePresenceData {
+  userId: string;
+  displayName: string;
+  username: string;
+  role: Role;
+  joinedAt: string;
+  lastSeenAt: string;
+  handRaised: boolean;
+  mediaGranted: boolean;
+  cameraOn: boolean;
+  micOn: boolean;
+}
+
+export interface LiveSignalData {
+  seq: number;
+  id: string;
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  targetUserId: string | null;
+  type: 'offer' | 'answer' | 'candidate' | 'page-sync' | string;
+  payload: any;
+  createdAt: string;
+}
+
 export interface ClassroomCommentData {
   id: string;
   liveSessionId: string;
@@ -554,7 +578,30 @@ export const liveSessionsApi = {
   join: (sessionId: string) =>
     request<{ allowed: boolean }>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
   participants: (sessionId: string) =>
-    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string }>>(`/live-sessions/${sessionId}/participants`),
+    request<Array<{ id: string; studentId: string; displayName: string; username: string; joinedAt: string; lastSeenAt?: string; handRaised?: boolean; mediaGranted?: boolean; cameraOn?: boolean; micOn?: boolean }>>(`/live-sessions/${sessionId}/participants`),
+  presence: {
+    heartbeat: (sessionId: string, updates: Partial<Pick<LivePresenceData, 'handRaised' | 'cameraOn' | 'micOn'>> = {}) =>
+      request<LivePresenceData>(`/live-sessions/${sessionId}/presence`, {
+        method: 'POST',
+        body: JSON.stringify(updates)
+      }),
+    list: (sessionId: string) =>
+      request<LivePresenceData[]>(`/live-sessions/${sessionId}/presence`),
+    grantMedia: (sessionId: string, studentId: string, mediaGranted = true) =>
+      request<LivePresenceData>(`/live-sessions/${sessionId}/permissions`, {
+        method: 'POST',
+        body: JSON.stringify({ studentId, mediaGranted })
+      })
+  },
+  signals: {
+    send: (sessionId: string, data: { targetUserId?: string; type: string; payload: any }) =>
+      request<LiveSignalData>(`/live-sessions/${sessionId}/signals`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    list: (sessionId: string, since = 0) =>
+      request<LiveSignalData[]>(`/live-sessions/${sessionId}/signals?since=${since}`)
+  },
   patch: (id: string, updates: Partial<Pick<LiveSessionData, 'sourceMode' | 'currentPage' | 'recordingStatus' | 'status'>>) =>
     request<LiveSessionData>(`/live-sessions/${id}`, {
       method: 'PATCH',
@@ -739,4 +786,3 @@ export const adminApi = {
 };
 
 export { request as apiFetch };
-

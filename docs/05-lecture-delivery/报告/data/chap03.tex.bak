@@ -1,0 +1,126 @@
+% !TeX root = ../thuthesis-example.tex
+\chapter{系统具体实现}
+
+本章旨在阐述本系统从数学模型转化为工程代码的技术细节。系统采用了典型的端云协同（Edge-Cloud Collaboration）模式：移动端负责高频的物理数据采集与实时活体防御，云端负责计算密集型的深度特征提取与海量库比对。通过这种架构设计，系统既保证了物理维度的安全性，又实现了毫秒级的识别响应。
+
+\section{开发环境配置与技术栈选型}
+
+在系统构建初期，本研究针对性能与兼容性进行了严谨的工具链选型：
+\begin{itemize}
+    \item \textbf{移动端（Client）}：采用 Apple 推出的声明式 UI 框架 \textbf{SwiftUI}。底层图形与感应能力依托于 \textbf{AVFoundation} 框架进行视频流管理，并调用 \textbf{ARKit/TrueDepth} 获取原生深度数据。
+    \item \textbf{追踪算法库}：集成 Google 开源的 \textbf{MediaPipe Tasks Vision}，利用其底层优化过的 TFLite 模型在端侧实现每秒 30 帧以上的关键点追踪。
+    \item \textbf{云端服务（Backend）}：服务端使用 \textbf{FastAPI} 构建异步非阻塞的 RESTful API。核心算法基于 \textbf{InsightFace} 框架，采用 \textbf{PyTorch} 作为计算后端。
+\end{itemize}
+
+\section{移动端多模态感知与同步机制实现}
+
+\subsection{硬件采集通道初始化}
+系统在 \texttt{DepthCameraManager} 类中封装了底层的硬件调用逻辑。相较于传统的单目相机，TrueDepth 硬件需要同时开启两个数据输出流。
+
+\begin{algorithm}
+\caption{多模态数据采集初始化逻辑}
+\begin{algorithmic}[1]
+\Procedure{InitCaptureSession}{}
+    \State $Device \gets$ 获取 \texttt{.builtInTrueDepthCamera} 实例
+    \State $Input \gets$ 将硬件设备绑定至会话输入
+    \State $VideoOutput \gets$ 设置像素格式为 \texttt{32BGRA}
+    \State $DepthOutput \gets$ 设置格式为 \texttt{DepthFloat32}，确保物理单位为米（m）
+    \State $Session.start()$ \Comment{启动软硬件同步采集流水线}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+为了确保算法在处理时，$RGB$ 帧与深度帧在时间维度上高度对齐，系统在内存中维护了一个临时的 \texttt{currentDepthData} 缓冲区。每当 \texttt{AVCaptureDepthDataOutput} 产生新数据时，系统会立即执行 \texttt{.applyingExifOrientation(.right)} 操作，以修正传感器原始坐标系与当前 UI 坐标系的一致性。
+
+
+
+\section{3D 活体检测算法的工程化落地}
+
+\subsection{空间采样与关键点对齐}
+如图\ref{fig:liveness_principle}所示，活体检测算法的有效性建立在“像素级精度”的坐标对齐之上。系统在执行 \texttt{validateWithStandardDeviation} 时，并非全局计算深度，而是采取了局部特征点采样策略。
+
+通过 MediaPipe 提供的 478 个归一化坐标点，系统选取了索引为 \texttt{[1, 133, 362, 10, 152, 234, 454]} 的七个解剖学关键点。这些点位覆盖了鼻尖（最高点）、眼窝（凹陷点）及额下（边缘点），能够最大程度反映面部的生理曲率。
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/figure3-1.pdf}
+    \caption{基于物理深度标准差($\sigma$)的活体检测原理对比}
+    \label{fig:liveness_principle}
+\end{figure}
+
+\subsection{深度特征解算与判别流水线}
+在深度特征解算与判别流水线的设计中，系统将获取到的采样点集合 Z 作为输入，通过多维统计分析与时间序列滤波相结合的方式实现高置信度的活体判定。在特征解算初期，系统通过计算采样点集合的深度均值 μ 与标准差 σ，对目标表面的物理起伏程度进行定量描述。由于真实人脸在解剖学上具备显著的起伏特征，如鼻尖相对于眼窝具有明显的纵深跨度，这使得真人面部的深度标准差通常稳定在特定的非零区间内。相比之下，传统的 2D 照片或电子屏幕虽然在色彩空间上具有极高的欺诈性，但在深度矩阵中则表现为高度的平坦性或线性分布，其计算得出的 σ 值将趋近于零。
+
+为了进一步排除通过弯曲照片或佩戴平面面具所制造的曲率伪装，流水线在标准差校验的基础上引入了解剖学纵深约束指标 Δz。该指标专门量化鼻尖采样点与内眼角采样点之间的物理高差，确保目标的几何拓扑符合人类生理常数。只有当标准差 σ 落在合理区间且纵深差 Δz 满足解剖学下限时，当前帧才会被标记为潜在的活体候选帧。这种双参数并行的判别机制，通过对空间曲率特征的深度挖掘，为系统构建了第一层坚实的物理安全防御屏障。
+
+在判定逻辑的落地过程中，为了解决移动端传感器热噪声以及用户轻微晃动导致的采样波动问题，系统引入了基于时间窗的累加器（Accumulator）滤波机制。算法并非通过单帧数据直接给出判定结果，而是要求目标在连续的时间序列中表现出稳定的生理曲率。
+
+当累加器分值达到预设的目标阈值后，系统将正式锁定活体判定状态，并立即触发后续的识别流转逻辑。此时，前端感知层会从视频流缓冲区内提取当前清晰度最优的 RGB 帧，并连同活体校验成功的令牌一并上传至云端服务器。这种“物理安全先行，生物特征后验”的流水线逻辑，不仅在算法逻辑上实现了严密的闭环，还有效避免了因处理照片或无效目标而产生的云端计算开销。通过这种深度的解算与判别过程，系统在保证识别精度的同时，也实现了在复杂动态环境下对非接触式静默活体攻击的高效防御。
+
+\begin{algorithm}
+\caption{基于物理深度标准差的活体校验算法}
+\label{ag:3.2}
+\begin{algorithmic}[1]
+\Procedure{LivenessValidation}{$Landmarks, DepthBuffer$}
+    \State $Points \gets$ 提取七个锚点在 $DepthBuffer$ 中的物理数值
+    \If{$Z$ 轴数值出现异常 (NaN) 或 采样点数 < 5} 
+        \State \Return \textbf{Pending} \Comment{光照或遮挡导致的无效采样}
+    \EndIf
+    
+    \State $\mu = \frac{1}{n}\sum z_i, \quad \sigma = \sqrt{\frac{1}{n}\sum(z_i-\mu)^2}$
+    \State $\Delta z = |z_{nose} - z_{eye}|$ \Comment{核心特征值提取}
+    
+    \If{$0.0075 < \sigma < 0.045$ \textbf{and} $0.015 < \Delta z < 0.06$}
+        \State $Accumulator \gets Accumulator + 1$
+        \State \textbf{Status} $\gets$ "正在分析深度特征 (\(Accumulator/8\))"
+    \Else
+        \State $Accumulator \gets \max(0, Accumulator - 1)$
+    \EndIf
+    
+    \If{$Accumulator \ge 8$} \State \Call{TriggerIdentify}{} \Comment{连续 8 帧满足物理起伏特征，触发比对}
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+
+
+\section{云端微调识别模型与全向适配实现}
+
+\subsection{特征嵌入与相似度比对逻辑}
+云端后端接收到前端上传的 JPEG 图像后，首先将其解码为 Tensor 张量。由于采用了迁移学习，系统调用进行过微调的 \textit{buffalo\_l} 模型执行推理。
+
+为了适应移动端用户在不同持握角度（如横屏捕捉）下的使用习惯，后端实现了全向旋转扫描机制。如下伪代码所示，该机制通过对输入图像执行四个方向的旋转，补足了移动端采集时的姿态随机性。
+
+在最终的身份判定阶段，系统采用度量学习中的余弦相似度算法，快速评估待测向量与库中各身份的匹配程度。本系统通过设定 τ=0.5 的严格全局判别阈值，在确保误识率（FAR）极低的前提下，实现了对目标身份的检索。
+
+\begin{algorithm}
+\caption{云端全向适配识别逻辑}
+\begin{algorithmic}[1]
+\Procedure{CloudFaceMatching}{$Image$}
+    \State $Candidates \gets []$
+    \For{$angle \in \{0^\circ, 90^\circ, 180^\circ, 270^\circ\}$}
+        \State $TempImg \gets \text{Rotate}(Image, angle)$
+        \State $Embedding \gets \text{Model.extract\_feature}(TempImg)$
+        \State $Result \gets \text{Gallery.search}(Embedding, \text{Threshold}=0.5)$
+        \State $Candidates.append(Result)$
+    \EndFor
+    \State \Return $Candidates.getMaxScoreResult()$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\section{动态 UI 渲染与坐标映射算法实现}
+
+\subsection{坐标系的镜像与缩放变换}
+在多人实时识别场景中，系统面临的核心挑战是如何将云端解算出的二维坐标精准且丝滑地还原到移动端瞬息万变的预览层上。由于后端返回的坐标 $(P_x, P_y)$ 是基于上传图像分辨率的像素索引，而移动端 UI 界面则受到设备屏幕尺寸、安全区域（Safe Area）以及缩放模式（Aspect Fill）的多重影响，因此必须建立一套严密的坐标投影算法。系统通过 SwiftUI 的 \texttt{GeometryReader} 动态捕获当前视图容器的物理尺寸 $W_{scr}$ 与 $H_{scr}$，并将后端返回的归一化坐标作为映射基准。通过这种比例还原机制，系统能够确保无论用户使用的是何种分辨率的设备，身份标签均能准确锁定在面部特征区域的相对位置。系统在渲染层应用了如下转换公式：
+
+\begin{equation}
+UI\_X = (1.0 - normX) \times View\_Width
+\end{equation}
+
+在 SwiftUI 代码中，通过 \texttt{GeometryReader} 捕获当前视口的尺寸，配合 \texttt{.position} 修饰符将解析出的名字标签（Name Tag）精准悬浮于目标头部。为了解决网络识别结果返回时的瞬时跳变感，系统在状态更新处注入了 \texttt{.spring()} 物理弹簧阻尼动画，实现了视觉上的平滑追踪。
+
+针对移动端前置摄像头天然的镜像（Mirrored）属性，映射逻辑在水平方向上执行了关键的补码转换。在正常的拍摄逻辑中，传感器捕捉到的 $x$ 轴方向与用户在预览画面中观察到的直觉方向相反，若直接采用归一化坐标 $normX$，会导致身份标签与人脸位置呈现“反向移动”的错误偏差。为此，系统应用了 $UI\_X = (1.0 - normX) \times W_{scr}$ 的镜像校正公式。该公式的几何意义在于将坐标系原点从左上角水平平移并翻转，从而抵消了前置摄像头的光学镜像效应。这种底层坐标系的几何重构，使得身份标签能够如同“物理贴纸”一般，严丝合缝地跟随预览画面中每一个移动的目标，解决了多人交错环境下标签错位的技术难题。
+
+由于云端识别结果受限于网络往返时延（RTT），其返回频率（约 $5 \sim 10$ 帧每秒）远低于移动端屏幕的刷新率（60 帧每秒），这往往会导致标签在视觉上产生明显的跳变和闪烁感。为了攻克这一交互痛点，本系统引入了基于物理引擎的动态插值技术。在渲染层，系统为每一个身份标签配置了 \texttt{.spring(response: 0.35, dampingFraction: 0.6)} 物理弹簧阻尼动画。当新的坐标数据被解析并触发 UI 状态更新时，标签并非突兀地瞬间跳转，而是遵循模拟物理质量和阻尼的轨迹平滑滑动至新坐标点。这种视觉补偿策略利用了人类视觉的暂留特性，有效地掩盖了由于网络波动造成的帧率不稳，配合垂直方向上 $-35$ 像素的悬浮偏移处理，为用户营造了极具科技感且丝滑顺畅的多人实时追踪体验。
+

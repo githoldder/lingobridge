@@ -1,224 +1,225 @@
-# LingoBridge PRD v4.6 Class-Live-Learning Cache
+# 00 Latest Product Decisions — LingoBridge v2.0 AI Learning Recommendation
 
-> 更新日期：2026-05-23  
-> 目标：在 Sprint 4 课件/PDF/批注修复基础上，收敛班级-课程-课时-live classroom 主模型，并把默认课件、学生同步、作业录音缓存、单词掌握遗忘、真实入会状态写成下一阶段可执行需求。  
-> 原则：简洁、可维护；只覆盖关键逻辑；重点写清模块交界点；每个任务必须能落到具体文件、接口、验证步骤。
+> 更新日期：2026-06-01
+> 覆盖范围：Sprint 09 v2.0 AI 模块新增产品决策
+> 定位：Sprint 09 执行期间的唯一产品决策快照，每次 Sprint 开始前更新
+> 与 `prds/current/02-product-boundary-and-business-rules.md` 配合使用
 
-## 0. 2026-05-23 最新产品决策
+---
 
-本次 PRD 更新与 `prd.json` v4.6 保持一致。优先级顺序为：先清理教师端测试数据和固化班级/课程/live 模型，再做默认课件、学生同步、作业录音缓存、单词遗忘曲线和课堂 annotation 体验。
+## 1. 产品定位与目标受众
 
-### 0.0 全局 i18n 语言优先级
+### 1.1 v2.0 模块定位
 
-系统全局文案、学习内容兜底和演示文案的语言优先级统一为：
+**课程大作业展示导向 AI 系统**，不是生产级机器学习闭环。
 
-1. 中文 `zh-CN`
-2. 哈萨克语 `kk-KZ`
-3. 俄语 `ru-RU`
-4. 英语 `en-US`
+目标：
 
-规则：
+- 让教师在课程大作业答辩/展示场景中，有可讲解的 AI 学习分析能力
+- 让学生在个人学习报告中看到个性化练习推荐，提升学习体验
+- 让 admin 在数据中台看到全班/全校的学习状态概览
 
-- 中文是系统默认第一顺位，任何缺失翻译必须先回落中文。
-- 面向哈萨克斯坦留学生的本地化第二顺位是哈萨克语，不应被俄语覆盖。
-- 俄语用于当前教学辅助、TTS 和演示字幕的重要补充。
-- 英语只作为最终 fallback 或开发兜底，不作为面向学生的默认语言。
-- 新增 i18n key、学习任务字段、翻译字段和演示脚本时，必须按 `zh-CN -> kk-KZ -> ru-RU -> en-US` 的顺序检查覆盖。
+不追求：
 
-### 0.1 教师端测试数据清理
+- 实时在线模型训练和部署
+- ASR 语音评分接入真实评分闭环
+- 多租户 SaaS 化数据隔离
+- 99.9% 可用性的生产 ML 服务
 
-教师端课程列表当前被大量测试课程污染，影响手动验收。下一阶段必须提供至少一种清理路径：
+### 1.2 受众与核心价值
 
-- 本地开发清理脚本：删除无用 `course`、`lesson_node`、`courseware_file`、`assignment_node`、`learning_task`、`learning_record`、上传文件元数据。
-- Admin 清理入口：可按测试前缀、创建时间、课程 owner、孤儿关系进行 dry-run 和确认删除。
-- 保留最小 demo seed：至少一位老师、一个班级、两到三名学生、一门课程、一个课时、一份 PDF、一份 Excel 作业。
+| 角色 | 核心价值 | AI 展示方式 |
+|------|----------|-------------|
+| 学生 | 看到个人学习画像和个性化练习建议 | riskLevel badge + 推荐练习卡片 + 排名 |
+| 教师 | 看到班级共性薄弱点和重点关注学生 | 班级洞察 summary + 高风险学生列表 + 班级平均分 |
+| Admin | 全局数据中台，模型运行状态 | 全体学生数、模型版本、最新运行时间、推荐总数 |
 
-验收：老师登录后课程列表不再被历史 E2E/手动测试数据刷屏。
+---
 
-### 0.2 班级是老师-学生绑定的核心容器
+## 2. 学生端产品决策
 
-当前系统不能只依赖“课程直接加学生”的临时关系。产品模型应调整为：
+### 2.1 个人学习画像卡
 
-```text
-teacher
-  -> class/cohort[]                 # 一个老师可带多个班
-      <-> student[]                 # 一个班级有多个学生，学生可加入多个班
-      -> course[]                   # 一个班级可有多门课
-          -> stable classroom       # 每门课有固定教室
-          -> lesson_node[]          # 每个课时就是一次 live
-          -> courseware_file[]      # 课程/课时课件
-          -> assignment_node[]      # 课时作业
-```
+位置：学生端 Dashboard 或 Profile 页
 
-关键规则：
+展示内容：
 
-- 老师与学生是主从关系，但实际管理通过班级/班级成员发生。
-- 老师可以创建多个班级，每个班级可以开多门课。
-- 老师把阿合买提加入班级或课程后，阿合买提学生端必须同步看到对应课程、课时提醒、schedule 和 live 入口。
-- 课程成员可由班级继承，也可以保留课程级覆盖，但学生端可见性必须有唯一可信来源。
+- **学习进度圆环**：completionRate，可视化为圆形进度条
+- **综合得分**：avgScore，显示为数字均分
+- **风险等级 badge**：riskLevel，显示 Low/Medium/High，带颜色
+- **学习画像标签**：clusterLabel，显示 steady_leader / needs_recording_practice / tone_weakness / low_activity / fast_improver
+- **薄弱知识点前 3**：weakKnowledgePoints，取前 3 个
 
-### 0.3 课程、课时与 live classroom
+数据来源：
 
-课程信息页必须支持编辑：
+- Python 管线输出 `output/student_profiles.json`
+- 前端通过 API 接口读取 JSON 文件内容（Mock 模式），或通过后端 `/api/v1/analytics/student-profile` 只读接口获取
 
-- 课程标题、描述、状态
-- 课程封面
-- 所属班级
-- 创建时间、更新时间
-- 课程时间或课时计划
+### 2.2 个性化推荐练习
 
-课程与 live 规则：
+位置：学生端 Dashboard 或推荐 Tab
 
-- 每门课有一个固定 classroom。
-- 老师创建上课时间，就是创建一个 `lesson_node`。
-- 每个 `lesson_node` 对应一次 live，可在上课时间进入。
-- 非上课时间，学生进入该课程 classroom 时应看到空教室/等待态，而不是错误或假数据。
-- `lesson_node.startsAt/endsAt` 是 schedule、通知和 live 入口的统一来源。
+展示内容：
 
-### 0.4 默认 PDF 课件机制
+- **推荐练习列表**：最多前 2 条，含 title、reason、priority、sourceSignals
+- **推荐理由**：recommendationReason，从 sourceSignals 聚合生成
 
-课程信息页上传课件后，必须支持选择默认课件：
+展示约束：
 
-- 默认课件优先是 PDF。
-- 默认课件可以设在课程级，也可以设在课时级；课时级覆盖课程级。
-- 进入 live classroom 时，默认打开当前课时设置的 PDF。
-- 若没有默认课件，教师端提示上传或选择默认课件，学生端显示等待老师准备课件。
+- 推荐仅基于当前 MVP 已有的学习任务、录音记录和完成状态
+- 不引入新的 ASR 评分数据作为推荐输入
+- 推荐理由使用可解释规则生成，不使用 LLM API
 
-建议字段：
+### 2.3 排行榜
 
-| 实体 | 字段 |
-|---|---|
-| `course` | `defaultCoursewareFileId` |
-| `lesson_node` | `defaultCoursewareFileId` |
-| `courseware_file` | `isDefault` |
+位置：学生端排行榜 Tab
 
-### 0.5 学生作业录音：题目级三槽位与三级缓存
+展示内容：
 
-学生自学时必须有明显节点变化，尤其是录音答题。
+- **个人排名百分位**：rankPercentile，显示为 Top X%
+- **班级排名**：按 completionRate + avgScore 综合排序
+- **进步趋势**：progressTrend（可选），展示近 7 天趋势
 
-每道录音题：
+展示约束：
 
-- 最多保留 3 个录音槽位。
-- 每次录音先进入本地缓存和应用状态。
-- 用户点击“重置”时删除当前题当前槽位缓存。
-- 用户点击确认/✅ 后，才进入 AI 评分和后端持久化。
-- 录音记录按“第几题第几次练习”标号。
-- 点击下一题后，只显示当前题目的录音、评分、缓存和完成状态，不显示全局录音。
+- 排行榜数据从 `output/student_profiles.json` 读取，不实时查询数据库
+- 排名仅用于展示，不做竞赛或竞争性激励设计
 
-作业末尾：
+---
 
-- 到最后一题后显示“完成作业并确认提交”。
-- 点击提交后才推送教师端。
-- 未提交前是学生端草稿，浏览器刷新或意外退出后应恢复。
+## 3. 教师端产品决策
 
-三级缓存策略：
+### 3.1 班级洞察 Summary
 
-| 层级 | 作用 |
-|---|---|
-| 浏览器缓存 | 快速恢复未提交录音槽位和当前题位置 |
-| 应用缓存 | 当前 session 内切题、重绘、评分状态不丢 |
-| 数据库缓存 | 刷新、换设备或意外退出后恢复草稿/已提交记录 |
+位置：教师端课程详情页或班级学生列表页
 
-建议新增实体：
+展示内容：
 
-| 实体 | 关键字段 |
-|---|---|
-| `homework_submission` | `studentId, courseId, lessonNodeId, assignmentNodeId, status, submittedAt` |
-| `homework_recording_attempt` | `studentId, lessonNodeId, taskId, slotIndex, audioUrl, localCacheKey, scoreStatus, scorePayload` |
+- **班级平均完成率**：所有学生的 completionRate 平均
+- **班级平均分**：所有学生的 avgScore 平均
+- **高风险学生数**：riskLevel = high 的学生数量
+- **共性薄弱知识点**：从所有学生 weakKnowledgePoints 聚合，取频率最高的前 3 个
 
-### 0.6 单词学习：三段掌握与遗忘曲线
+数据来源：
 
-单词不是一次性作业，而是长期巩固学习。
+- Python 管线输出 `output/class_insights.json`
+- 前端通过后端只读 API 获取，教师端不直接读 Python output 目录
 
-规则：
+### 3.2 学生总览列表
 
-- 每完成一次完整学习，只增加约 `1/3` 掌握度。
-- 完成三次后，该单词才算完全掌握。
-- 超过 1 周未复习，掌握度开始衰减。
-- 长期不复习时，最低回落到“第一次接触完成”后的 `1/3` 状态，而不是归零。
+位置：教师端学生管理页
 
-建议实体：
+展示内容：
 
-| 实体 | 字段 |
-|---|---|
-| `vocabulary_progress` | `studentId, lessonNodeId, taskId, masteryStep, reviewCount, lastReviewedAt, decayState` |
+- 每行学生显示 risk badge（Low / Medium / High）
+- 按 riskLevel 排序，高风险在前
+- 显示 completionRate、avgScore
 
-### 0.7 学生同步、课时通知与 schedule
+展示约束：
 
-老师在课程里执行以下操作时，相关学生端必须同步：
+- 学生数据从后端 `/api/v1/analytics/class-insights` 接口读取
+- 不做实时计算，所有数据来源于 Python 管线的离线输出 JSON
 
-- 上传课程封面
-- 添加学生
-- 上传课件
-- 选择默认课件
-- 上传作业
-- 创建/修改课时
-- 开始 live
+### 3.3 教师复盘视图
 
-学生端入口：
+位置：教师端班级复盘 Tab
 
-- Dashboard 显示最新课时/live 提醒。
-- Schedule 同步课程课时。
-- 课程详情页显示可进入的课时。
-- 当前 live 进行中时显示明确进入按钮。
+展示内容：
 
-### 0.8 真实入会状态
+- **学生学习画像对比**：多个学生的 riskLevel、completionRate 对比柱状图
+- **薄弱点分布**：weakKnowledgePoints 词云或柱状图
+- **录音覆盖率**：recordingCoverageRate 班级平均值
 
-教师在 live classroom 右上角点击 Students 时，必须看到真实入会情况，而不是 mock 数据。
+展示约束：
 
-应显示：
+- 数据来源于 Python 管线的离线输出 JSON
+- 不实时调用 ML 模型，每次展示前需先运行 Python 管线
 
-- 已加入课程/班级学生
-- 当前在线
-- 已离开
-- 举手状态
-- 最近心跳/最后在线时间
+---
 
-建议接口：
+## 4. Admin 数据中台产品决策
 
-| 接口 | 用途 |
-|---|---|
-| `POST /api/v1/live-sessions/:id/join` | 学生进入课堂 |
-| `POST /api/v1/live-sessions/:id/leave` | 学生离开课堂 |
-| `GET /api/v1/live-sessions/:id/participants` | 教师查看真实入会状态 |
+### 4.1 全局数据看板
 
-### 0.9 Annotation 工具增强
+位置：Admin 端 Dashboard 或 Analytics Tab
 
-课堂 annotation 是正式教学工具，不是简单画笔。
+展示内容：
 
-已有能力继续保留：
+- **totalStudents**：当前注册学生总数
+- **modelVersion**：当前运行的数据模型版本（如 v1.0.0）
+- **modelRunAt**：Python 管线最新运行时间
+- **recommendationCount**：当前活跃推荐数量
+- **invalidSampleCount**：无法建模的样本数（如缺少学习记录的学生）
 
-- 画笔
-- 直线
-- 矩形
-- 圆/椭圆
-- 文本
-- 调色板与取色
+展示约束：
 
-下一步需要补：
+- 数据从 `output/admin_snapshot.json` 读取
+- Admin 可手动触发 Python 管线重新运行（按钮操作，结果写入 output/）
 
-- 箭头
-- 橡皮擦
-- 页面内动态文本输入框，不能再使用浏览器 `prompt`
-- 设置按钮移动到最左上角，展开后不被下层 layer 遮挡
-- 橡皮擦应支持对象级或区域级删除
+### 4.2 学生画像列表
 
-验收：老师在 live classroom 内批注 PDF 时，摄像头不闪烁、PDF 不重渲染、工具栏不遮挡主要内容。
+位置：Admin 端 Analytics 页
 
-### 0.10 演示版 ASR 与双语翻译临时测试版
+展示内容：
 
-为了在演示时体现“完整版功能”的能力边界，允许在上线前 sprint 中加入一个临时测试版 ASR 语音识别和双语翻译字幕能力。
+- 学生列表：studentId、riskLevel、clusterLabel、completionRate、avgScore、weakKnowledgePoints 前 3
+- 支持按 riskLevel 筛选
 
-范围：
+展示约束：
 
-- 使用免费额度或免费试用方案优先，不引入高成本云服务承诺。
-- ASR 和翻译只作为 demo/spike 能力，不进入正式课堂主链路的强依赖。
-- 支持实时麦克风输入和预录音频 fallback；实时 API 失败时仍可展示预生成识别文本和双语字幕。
-- 字幕语言遵循全局优先级：中文为主，哈萨克语优先于俄语，英语仅兜底。
-- 前端应通过 feature flag、demo route 或脚本入口隔离，避免影响课程、作业、PDF、Live 和 Admin 主链路。
+- 数据从 `output/student_profiles.json` 读取
+- 不显示真实学生姓名（Privacy 约束），只显示脱敏 studentId
 
-验收：
+---
 
-- 本机演示时可展示“说话 -> 识别文本 -> 双语翻译字幕”的最小闭环。
-- 断网或免费额度失败时可切到预录音频/预生成字幕。
-- 文档中明确该能力是临时测试版，不承诺生产 SLA、无限额度或长期免费。
+## 5. Python 管线与数据边界
+
+### 5.1 数据输入边界
+
+- **输入数据源**：`analysis/ai-learning-recommendation/data/` 下的合成样本 CSV
+- **不直接读取**：`backend/storage/`、`backend/data/db.json`、真实学生录音
+- **间接来源**：后端 API 接口返回的聚合数据（需 S9-T03 新增接口）
+
+### 5.2 数据输出边界
+
+- **输出目录**：`analysis/ai-learning-recommendation/output/`
+- **输出 JSON**：student_profiles.json、recommendations.json、class_insights.json、admin_snapshot.json
+- **禁止输出**：真实学生姓名、邮箱、手机号、音频文件路径
+
+### 5.3 MVP 可复用能力
+
+以下 v1.0 已有能力**不需要改动**，直接复用：
+
+| 已有能力 | 复用方式 |
+|----------|----------|
+| 学习任务导入（Excel） | Python 管线直接用 learningTasks 数据，无需修改 |
+| 录音记录元数据 | Python 管线用 durationSec、createdAt、taskId，不读取音频内容 |
+| 学习记录持久化 | Python 管线用 learningRecords 的 completionStatus、attemptsCount |
+| 后端 /api/v1/analytics/* | 新增只读接口返回 Python 管线输出的 JSON（需 S9-T03 实现） |
+| AdminDashboardView | 在现有 Admin Dashboard 中增加 analytics tab（需 S9-T04 实现） |
+| 学生/教师/Admin 角色 | 角色权限不变，AI 展示数据按角色权限读取 |
+
+### 5.4 需要新增的能力
+
+| 新增能力 | 优先级 | 关联 TaskId |
+|----------|--------|-------------|
+| Python 数据管线（合成样本生成、特征工程、聚类、推荐） | P0 | S9-T02 |
+| 后端 `/api/v1/analytics/student-profile` 接口 | P0 | S9-T03 |
+| 后端 `/api/v1/analytics/class-insights` 接口 | P0 | S9-T03 |
+| 后端 `/api/v1/analytics/admin-snapshot` 接口 | P1 | S9-T03 |
+| 学生端 AI 学习助手卡片（Dashboard） | P0 | S9-T04 |
+| 教师端班级洞察 Summary | P0 | S9-T04 |
+| Admin 数据中台 Analytics Tab | P1 | S9-T04 |
+
+---
+
+## 6. 禁止事项（v2.0 AI 模块）
+
+- 禁止引入 ASR 语音评分作为推荐输入（v2.0 仅用规则阈值）
+- 禁止调用外部付费 LLM API（推荐理由用可解释规则生成）
+- 禁止读取或写入 `backend/storage/`、`backend/data/db.json`、`.env*`
+- 禁止提交录音、PDF、Excel 真实上传文件
+- 禁止将真实学生姓名/邮箱写入 `analysis/` 目录
+- 禁止改动 `TeacherClassroomView`、`StudentClassroomView`、`HomeworkView` 录音逻辑
+- 禁止改动 `backend/src/providers/`、docker/、vercel.json
+- 禁止在 Sprint 执行中直接 `git push`

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      .title { font: 700 30px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .stage { font: 700 22px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #0f172a; }
+      .text { font: 18px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #1e293b; }
+      .small { font: 15px "Microsoft YaHei", "PingFang SC", Arial, sans-serif; fill: #475569; }
+      .card { rx: 18; ry: 18; stroke-width: 2; }
+      .arrow { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1200" height="720" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">LingoBridge 三阶段实施推进路线图</text>
+
+  <rect x="70" y="110" width="290" height="440" class="card" fill="#f0fdf4" stroke="#10b981"/>
+  <rect x="455" y="110" width="290" height="440" class="card" fill="#eff6ff" stroke="#3b82f6"/>
+  <rect x="840" y="110" width="290" height="440" class="card" fill="#fff7ed" stroke="#f59e0b"/>
+
+  <text x="215" y="155" text-anchor="middle" class="stage">阶段一：演示验证</text>
+  <text x="215" y="185" text-anchor="middle" class="small">1-2 周，可演示 MVP</text>
+  <rect x="115" y="220" width="200" height="54" fill="#d1fae5" stroke="#059669" rx="12"/>
+  <text x="215" y="253" text-anchor="middle" class="text">配置云端演示环境</text>
+  <rect x="115" y="300" width="200" height="54" fill="#d1fae5" stroke="#059669" rx="12"/>
+  <text x="215" y="333" text-anchor="middle" class="text">部署前后端服务</text>
+  <rect x="115" y="380" width="200" height="54" fill="#d1fae5" stroke="#059669" rx="12"/>
+  <text x="215" y="413" text-anchor="middle" class="text">完成核心流程冒烟</text>
+  <rect x="115" y="470" width="200" height="44" fill="#ecfdf5" stroke="#10b981" rx="22"/>
+  <text x="215" y="498" text-anchor="middle" class="small">决策门：演示可用</text>
+
+  <text x="600" y="155" text-anchor="middle" class="stage">阶段二：单班试点</text>
+  <text x="600" y="185" text-anchor="middle" class="small">4-8 周，真实班级验证</text>
+  <rect x="500" y="220" width="200" height="54" fill="#bfdbfe" stroke="#2563eb" rx="12"/>
+  <text x="600" y="253" text-anchor="middle" class="text">教师培训与账号导入</text>
+  <rect x="500" y="300" width="200" height="54" fill="#bfdbfe" stroke="#2563eb" rx="12"/>
+  <text x="600" y="333" text-anchor="middle" class="text">HTTPS 与对象存储</text>
+  <rect x="500" y="380" width="200" height="54" fill="#bfdbfe" stroke="#2563eb" rx="12"/>
+  <text x="600" y="413" text-anchor="middle" class="text">采集作业与使用数据</text>
+  <rect x="500" y="470" width="200" height="44" fill="#eff6ff" stroke="#3b82f6" rx="22"/>
+  <text x="600" y="498" text-anchor="middle" class="small">决策门：试点达标</text>
+
+  <text x="985" y="155" text-anchor="middle" class="stage">阶段三：增强扩容</text>
+  <text x="985" y="185" text-anchor="middle" class="small">持续迭代，智能化增强</text>
+  <rect x="885" y="220" width="200" height="54" fill="#fed7aa" stroke="#ea580c" rx="12"/>
+  <text x="985" y="253" text-anchor="middle" class="text">ASR 辅助评分</text>
+  <rect x="885" y="300" width="200" height="54" fill="#fed7aa" stroke="#ea580c" rx="12"/>
+  <text x="985" y="333" text-anchor="middle" class="text">学习报告与看板</text>
+  <rect x="885" y="380" width="200" height="54" fill="#fed7aa" stroke="#ea580c" rx="12"/>
+  <text x="985" y="413" text-anchor="middle" class="text">多班级复用</text>
+  <rect x="885" y="470" width="200" height="44" fill="#fff7ed" stroke="#f59e0b" rx="22"/>
+  <text x="985" y="498" text-anchor="middle" class="small">目标：成果申报</text>
+
+  <path class="arrow" d="M 360 330 L 455 330"/>
+  <path class="arrow" d="M 745 330 L 840 330"/>
+
+  <rect x="165" y="600" width="870" height="54" fill="#f8fafc" stroke="#cbd5e1" rx="14"/>
+  <text x="600" y="624" text-anchor="middle" class="small">实施原则：先演示验证，再单班试点，最后根据真实学习数据扩展智能推荐与管理看板。</text>
+  <text x="600" y="646" text-anchor="middle" class="small">每一阶段均以可运行系统、可追踪数据和可复盘风险作为进入下一阶段的依据。</text>
+</svg>

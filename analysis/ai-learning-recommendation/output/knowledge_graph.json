@@ -1,0 +1,173 @@
+{
+  "nodes": [
+    {
+      "id": 0,
+      "name": "Initial_b",
+      "category": "Pinyin",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 1,
+      "name": "Initial_p",
+      "category": "Pinyin",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 2,
+      "name": "Final_a",
+      "category": "Pinyin",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 2
+    },
+    {
+      "id": 3,
+      "name": "Final_o",
+      "category": "Pinyin",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 4,
+      "name": "Tone_1",
+      "category": "Tone",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 5,
+      "name": "Tone_2",
+      "category": "Tone",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 6,
+      "name": "Tone_3",
+      "category": "Tone",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 0
+    },
+    {
+      "id": 7,
+      "name": "Tone_4",
+      "category": "Tone",
+      "pagerank": 0.03628761674615556,
+      "in_degree": 0,
+      "out_degree": 1
+    },
+    {
+      "id": 8,
+      "name": "Char_ba",
+      "category": "Character",
+      "pagerank": 0.11339859933020993,
+      "in_degree": 3,
+      "out_degree": 1
+    },
+    {
+      "id": 9,
+      "name": "Char_ma",
+      "category": "Character",
+      "pagerank": 0.08255420629658818,
+      "in_degree": 2,
+      "out_degree": 1
+    },
+    {
+      "id": 10,
+      "name": "Char_po",
+      "category": "Character",
+      "pagerank": 0.1288207958470208,
+      "in_degree": 3,
+      "out_degree": 1
+    },
+    {
+      "id": 11,
+      "name": "Vocab_baba",
+      "category": "Vocabulary",
+      "pagerank": 0.13267823664320752,
+      "in_degree": 1,
+      "out_degree": 0
+    },
+    {
+      "id": 12,
+      "name": "Vocab_mama",
+      "category": "Vocabulary",
+      "pagerank": 0.10645974589783544,
+      "in_degree": 1,
+      "out_degree": 0
+    },
+    {
+      "id": 13,
+      "name": "Vocab_popo",
+      "category": "Vocabulary",
+      "pagerank": 0.14578748201589356,
+      "in_degree": 1,
+      "out_degree": 0
+    }
+  ],
+  "links": [
+    {
+      "source": 0,
+      "target": 8,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 1,
+      "target": 10,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 2,
+      "target": 8,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 2,
+      "target": 9,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 3,
+      "target": 10,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 4,
+      "target": 9,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 5,
+      "target": 10,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 7,
+      "target": 8,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 8,
+      "target": 11,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 9,
+      "target": 12,
+      "type": "PREREQUISITE_OF"
+    },
+    {
+      "source": 10,
+      "target": 13,
+      "type": "PREREQUISITE_OF"
+    }
+  ]
+}

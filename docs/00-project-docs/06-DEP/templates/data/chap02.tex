@@ -1,0 +1,57 @@
+% !TeX encoding = UTF-8
+\chapter{部署步骤}
+
+系统的具体实施与上线流程需要严格遵循软件系统设计规范~\cite{ieee1016} 的方法论指导，确保各组件在目标操作系统中能够正确装载并建立通信链路。本章将详细阐述 LingoBridge 平台的本地开发部署、Docker 容器化部署以及腾讯云公网环境下的具体执行步骤。
+
+\section{本地开发部署}
+
+本地开发部署模式主要面向日常开发调试、原型功能验证以及快速迭代场景。在此模式下，系统的前后端组件直接搭载于开发人员的宿主机环境中运行，通过本机的 Node.js 运行时和进程管理器进行控制。
+
+第一步，获取项目源码与环境核对。部署人员通过代码管理工具将项目的主干分支源码完整克隆至本地的工作目录。在开始后续操作前，须通过终端命令确认当前系统的 Node.js 及 npm 包管理器版本符合前述软件环境要求。
+
+第二步，依赖包的拉取与装载。部署人员在项目根目录下打开终端，执行依赖项自动装载指令，即运行 \texttt{npm install} 命令。该命令将根据根目录下的配置文件，自动从配置的镜像源中拉取前端开发依赖以及后端服务依赖，并将其统一解压并建立软链接于 \texttt{node\_modules} 目录中。
+
+第三步，环境配置文件的创建与参数调整。部署人员需要将根目录下的环境变量模板文件 \texttt{.env.example} 复制一份并重命名为 \texttt{.env} 文件。在此文件中，可以根据本地调试环境的具体情况对配置参数进行个性化微调，包括但不限于后端的服务绑定地址、后端服务侦听端口等。
+
+第四步，前端构建与服务常驻运行。对于开发调试，可以直接运行 \texttt{npm run dev} 启动 Vite 提供的热重载开发服务器。对于生产模拟，则首先需要执行 \texttt{npm run build} 对 React 前端项目进行静态编译，所有优化压缩后的资源将输出至 \texttt{dist} 目录。此后，通过运行命令 \texttt{npm run pm2:start}，PM2 进程管理器将根据配置文件 \texttt{ecosystem.config.cjs} 的定义，在宿主机后台并发拉起 Express 后端 API 服务，实现应用的常驻守护。
+
+\section{Docker 部署}
+
+针对多模块协同、环境强隔离的生产环境，推荐采用 Docker 容器化编排的部署方式。此方式可以实现宿主机环境与应用运行环境的彻底解耦，杜绝由于系统依赖库差异导致的不确定性故障。容器化部署的时序活动流如附图~\ref{fig:deployment-activity} 所示。
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{deployment-activity.pdf}
+  \caption{LingoBridge 系统容器化部署与活动执行时序图}
+  \label{fig:deployment-activity}
+\end{figure}
+
+在容器化部署架构中，前端打包静态产物被挂载至高性能的反向代理容器中，而后端 Express 微服务则独立封装于 Node 应用容器内。两个容器通过加入同一个自定义的虚拟网桥实现高效的私有通信，从而将直接的端口暴露限制在反向代理边界。系统的多容器编排关键参数配置如表~\ref{tab:docker-compose-params} 所示。
+
+\begin{table}[htbp]
+  \centering
+  \caption{LingoBridge 系统容器编排参数说明}
+  \label{tab:docker-compose-params}
+  \begin{tabularx}{\textwidth}{llX}
+    \toprule
+    服务组件名称 & 容器网络端口映射 & 挂载宿主机持久化卷 \\
+    \midrule
+    lingobridge-backend & 3001:3001 & ./backend/data:/opt/backend/data \allowbreak \\
+    & & ./backend/storage:/opt/backend/storage \allowbreak \\
+    lingobridge-nginx & 80:80 \allowbreak , 443:443 & ./nginx/conf:/etc/nginx/conf.d \allowbreak \\
+    & & ./dist:/usr/share/nginx/html \allowbreak \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+执行容器化部署的具体步骤如下：首先，在宿主机执行 \texttt{npm run build} 对前端单页应用进行打包，确保生成最新的静态资源。其次，进入项目中的 \texttt{docker} 编排配置目录，运行 \texttt{docker-compose up -d} 命令。该命令将指示 Docker 引擎自动下载基础镜像、构建后端专属运行时镜像、创建私有网桥，并在后台以守护进程模式拉起后端应用容器与 Nginx 服务容器。最后，通过运行容器状态查看命令，确认所有定义的服务均处于运行状态，并检查持久化卷的挂载目录权限，确保后端容器对宿主机挂载的 \texttt{backend/data} 目录具有完整的读写权限，以便本地 JSON 文件数据库能够正确持久化。
+
+\section{腾讯云公网部署}
+
+将 LingoBridge 平台部署于腾讯云等公网云服务器上，是面向哈萨克斯坦国际学生提供公网测试的必要步骤。此过程需要将本地开发产物上传至云端虚拟机，并配置安全策略与反向代理。
+
+第一步，云端虚拟机的初始化与端口访问控制。在腾讯云控制台购买并初始化一台搭载 Ubuntu 系统的轻量应用服务器或云服务器，并在腾讯云控制台的安全组规则中，增添允许外部访问的超文本传输协议的八十端口与加密超文本传输协议的四百四十三端口，同时确保用于安全登录的二十二端口受到特定源地址的限制。
+
+第二步，应用产物上传与云端解压。部署人员在本地将通过测试的代码仓库打包为压缩文件，通过安全拷贝协议或腾讯云命令行工具将其上传至云端服务器指定的目录中。上传完成后，登录云端终端执行解压操作，并根据云主机的内网域名或公网域名对解压出的 \texttt{.env} 文件进行修改，调整对应的跨域请求基准路径。
+
+第三步，云端反向代理与证书绑定。在云主机上安装并启动 Nginx 服务，或者通过云主机上的 Docker Compose 容器集群直接拉起代理服务。为了保障数据的机密性，需要在 Nginx 的配置文件中指定域名解析，并将从腾讯云数字证书中心下载的 SSL 证书映射至代理配置中，使得所有外部对该域名的 HTTPS 访问都能被安全地解密，并正确转发至本地监听于三千零一端口的 Express 后端 API 服务，最终完成高安全性的公网环境部署。

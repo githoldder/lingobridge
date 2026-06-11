@@ -1,0 +1,24 @@
+1
+00:00:01,200 --> 00:00:03,500
+大家好，我们今天学习汉语。
+Hello everyone, today we are going to learn Chinese Language
+
+2
+00:00:04,100 --> 00:00:07,800
+首先是第一声，例如妈妈的妈。
+First of all, The First Tone (Level Tone), for example, 'māma' (Mom)
+
+3
+00:00:08,200 --> 00:00:11,900
+接下来是第四声，例如爸爸的板。
+Next is, The Fourth Tone (Falling Tone), for example, 'bàba' (Dad)
+
+4
+00:00:12,500 --> 00:00:16,200
+然后是第二声，例如婆婆的破。
+Then we have, The Second Tone (Rising Tone), for example, 'pópo' (Grandma)
+
+5
+00:00:17,000 --> 00:00:20,000
+大家跟着我大声朗读。
+Please read aloud after me

@@ -1,0 +1,93 @@
+% !TeX encoding = UTF-8
+% !TeX program = xelatex
+% !TeX spellcheck = en_US
+
+\documentclass[fontset=mac]{thuthesis}
+ 
+\input{thusetup}
+\begin{document}
+\begin{titlepage}
+\vspace*{-1cm} % 调整向上的距离
+\hspace*{-1cm} % 调整向左的距离
+\noindent % 防止缩进
+\raisebox{-0.5\height}{\includegraphics[height=1.7cm]{cover/czu.png}}%
+\hspace{0.1cm} % 控制两个图片之间的水平间距
+\raisebox{-0.5\height}{\includegraphics[height=1.7cm]{cover/cit-name.pdf}}
+
+\vspace{3cm}
+
+\centering
+{\heiti\bfseries\fontsize{36pt}{\baselineskip}\selectfont
+\textcolor[rgb]{0.71,0.30,0.16}{人工智能}\par}
+\vspace{1cm}
+{\heiti\fontsize{36pt}{\baselineskip}\selectfont 大作业报告}
+
+\vspace{1cm}
+
+\begin{center} % 使用center环境实现居中
+    {\Large 报告题目：\dlmu[11cm]{基于 DKT 知识追踪与 Levenshtein}\par}
+    \vspace{.28cm}
+    {\Large \hspace{5.5em}\dlmu[11cm]{距离校准的国际中文自适应学习推荐系统}\par}
+    \vspace{.5cm}
+    {\Large 专\hspace{2em}业：\dlmu[11cm]{软件工程}\par}
+    \vspace{.5cm}
+    {\Large 班\hspace{2em}级：\dlmu[11cm]{23软件一}\par}
+    \vspace{.5cm}
+	{\Large
+	组长姓名：\dlmu[2.8cm]{曹磊}
+		学号：\dlmu[2.7cm]{23030301}
+		成绩：\dlmu[1.6cm]{}
+	\par}
+	\vspace{.5cm}
+		{\Large
+	成员姓名：\dlmu[2.8cm]{陈晓楠}
+		学号：\dlmu[2.7cm]{23030303}
+		成绩：\dlmu[1.6cm]{}
+	\par}
+	\vspace{.5cm}
+		{\Large
+	成员姓名：\dlmu[2.8cm]{}
+	学号：\dlmu[2.5cm]{}
+	成绩：\dlmu[1.8cm]{}
+	\par}
+	\vspace{.5cm}
+    {\Large 实验地点：\dlmu[11cm]{开阳楼A205}\par}
+    \vspace{.5cm}
+    {\Large 指导教师： \dlmu[11cm]{张伟奇}\par}
+    \vspace{.5cm}
+    {\Large 实验成绩： \dlmu[11cm]{}\par}
+\end{center}
+
+\vspace{1cm}
+
+\centering
+{\heiti\fontsize{16pt}{\baselineskip}\selectfont 计~算~机~信~息~工~程~学~院}
+\end{titlepage}
+
+
+\frontmatter
+\input{data/abstract}
+
+% 目录
+\tableofcontents
+
+% 插图和附表清单
+% \listoffiguresandtables  % 插图和附表清单
+
+% 正文部分
+\mainmatter
+\input{data/chap01}
+\input{data/chap02}
+\input{data/chap03}
+\input{data/chap04}
+\input{data/chap05}
+% 参考文献
+\bibliography{ref/refs}  % 参考文献使用 BibTeX 编译
+% \printbibliography       % 参考文献使用 BibLaTeX 编译
+
+% 附录
+%\appendix
+%\input{data/appendix}
+
+
+\end{document}

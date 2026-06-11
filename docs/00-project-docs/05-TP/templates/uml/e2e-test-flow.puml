@@ -1,0 +1,111 @@
+@startuml e2e-test-flow
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title Playwright E2E 测试流程活动图
+
+start
+
+partition "环境准备" {
+  :清理测试数据库;
+  note right
+    重置 JSON 数据库文件
+    PM2 restart backend
+    确保干净初始状态
+  end note
+
+  :启动 Playwright 浏览器实例;
+  note right
+    Chromium headless 模式
+    设置视口 1280×720
+  end note
+}
+
+partition "教师操作阶段" {
+  :教师账号登录;
+  note right
+    POST /auth/login
+    获取 JWT Token
+  end note
+
+  :创建课程与课时;
+  note right
+    POST /courses
+    POST /lesson-nodes
+  end note
+
+  :上传课件;
+  note right
+    POST /coursewares
+    上传测试 PDF 文件
+  end note
+
+  :导入作业;
+  note right
+    POST /assignments/import
+    Excel 词表导入
+  end note
+}
+
+partition "学生操作阶段" {
+  :切换学生角色登录;
+  note right
+    使用学生 demo 账号
+    POST /auth/login
+  end note
+
+  :进入作业页;
+
+  :遍历任务列表;
+
+  while (还有未完成任务?) is (是)
+    :选择当前任务;
+    :执行第 1 次录音;
+    :执行第 2 次录音;
+    :执行第 3 次录音;
+    :确认录音完成;
+  endwhile (否)
+
+  :批量提交全部作业;
+  note right
+    POST /homework/submit
+    提交所有录音数据
+  end note
+}
+
+partition "验证阶段" {
+  :验证后端 homework_submissions\n状态变更;
+  note right
+    GET /homework/submissions
+    断言 status = "submitted"
+  end note
+
+  :验证 learning_records\n持久化;
+  note right
+    GET /learning-records
+    断言记录数 > 0
+    校验时间戳与关联 ID
+  end note
+
+  if (所有断言通过?) then (是)
+    #10B981:生成测试报告\n(PASS);
+  else (否)
+    #F43F5E:生成测试报告\n(FAIL);
+    :记录失败截图与日志;
+  endif
+}
+
+stop
+
+@enduml

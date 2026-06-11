@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "docs: build current 01-07 document",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/docs/00-project-docs/build_on_save.sh",
+        "${file}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "docs: build all 01-07 documents",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/docs/00-project-docs/build_all.sh"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "time_stamp": "00:00:01,200 --> 00:00:03,500",
+    "raw_asr_text": "大家好，我们今天学习汉语。",
+    "calibrated_text": "大家好，我们今天学习汉语。",
+    "english_translation": "Hello everyone, today we are going to learn Chinese Language"
+  },
+  {
+    "time_stamp": "00:00:04,100 --> 00:00:07,800",
+    "raw_asr_text": "首先是第一声，例如妈妈的妈。",
+    "calibrated_text": "首先是第一声，例如妈妈的妈。",
+    "english_translation": "First of all, The First Tone (Level Tone), for example, 'māma' (Mom)"
+  },
+  {
+    "time_stamp": "00:00:08,200 --> 00:00:11,900",
+    "raw_asr_text": "接下来是地势声，例如板板的板。",
+    "calibrated_text": "接下来是第四声，例如爸爸的板。",
+    "english_translation": "Next is, The Fourth Tone (Falling Tone), for example, 'bàba' (Dad)"
+  },
+  {
+    "time_stamp": "00:00:12,500 --> 00:00:16,200",
+    "raw_asr_text": "然后是低二生，例如破破的破。",
+    "calibrated_text": "然后是第二声，例如婆婆的破。",
+    "english_translation": "Then we have, The Second Tone (Rising Tone), for example, 'pópo' (Grandma)"
+  },
+  {
+    "time_stamp": "00:00:17,000 --> 00:00:20,000",
+    "raw_asr_text": "大家跟着我大声朗读。",
+    "calibrated_text": "大家跟着我大声朗读。",
+    "english_translation": "Please read aloud after me"
+  }
+]

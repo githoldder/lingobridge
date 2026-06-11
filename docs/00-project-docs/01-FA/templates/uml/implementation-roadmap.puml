@@ -1,0 +1,79 @@
+@startuml
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam activity {
+  BackgroundColor #E0F2FE
+  BorderColor #3B82F6
+  FontColor #1E293B
+}
+skinparam activityDiamond {
+  BackgroundColor #FEF3C7
+  BorderColor #F97316
+  FontColor #1E293B
+}
+skinparam arrow {
+  Color #3B82F6
+  FontColor #64748B
+}
+skinparam partition {
+  BorderColor #10B981
+  FontColor #1E293B
+}
+
+title LingoBridge 三阶段实施路线图 (3-Phase Implementation Roadmap)
+
+start
+
+partition "阶段一：演示验证 (Demo Validation)" #F0FDF4 {
+  #D1FAE5:申请腾讯云 CVM 资源\n(1C2G 轻量实例);
+  #D1FAE5:配置 Docker 环境\n(Node.js + PostgreSQL + Caddy);
+  #D1FAE5:部署前端至 Vercel\n(React 19 SPA 静态托管);
+  #D1FAE5:部署后端 API 服务\n(Express + JWT 鉴权);
+  #D1FAE5:执行冒烟测试\n(核心流程验证);
+  #10B981:向利益相关方演示\n(Stakeholder Demo);
+}
+
+if (演示验证通过？\n(Decision Gate 1)) then (<color:#10B981><b>通过</b></color>)
+else (<color:#F43F5E><b>未通过</b></color>)
+  #FCA5A5:修复问题 & 重新验证;
+  -> 回到演示;
+  backward:重新执行冒烟测试;
+endif
+
+partition "阶段二：单班试点 (Pilot Class Trial)" #E0F2FE {
+  #93C5FD:招募试点班级\n(20-50 名学生);
+  #93C5FD:教师入驻 & 培训\n(课程创建/课件上传流程);
+  #93C5FD:启用 HTTPS 证书\n(Caddy 自动 Let's Encrypt);
+  #93C5FD:接入对象存储\n(课件/录音文件迁移);
+  #93C5FD:4-8 周试运行\n(收集使用数据);
+  #93C5FD:分析关键指标\n┌─ DAU / 留存率\n├─ 录音完成率\n├─ 作业提交率\n└─ 教师评分覆盖率;
+}
+
+if (试点数据达标？\n(Decision Gate 2)) then (<color:#10B981><b>达标</b></color>)
+else (<color:#F43F5E><b>未达标</b></color>)
+  #FCA5A5:分析瓶颈 & 调整方案;
+  -> 延长试点;
+  backward:继续收集数据;
+endif
+
+partition "阶段三：增强扩容 (Enhancement & Scale)" #FFF7ED {
+  #FBBF24:集成 ASR 语音评分\n(Azure Speech SDK);
+  #FBBF24:生成学习报告\n(learning_records 聚合分析);
+  #FBBF24:多班级管理\n(批量导入/跨班操作);
+  #FBBF24:数据仪表盘\n(Admin Dashboard\n可视化统计);
+  #FBBF24:性能优化 & 容量规划\n(水平扩展评估);
+}
+
+#10B981:系统全面上线\n(Production Release);
+
+stop
+
+legend right
+  |= 阶段 |= 周期 |= 目标 |
+  | <back:#D1FAE5>阶段一</back> | 1-2 周 | 可演示的 MVP |
+  | <back:#93C5FD>阶段二</back> | 4-8 周 | 真实场景验证 |
+  | <back:#FBBF24>阶段三</back> | 持续迭代 | 功能增强 & 规模化 |
+end legend
+
+@enduml

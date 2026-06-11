@@ -1,0 +1,78 @@
+@startuml test-process-activity
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #3B82F6
+skinparam ActivityBorderColor #2563EB
+skinparam ActivityFontColor #FFFFFF
+skinparam ActivityDiamondBackgroundColor #F43F5E
+skinparam ActivityDiamondBorderColor #E11D48
+skinparam ActivityDiamondFontColor #FFFFFF
+skinparam ArrowColor #3B82F6
+skinparam NoteBackgroundColor #EFF6FF
+skinparam NoteBorderColor #3B82F6
+skinparam PartitionBackgroundColor #F0FDF4
+skinparam PartitionBorderColor #10B981
+
+title 整体测试流程活动图
+
+|总体流程|
+start
+
+:测试需求分析;
+note right
+  从 SRS 需求规格说明书
+  追溯功能测试点
+end note
+
+:测试设计;
+note right
+  编写测试用例
+  覆盖正向/异常路径
+end note
+
+:测试环境搭建;
+note right
+  本地 Docker 容器
+  + 种子数据注入
+end note
+
+fork
+  |单元测试|
+  :单元测试执行\n(Backend API Tests);
+  note right
+    28 个后端 API 测试
+    npm run backend:test
+  end note
+
+  :验证测试覆盖率;
+
+fork again
+  |E2E 测试|
+  :E2E 集成测试\n(Playwright 浏览器自动化);
+  note right
+    Playwright 模拟用户操作
+    覆盖教师/学生核心流程
+  end note
+
+  :验证页面交互与数据持久化;
+
+end fork
+
+|总体流程|
+:冒烟测试\n(Production Smoke);
+note right
+  生产环境关键接口验证
+  /health, /auth/login
+end note
+
+:测试报告归档;
+
+:缺陷跟踪与回归;
+note right
+  记录缺陷 -> 修复 -> 回归验证
+  直到所有阻塞缺陷关闭
+end note
+
+stop
+
+@enduml
