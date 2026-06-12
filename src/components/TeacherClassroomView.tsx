@@ -1305,7 +1305,7 @@ const TeacherClassroomView: React.FC<TeacherClassroomViewProps> = ({ onExit, rol
       <div id="classroom-view" className="fixed inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] text-white z-[100] flex flex-col font-sans">
         <header className="h-16 px-6 border-b border-white/5 flex justify-between items-center bg-black/20 backdrop-blur-md z-50">
           <div className="flex items-center gap-4">
-            <Logo />
+            <Logo size={32} />
             <div className="w-[1px] h-4 bg-white/20" />
             <div>
               <div className="text-xs uppercase tracking-widest text-emerald-400 font-bold animate-pulse">

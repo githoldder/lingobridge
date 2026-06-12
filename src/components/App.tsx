@@ -9,6 +9,7 @@ import DashboardView from './DashboardView.tsx';
 import ScheduleView from './ScheduleView.tsx';
 import HomeworkView from './HomeworkView.tsx';
 import VocabularyView from './VocabularyView.tsx';
+import KnowledgeGraphView from './KnowledgeGraphView.tsx';
 import HomeView from './HomeView.tsx';
 import TeacherDashboardView from './TeacherDashboardView.tsx';
 import TeacherCoursesView from './TeacherCoursesView.tsx';
@@ -37,6 +38,7 @@ export interface NavigationContext {
 
 const PROTECTED_TABS = [
   'dashboard', 'schedule', 'vocabulary', 'homework', 'student-classroom',
+  'knowledge-graph',
   'teacher-dashboard', 'teacher-courses', 'teacher-classes', 'students', 'teacher-classroom', 'reports', 'teacher-course-detail',
   'admin',
 ];
@@ -129,9 +131,11 @@ function AppContent() {
       case 'schedule':
         return <ScheduleView onNavigate={handleNavigate} lessonNodeId={navContext.lessonNodeId} />;
       case 'homework':
-        return <HomeworkView lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
+        return <HomeworkView onNavigate={handleNavigate} lessonNodeId={navContext.lessonNodeId} courseId={navContext.courseId} />;
       case 'vocabulary':
         return <VocabularyView />;
+      case 'knowledge-graph':
+        return <KnowledgeGraphView onNavigate={handleNavigate} />;
       case 'teacher-dashboard':
         return <TeacherDashboardView onNavigate={handleNavigate} />;
       case 'teacher-courses':

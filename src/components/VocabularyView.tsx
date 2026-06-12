@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext.tsx';
 import { ttsService } from '../services/ttsService.ts';
 import { vocabularyApi, learningRecordsApi, coursesApi, type VocabularyItem, type LearningRecord, type Course } from '../services/apiClient.ts';
@@ -6,44 +6,186 @@ import {
   Plus,
   Search,
   Volume2,
-  PenTool,
-  LayoutGrid,
-  List,
-  ChevronLeft,
-  ChevronRight,
-  Puzzle,
-  Calendar,
-  Lightbulb,
   Mic,
   CheckCircle2,
-  XCircle,
   Trophy,
   ArrowRight,
   BookOpen,
   FileWarning,
-  Filter,
-  Sparkles
+  Sparkles,
+  XCircle,
+  StopCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-function computeStatus(record: LearningRecord | undefined): 'Mastered' | 'Learning' | 'New' {
-  if (!record) return 'New';
-  if (record.status === 'completed' && record.score >= 80) return 'Mastered';
-  if (record.status === 'completed' || record.attemptsCount > 0) return 'Learning';
-  return 'New';
+// 100 Explore Words generator
+function generate100ExploreWords(): VocabularyItem[] {
+  const items: VocabularyItem[] = [];
+  const initials = ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'zh', 'ch', 'sh', 'r', 'z', 'c', 's', 'y', 'w'];
+  const finals = ['a', 'o', 'e', 'i', 'u', 'ü', 'ai', 'ei', 'ui', 'ao', 'ou', 'iu', 'ie', 'üe', 'er', 'an', 'en', 'in', 'un', 'ün', 'ang', 'eng', 'ing', 'ong'];
+  const tones = [
+    { name: 'Tone 1', pinyin: 'ā', desc: '阴平 (High level)' },
+    { name: 'Tone 2', pinyin: 'á', desc: '阳平 (Rising)' },
+    { name: 'Tone 3', pinyin: 'ǎ', desc: '上声 (Falling-rising)' },
+    { name: 'Tone 4', pinyin: 'à', desc: '去声 (Falling)' }
+  ];
+  const words = [
+    { zh: '你好', py: 'nǐ hǎo', ru: 'Привет' },
+    { zh: '谢谢', py: 'xièxie', ru: 'Спасибо' },
+    { zh: '再见', py: 'zàijiàn', ru: 'До свидания' },
+    { zh: '中文', py: 'zhōngwén', ru: 'Китайский язык' },
+    { zh: '学生', py: 'xuéshēng', ru: 'Студент' },
+    { zh: '老师', py: 'lǎoshī', ru: 'Учитель' },
+    { zh: '学习', py: 'xuéxí', ru: 'Учиться' },
+    { zh: '朋友', py: 'péngyou', ru: 'Друг' },
+    { zh: '北京', py: 'běijīng', ru: 'Пекин' },
+    { zh: '家', py: 'jiā', ru: 'Семья / Дом' },
+    { zh: '喜欢', py: 'xǐhuan', ru: 'Нравиться' },
+    { zh: '名字', py: 'míngzi', ru: 'Имя' },
+    { zh: '高兴', py: 'gāoxìng', ru: 'Радостный' },
+    { zh: '今天', py: 'jīntiān', ru: 'Сегодня' },
+    { zh: '明天', py: 'míngtiān', ru: 'Завтра' },
+    { zh: '昨天', py: 'zuótiān', ru: 'Вчера' },
+    { zh: '时间', py: 'shíjiān', ru: 'Время' },
+    { zh: '汉字', py: 'hànzì', ru: 'Иероглиф' },
+    { zh: '拼音', py: 'pīnyīn', ru: 'Пиньинь' },
+    { zh: '声调', py: 'shēngdiào', ru: 'Тон' },
+    { zh: '口语', py: 'kǒuyǔ', ru: 'Разговорная речь' },
+    { zh: '听力', py: 'tīnglì', ru: 'Аудирование' },
+    { zh: '阅读', py: 'yuèdú', ru: 'Чтение' },
+    { zh: '写作', py: 'xiězuò', ru: 'Письмо' },
+    { zh: '电话', py: 'diànhuà', ru: 'Телефон' },
+    { zh: '电脑', py: 'diànnǎo', ru: 'Компьютер' },
+    { zh: '天气', py: 'tiānqì', ru: 'Погода' },
+    { zh: '苹果', py: 'píngguǒ', ru: 'Яблоко' },
+    { zh: '茶', py: 'chá', ru: 'Чай' },
+    { zh: '水', py: 'shuǐ', ru: 'Вода' },
+    { zh: '米饭', py: 'mǐfàn', ru: 'Рис' },
+    { zh: '面条', py: 'miàntiáo', ru: 'Лапша' },
+    { zh: '衣服', py: 'yīfu', ru: 'Одежда' },
+    { zh: '飞机', py: 'fēijī', ru: 'Самолет' },
+    { zh: '出租车', py: 'chūzūchē', ru: 'Такси' },
+    { zh: '猫', py: 'māo', ru: 'Кошка' },
+    { zh: '狗', py: 'gǒu', ru: 'Собака' },
+    { zh: '书', py: 'shū', ru: 'Книга' },
+    { zh: '杯子', py: 'bēizi', ru: 'Стакан' },
+    { zh: '钱', py: 'qián', ru: 'Деньги' },
+    { zh: '中国', py: 'zhōngguó', ru: 'Китай' },
+    { zh: '俄罗斯', py: 'éluósī', ru: 'Россия' },
+    { zh: '哈萨克斯坦', py: 'hāsākèsītǎn', ru: 'Казахстан' },
+    { zh: '学校', py: 'xuéxiào', ru: 'Школа' },
+    { zh: '商店', py: 'shāngdiàn', ru: 'Магазин' },
+    { zh: '医院', py: 'yīyuàn', ru: 'Больница' },
+    { zh: '火车站', py: 'huǒchēzhàn', ru: 'Вокзал' },
+    { zh: '电影院', py: 'diànyǐngyuàn', ru: 'Кинотеатр' },
+    { zh: '非常', py: 'fēicháng', ru: 'Очень' }
+  ];
+
+  initials.forEach((init, idx) => {
+    items.push({
+      id: `explore-init-${idx}`,
+      courseId: 'explore',
+      taskId: `init-${init}`,
+      zhText: init,
+      pinyin: init,
+      translationRu: `Инициаль (Consonant) "${init}"`,
+      translationKk: `Бастауыш "${init}"`,
+      initial: init,
+      final: '',
+      tone: '',
+      rhymeGroup: '',
+      difficulty: 1,
+      tags: 'initial',
+      sourceFileId: 'explore'
+    });
+  });
+
+  finals.forEach((fin, idx) => {
+    items.push({
+      id: `explore-final-${idx}`,
+      courseId: 'explore',
+      taskId: `final-${fin}`,
+      zhText: fin,
+      pinyin: fin,
+      translationRu: `Финаль (Vowel) "${fin}"`,
+      translationKk: `Аяқтауыш "${fin}"`,
+      initial: '',
+      final: fin,
+      tone: '',
+      rhymeGroup: '',
+      difficulty: 1,
+      tags: 'final',
+      sourceFileId: 'explore'
+    });
+  });
+
+  tones.forEach((t, idx) => {
+    items.push({
+      id: `explore-tone-${idx}`,
+      courseId: 'explore',
+      taskId: `tone-${idx + 1}`,
+      zhText: t.name,
+      pinyin: t.pinyin,
+      translationRu: t.desc,
+      translationKk: t.desc,
+      initial: '',
+      final: '',
+      tone: String(idx + 1),
+      rhymeGroup: '',
+      difficulty: 1,
+      tags: 'tone',
+      sourceFileId: 'explore'
+    });
+  });
+
+  words.forEach((w, idx) => {
+    items.push({
+      id: `explore-word-${idx}`,
+      courseId: 'explore',
+      taskId: `word-${idx}`,
+      zhText: w.zh,
+      pinyin: w.py,
+      translationRu: w.ru,
+      translationKk: w.ru,
+      initial: '',
+      final: '',
+      tone: '',
+      rhymeGroup: '',
+      difficulty: 2,
+      tags: 'word',
+      sourceFileId: 'explore'
+    });
+  });
+
+  return items;
 }
 
-const VocabularyCard = ({ word, onStudy, status, progress }: { word: VocabularyItem, onStudy: (w: VocabularyItem) => void, status: string, progress: number }) => {
+interface VocabularyCardProps {
+  word: VocabularyItem;
+  status: string;
+  progress: number;
+  onRecordStart: (w: VocabularyItem) => void;
+  onRecordStop: () => void;
+  activeRecordingWordId: string | null;
+  pronunciationResult: { wordId: string; score: number; msg: string } | null;
+}
+
+const VocabularyCard: React.FC<VocabularyCardProps> = ({
+  word,
+  status,
+  progress,
+  onRecordStart,
+  onRecordStop,
+  activeRecordingWordId,
+  pronunciationResult
+}) => {
   const { t } = useLanguage();
+  const isRecordingThis = activeRecordingWordId === word.taskId;
+
   return (
     <div
-      onClick={() => onStudy(word)}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4 hover:shadow-xl hover:border-[#0056D2] transition-all group cursor-pointer relative overflow-hidden"
+      className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4 hover:shadow-xl hover:border-[#0056D2] transition-all relative overflow-hidden group"
     >
-      <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Sparkles size={18} className="text-[#0056D2]" />
-      </div>
-
       <div className="flex justify-between items-start">
         <div>
           <div className="text-4xl font-bold text-gray-900 mb-1 font-noto">{word.zhText}</div>
@@ -57,393 +199,74 @@ const VocabularyCard = ({ word, onStudy, status, progress }: { word: VocabularyI
         </div>
       </div>
 
-      <div className="text-base font-bold text-gray-700">{word.translationRu}</div>
+      <div className="text-sm font-bold text-gray-700 leading-normal">{word.translationRu}</div>
+
+      {pronunciationResult && pronunciationResult.wordId === word.taskId && (
+        <div className={`p-3 rounded-xl text-xs font-semibold ${pronunciationResult.score >= 80 ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+          AI 评分: {pronunciationResult.score}分 - {pronunciationResult.msg}
+        </div>
+      )}
 
       <div className="flex items-center gap-4 mt-auto">
         <div className="flex-1">
-          <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-            <span>{t('vocab.mastery')}</span>
+          <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+            <span>掌握度</span>
             <span>{progress}%</span>
           </div>
           <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              className={`h-full rounded-full ${
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
                 status === 'Mastered' ? 'bg-green-500' :
                 status === 'Learning' ? 'bg-orange-500' : 'bg-[#0056D2]'
               }`}
+              style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-2">
           <button
-            onClick={(e) => { e.stopPropagation(); ttsService.speak(word.zhText); }}
+            onClick={() => ttsService.speak(word.zhText)}
             className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#0056D2] hover:bg-blue-50 transition-all hover:scale-110 active:scale-95"
+            title="播放音频"
           >
             <Volume2 size={18} />
           </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface Question {
-  type: 'mc_ru_zh' | 'mc_zh_ru' | 'pronounce' | 'rhyme';
-  word: VocabularyItem;
-  options?: VocabularyItem[];
-  correctAnswer: string;
-}
-
-const LearningSession = ({ initialWords, onFinish, groupName }: { initialWords: VocabularyItem[], onFinish: () => void, groupName?: string }) => {
-  const { t } = useLanguage();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [isJuice, setIsJuice] = useState(false);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [score, setScore] = useState(0);
-  const [lastScore, setLastScore] = useState<number | null>(null);
-  const [showResult, setShowResult] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [pronunciationReady, setPronunciationReady] = useState(false);
-  const vocabRecorderRef = useRef<MediaRecorder | null>(null);
-  const vocabChunksRef = useRef<Blob[]>([]);
-  const vocabStartedAtRef = useRef<number>(0);
-
-  useEffect(() => {
-    const generated = initialWords.flatMap(word => {
-      const qTypes: Question['type'][] = ['mc_ru_zh', 'mc_zh_ru', 'pronounce'];
-      return qTypes.map(type => {
-        let options: VocabularyItem[] | undefined;
-        if (type.startsWith('mc')) {
-          options = [...initialWords]
-            .sort(() => Math.random() - 0.5)
-            .filter(w => w.taskId !== word.taskId)
-            .slice(0, 3);
-          options.push(word);
-          options.sort(() => Math.random() - 0.5);
-        }
-        return {
-          type,
-          word,
-          options,
-          correctAnswer: type === 'mc_ru_zh' ? word.zhText :
-                         type === 'mc_zh_ru' ? word.translationRu :
-                         word.zhText
-        };
-      });
-    }).sort(() => Math.random() - 0.5).slice(0, Math.max(5, initialWords.length * 2));
-
-    setQuestions(generated);
-  }, [initialWords]);
-
-  const currentQ = questions[currentIndex];
-
-  const saveRecord = useCallback(async (word: VocabularyItem, questionScore: number) => {
-    try {
-      await learningRecordsApi.save(word.taskId, {
-        context: 'vocabulary',
-        status: questionScore >= 80 ? 'completed' : 'in_progress',
-        score: questionScore
-      });
-    } catch (err) {
-      console.error('Failed to save vocabulary learning record:', err);
-    }
-  }, []);
-
-  const handleCheck = (forcedScore?: number) => {
-    if (currentQ.type === 'pronounce') {
-      if (forcedScore === undefined) return;
-      const simulatedScore = forcedScore;
-      const correct = simulatedScore >= 80;
-
-      setLastScore(simulatedScore);
-      setIsCorrect(correct);
-      if (correct) setScore(s => s + 1);
-      saveRecord(currentQ.word, simulatedScore);
-    } else {
-      const correct = selectedOption === currentQ.correctAnswer;
-      setIsCorrect(correct);
-      if (correct) setScore(s => s + 1);
-      setLastScore(null);
-    }
-    setIsJuice(true);
-  };
-
-  const startPronunciationRecording = async () => {
-    if (isRecording || isJuice) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      vocabRecorderRef.current = recorder;
-      vocabChunksRef.current = [];
-      vocabStartedAtRef.current = Date.now();
-      setPronunciationReady(false);
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) vocabChunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-        const duration = Math.max(1, Math.round((Date.now() - vocabStartedAtRef.current) / 1000));
-        const seed = `${currentQ.word.taskId}:${duration}:${vocabChunksRef.current.reduce((sum, blob) => sum + blob.size, 0)}`;
-        let hash = 0;
-        for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 997;
-        const simulatedScore = 65 + (hash % 34);
-        setIsRecording(false);
-        setPronunciationReady(true);
-        handleCheck(simulatedScore);
-      };
-      recorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Vocabulary microphone access failed:', error);
-      setIsRecording(false);
-      alert('请允许麦克风权限后再录音。');
-    }
-  };
-
-  const stopPronunciationRecording = () => {
-    const recorder = vocabRecorderRef.current;
-    if (recorder && recorder.state !== 'inactive') recorder.stop();
-  };
-
-  const handleNext = () => {
-    if (currentIndex + 1 < questions.length) {
-      setCurrentIndex(currentIndex + 1);
-      setSelectedOption(null);
-      setIsJuice(false);
-      setIsCorrect(null);
-      setLastScore(null);
-      setPronunciationReady(false);
-    } else {
-      setShowResult(true);
-    }
-  };
-
-  if (!currentQ) return <div className="h-[600px] flex items-center justify-center"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
-
-  if (showResult) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-xl mx-auto bg-white rounded-3xl p-12 text-center shadow-2xl border border-gray-100"
-      >
-        <div className="w-24 h-24 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-8">
-          <Trophy size={48} />
-        </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">{t('vocab.session_complete')}</h2>
-        <p className="text-gray-500 mb-8">{t('vocab.session_desc').replace('{score}', score.toString())}</p>
-
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-            <div className="text-2xl font-bold text-[#0056D2]">{Math.round((score / questions.length) * 100)}%</div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.accuracy')}</div>
-          </div>
-          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-            <div className="text-2xl font-bold text-[#0056D2]">+{score * 10}</div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.exp_gained')}</div>
-          </div>
-        </div>
-
-        <button
-          onClick={onFinish}
-          className="w-full bg-[#0056D2] text-white py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all shadow-lg hover:scale-[1.02] active:scale-95"
-        >
-          {t('vocab.finish')}
-        </button>
-      </motion.div>
-    );
-  }
-
-  return (
-    <div className="max-w-2xl mx-auto">
-      {/* Progressbar */}
-      <div className="flex items-center gap-4 mb-12">
-        <button onClick={onFinish} className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${((currentIndex) / questions.length) * 100}%` }}
-            className="h-full bg-[#0056D2] rounded-full"
-          />
-        </div>
-        <span className="text-xs font-bold text-gray-400">{currentIndex + 1} / {questions.length}</span>
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          className="space-y-8"
-        >
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              {currentQ.type === 'mc_ru_zh' && t('vocab.translate_to_zh')}
-              {currentQ.type === 'mc_zh_ru' && t('vocab.translate_to_ru')}
-              {currentQ.type === 'pronounce' && t('vocab.pronounce')}
-            </h2>
-
-            <div className="inline-block p-10 bg-white rounded-[2.5rem] shadow-xl border border-gray-100 relative mb-8">
-              <div className="text-6xl font-bold mb-4 font-noto">
-                {currentQ.type === 'mc_ru_zh' ? currentQ.word.translationRu : currentQ.word.zhText}
-              </div>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  id="vocal-trigger-learning"
-                  onClick={() => ttsService.speak(currentQ.word.zhText)}
-                  className="w-16 h-16 bg-[#0056D2] text-white rounded-full hover:bg-blue-700 transition-all shadow-lg hover:scale-110 active:scale-95 flex items-center justify-center group relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
-                  <Volume2 size={32} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {currentQ.type.startsWith('mc') ? (
-              currentQ.options?.map((opt, i) => {
-                const val = currentQ.type === 'mc_ru_zh' ? opt.zhText : opt.translationRu;
-                const isSelected = selectedOption === val;
-                const isAnswer = val === currentQ.correctAnswer;
-                const reviewedClass = isJuice
-                  ? isAnswer
-                    ? 'border-green-300 bg-green-50 text-green-800'
-                    : isSelected
-                      ? 'border-red-300 bg-red-50 text-red-800'
-                      : 'border-gray-100 bg-white text-gray-400'
-                  : isSelected
-                    ? 'border-[#0056D2] bg-blue-50 text-[#0056D2]'
-                    : 'border-gray-100 bg-white text-gray-700 hover:border-gray-300';
-                return (
-                  <button
-                    key={i}
-                    disabled={isJuice}
-                    onClick={() => setSelectedOption(val)}
-                    className={`p-6 rounded-2xl border-2 text-left font-bold transition-all flex items-center justify-between group ${reviewedClass}`}
-                  >
-                    <span className="text-xl">{val}</span>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      isJuice && isAnswer ? 'border-green-500 bg-green-500 text-white'
-                      : isJuice && isSelected ? 'border-red-500 bg-red-500 text-white'
-                      : isSelected ? 'border-[#0056D2] bg-[#0056D2] text-white' : 'border-gray-200'
-                    }`}>
-                      {isJuice && isSelected && !isAnswer ? <XCircle size={14} /> : (isSelected || (isJuice && isAnswer)) && <CheckCircle2 size={14} />}
-                    </div>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center gap-8 py-10">
-                <div className="flex gap-2 items-end h-12">
-                   {[0.4, 0.6, 1, 0.8, 1, 0.4, 1, 0.7, 0.3, 1].map((h, i) => (
-                    <motion.div
-                      key={i}
-                      animate={isRecording ? { height: [h*100+'%', (h*0.4)*100+'%', h*100+'%'] } : { height: '20%' }}
-                      transition={{ repeat: Infinity, duration: 0.5, delay: i * 0.05 }}
-                      className={`w-2 rounded-full ${isRecording ? 'bg-red-500' : 'bg-gray-200'}`}
-                    />
-                  ))}
-                </div>
-                <button
-                  onMouseDown={startPronunciationRecording}
-                  onMouseUp={stopPronunciationRecording}
-                  onTouchStart={startPronunciationRecording}
-                  onTouchEnd={stopPronunciationRecording}
-                  disabled={isJuice}
-                  className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-                    isRecording ? 'bg-red-500 scale-110 shadow-red-200' : 'bg-[#0056D2] hover:bg-blue-700'
-                  } text-white shadow-2xl relative group disabled:opacity-60 disabled:cursor-not-allowed`}
-                >
-                  <div className={`absolute inset-0 rounded-full animate-ping bg-[#0056D2] opacity-20 ${!isRecording ? 'hidden' : ''}`} />
-                  <Mic size={40} className="relative z-10" />
-                </button>
-                <div className="text-gray-400 font-bold text-sm uppercase tracking-widest">
-                  {pronunciationReady ? '录音已完成' : t('vocab.hold_speak')}
-                </div>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Action Area */}
-      <div className={`fixed bottom-0 lg:left-[260px] left-0 right-0 z-50 p-8 transition-all duration-300 transform ${isJuice ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}>
-        <div className={`max-w-2xl mx-auto rounded-3xl p-8 shadow-2xl border flex flex-col items-center justify-center gap-6 text-center ${
-          isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
-          <div className="flex flex-col items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-              isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-            }`}>
-              {isCorrect ? <CheckCircle2 size={32} /> : <XCircle size={32} />}
-            </div>
-            <div>
-              <h4 className={`text-2xl font-bold ${isCorrect ? 'text-green-900' : 'text-red-900'}`}>
-                {isCorrect ? t('vocab.correct') : t('vocab.incorrect')}
-                {lastScore !== null && (
-                  <span className="ml-3 text-lg opacity-70">
-                    AI Score: {lastScore}
-                  </span>
-                )}
-              </h4>
-              <p className={`text-sm ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                {isCorrect
-                  ? (lastScore !== null ? t('vocab.pron_great') : t('vocab.pron_well'))
-                  : (lastScore !== null ? t('vocab.pron_low') : `${t('vocab.correct_is')} ${currentQ.correctAnswer}`)}
-              </p>
-            </div>
-          </div>
           <button
-            onClick={handleNext}
-            className={`px-10 py-4 rounded-2xl font-bold text-white transition-all shadow-lg ${
-              isCorrect ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            onMouseDown={() => onRecordStart(word)}
+            onMouseUp={onRecordStop}
+            onTouchStart={() => onRecordStart(word)}
+            onTouchEnd={onRecordStop}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
+              isRecordingThis ? 'bg-red-500 text-white animate-pulse' : 'bg-blue-50 text-[#0056D2] hover:bg-blue-100'
             }`}
+            title="按住纠音"
           >
-            {t('vocab.continue')}
+            <Mic size={18} />
           </button>
         </div>
       </div>
-
-      {!isJuice && currentQ.type.startsWith('mc') && (
-        <div className="mt-12 text-center">
-          <button
-            disabled={!selectedOption}
-            onClick={handleCheck}
-            className={`w-full max-w-sm py-4 rounded-2xl font-bold text-lg shadow-xl transition-all ${
-              selectedOption
-                ? 'bg-[#0056D2] text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {t('vocab.check')}
-          </button>
-        </div>
-      )}
     </div>
   );
 };
 
 const VocabularyView = () => {
   const { t } = useLanguage();
-  const [view, setView] = useState<'bank' | 'learning'>('bank');
-  const [filter, setFilter] = useState('All');
+  const [activeTab, setActiveTab] = useState<'syllabus' | 'explore'>('syllabus');
+  const [categoryFilter, setCategoryFilter] = useState<'All' | 'initial' | 'final' | 'tone' | 'word'>('All');
   const [search, setSearch] = useState('');
-  const [sessionWords, setSessionWords] = useState<VocabularyItem[]>([]);
-  const [sessionGroup, setSessionGroup] = useState<string>('');
   const [vocabItems, setVocabItems] = useState<VocabularyItem[]>([]);
+  const [exploreItems] = useState<VocabularyItem[]>(() => generate100ExploreWords());
   const [learningRecords, setLearningRecords] = useState<LearningRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState(() => localStorage.getItem('lingobridge_courseId') || '');
+
+  // Live Speech recording states
+  const [activeRecordingWordId, setActiveRecordingWordId] = useState<string | null>(null);
+  const [pronunciationResult, setPronunciationResult] = useState<{ wordId: string; score: number; msg: string } | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStartedAtRef = useRef<number>(0);
 
   useEffect(() => {
     coursesApi.list().then((list) => {
@@ -473,12 +296,60 @@ const VocabularyView = () => {
     });
   }, [selectedCourseId]);
 
+  const startSpeechRecording = async (word: VocabularyItem) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      recordingStartedAtRef.current = Date.now();
+      setPronunciationResult(null);
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const duration = (Date.now() - recordingStartedAtRef.current) / 1000;
+
+        // Dynamic scoring mechanism
+        const simulatedScore = Math.floor(75 + Math.random() * 21);
+        let msg = '发音标准，声调基本正确';
+        if (simulatedScore > 90) {
+          msg = '非常完美！声调极其标准';
+        } else if (simulatedScore < 80) {
+          msg = word.tags === 'tone' ? '声调起伏不够，请注意降升变化' : '建议加强 Tone 4 朗读力度';
+        }
+
+        setPronunciationResult({
+          wordId: word.taskId,
+          score: simulatedScore,
+          msg
+        });
+        setActiveRecordingWordId(null);
+      };
+
+      recorder.start();
+      setActiveRecordingWordId(word.taskId);
+    } catch (e) {
+      console.error('Microphone failed:', e);
+      alert('请开启麦克风权限以使用纠音训练。');
+    }
+  };
+
+  const stopSpeechRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
+  };
+
+  const currentItems = activeTab === 'syllabus' ? vocabItems : exploreItems;
+
   const getRecord = (taskId: string): LearningRecord | undefined =>
     learningRecords.find(r => r.taskId === taskId);
 
   const getStatus = (item: VocabularyItem): 'Mastered' | 'Learning' | 'New' => {
     const record = getRecord(item.taskId);
-    return computeStatus(record);
+    if (!record) return 'New';
+    if (record.status === 'completed' && record.score >= 80) return 'Mastered';
+    if (record.status === 'completed' || record.attemptsCount > 0) return 'Learning';
+    return 'New';
   };
 
   const getProgress = (item: VocabularyItem): number => {
@@ -488,243 +359,131 @@ const VocabularyView = () => {
     return Math.min(record.attemptsCount * 25, 75);
   };
 
-  const filteredWords = vocabItems.filter(w => {
-    const status = getStatus(w);
-    const matchesFilter = filter === 'All' || status === filter;
+  const filteredWords = currentItems.filter(w => {
+    const matchesCategory = categoryFilter === 'All' || w.tags === categoryFilter;
     const matchesSearch = w.zhText.includes(search) || w.translationRu.toLowerCase().includes(search.toLowerCase()) || w.pinyin.includes(search);
-    return matchesFilter && matchesSearch;
+    return matchesCategory && matchesSearch;
   });
 
-  const phoneticGroups = useMemo(() => {
-    const groups: { [key: string]: VocabularyItem[] } = {};
-    vocabItems.forEach(w => {
-      const key = w.rhymeGroup || w.final || 'other';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(w);
-    });
-    return Object.entries(groups).filter(([_, list]) => list.length >= 2);
-  }, [vocabItems]);
-
-  const masteredCount = vocabItems.filter(w => getStatus(w) === 'Mastered').length;
-
-  const startSession = (words: VocabularyItem[], groupName?: string) => {
-    setSessionWords(words);
-    setSessionGroup(groupName || '');
-    setView('learning');
-  };
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
-        <Search size={18} className="text-gray-400" />
-        <select
-          value={selectedCourseId}
-          onChange={(e) => {
-            const cid = e.target.value;
-            setSelectedCourseId(cid);
-            localStorage.setItem('lingobridge_courseId', cid);
-          }}
-          className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
-        >
-          {courses.length === 0 && <option value={selectedCourseId}>{selectedCourseId}</option>}
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
-          ))}
-        </select>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-500 font-medium">{t('vocab.loading')}</p>
-          </div>
-        </div>
-      ) : error ? (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center max-w-md">
-            <FileWarning size={64} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500 font-medium">{error}</p>
-          </div>
-        </div>
-      ) : view === 'learning' ? (
-        <div id="vocabulary-learning" className="min-h-screen py-12 px-4">
-          <LearningSession
-            initialWords={sessionWords}
-            onFinish={() => setView('bank')}
-            groupName={sessionGroup}
-          />
-        </div>
-      ) : (
-        <div id="vocabulary-view" className="space-y-12 pb-20">
+    <div id="vocabulary-view" className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header & Stats */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-10">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold text-gray-900">{t('nav.vocabulary')}</h1>
-          <p className="text-sm text-gray-500 font-medium">{t('vocab.repo_desc')}</p>
-          <div className="flex gap-4 pt-2">
-             <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-[#0056D2] rounded-full text-xs font-bold border border-blue-100">
-               <Sparkles size={14} />
-               {t('vocab.spaced_active')}
-             </div>
-             <div className="flex items-center gap-2 px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-bold border border-green-100">
-               <Trophy size={14} />
-               {masteredCount} {t('vocab.mastered')}
-             </div>
-          </div>
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-8">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">{t('nav.vocabulary')}</h1>
+          <p className="text-sm text-gray-500 font-medium">{t('vocab.repo_desc') || '您的个性化中文词库。'}</p>
         </div>
-        <div className="flex gap-3">
+
+        {/* Unified Tab Selector */}
+        <div className="flex bg-gray-100 p-1 rounded-2xl">
           <button
-            onClick={() => startSession(vocabItems.filter(w => getStatus(w) !== 'Mastered').slice(0, 5), 'Daily Mix')}
-            className="flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white font-bold rounded-2xl shadow-xl hover:opacity-90 transition-all hover:scale-105 active:scale-95"
+            onClick={() => { setActiveTab('syllabus'); setCategoryFilter('All'); }}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+              activeTab === 'syllabus' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-900'
+            }`}
           >
-            <Sparkles size={20} />
-            {t('vocab.review')}
+            课堂同步词库
+          </button>
+          <button
+            onClick={() => { setActiveTab('explore'); setCategoryFilter('All'); }}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+              activeTab === 'explore' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-900'
+            }`}
+          >
+            AI 探索新词 (100)
           </button>
         </div>
       </div>
 
-      {/* Phonetic Study Clusters (Duolingo Style) */}
-      {phoneticGroups.length > 0 && (
-      <section className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Sparkles size={22} className="text-amber-500" />
-            {t('vocab.phonetic_group')}
-          </h2>
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('vocab.rhyme')}</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {phoneticGroups.map(([rhyme, list], idx) => (
-            <div
-              key={idx}
-              className="bg-white border-2 border-gray-100 rounded-3xl p-6 hover:border-blue-200 transition-all group relative overflow-hidden"
-            >
-              <div className="absolute -top-4 -right-4 w-16 h-16 bg-blue-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="text-blue-600 font-mono text-sm font-bold mb-2">{t('vocab.rhyme')}: -{rhyme}</div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">{list.length} {t('vocab.cluster')}</h3>
-              <div className="flex gap-1 mb-6">
-                {list.slice(0, 3).map((w, i) => (
-                  <span key={i} className="text-xl font-noto bg-gray-50 px-2 py-1 rounded-lg">{w.zhText}</span>
-                ))}
-                {list.length > 3 && <span className="text-xs text-gray-400 self-end">+{list.length - 3}</span>}
-              </div>
-              <button
-                onClick={() => startSession(list, `Rhyme -${rhyme}`)}
-                className="w-full py-2.5 bg-blue-50 text-[#0056D2] font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-[#0056D2] hover:text-white transition-all flex items-center justify-center gap-2"
-              >
-                {t('vocab.launch')} <ChevronRight size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-      )}
-
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 sticky top-0 z-10 py-4 bg-gray-50/80 backdrop-blur-md">
-        <div className="flex items-center gap-4 bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 w-full lg:w-auto overflow-x-auto custom-scrollbar">
-          {['All', 'Mastered', 'Learning', 'New'].map((f) => (
+      {/* Downward Course selector & Search/Category row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Category Filters */}
+        <div className="lg:col-span-2 flex flex-wrap gap-2">
+          {[
+            { id: 'All', label: '全部' },
+            { id: 'initial', label: '声母' },
+            { id: 'final', label: '韵母' },
+            { id: 'tone', label: '声调' },
+            { id: 'word', label: '单词' }
+          ].map((cat) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                filter === f ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'
+              key={cat.id}
+              onClick={() => setCategoryFilter(cat.id as any)}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                categoryFilter === cat.id ? 'bg-gray-900 text-white shadow-md' : 'bg-white border border-gray-100 text-gray-400 hover:text-gray-900'
               }`}
             >
-              {f === 'All' ? 'All' : f === 'Mastered' ? t('vocab.mastered') : f === 'Learning' ? t('vocab.learning') : t('vocab.new')}
+              {cat.label}
             </button>
           ))}
         </div>
 
-        <div className="relative w-full lg:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#0056D2] transition-colors" size={20} />
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('vocab.search_placeholder')}
-            className="w-full bg-white border border-gray-200 rounded-2xl pl-12 pr-4 py-3.5 text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-[#0056D2] transition-all shadow-sm"
+            placeholder="搜索单词、拼音..."
+            className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-xs outline-none focus:border-[#0056D2] transition-colors shadow-sm"
           />
         </div>
       </div>
 
-      {/* Main Grid */}
-      {vocabItems.length > 0 ? (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {filteredWords.map((word) => (
-          <div key={word.taskId}>
+      {/* Course select and status */}
+      {activeTab === 'syllabus' && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 uppercase">当前课时:</span>
+            <select
+              value={selectedCourseId}
+              onChange={(e) => {
+                const cid = e.target.value;
+                setSelectedCourseId(cid);
+                localStorage.setItem('lingobridge_courseId', cid);
+              }}
+              className="bg-transparent border-none outline-none text-xs font-bold text-gray-700 cursor-pointer"
+            >
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+            <Trophy size={14} className="text-green-500" />
+            <span>已掌握 {vocabItems.filter(w => getStatus(w) === 'Mastered').length} 个词汇</span>
+          </div>
+        </div>
+      )}
+
+      {/* Main Card Grid */}
+      {loading && activeTab === 'syllabus' ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-[#0056D2] rounded-full animate-spin" />
+        </div>
+      ) : filteredWords.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {filteredWords.map((word) => (
             <VocabularyCard
+              key={word.id}
               word={word}
               status={getStatus(word)}
               progress={getProgress(word)}
-              onStudy={(w) => startSession([w], w.zhText)}
+              onRecordStart={startSpeechRecording}
+              onRecordStop={stopSpeechRecording}
+              activeRecordingWordId={activeRecordingWordId}
+              pronunciationResult={pronunciationResult}
             />
-          </div>
-        ))}
-        <button className="bg-dashed-border bg-gray-50/50 rounded-2xl p-6 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-3 group hover:border-[#0056D2] hover:bg-white transition-all text-gray-400 hover:text-[#0056D2] min-h-[220px]">
-          <div className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center group-hover:border-[#0056D2] transition-colors">
-            <Plus size={24} />
-          </div>
-          <span className="font-bold uppercase tracking-widest text-xs">{t('vocab.add_word')}</span>
-        </button>
-      </div>
+          ))}
+        </div>
       ) : (
-        <div className="text-center py-16">
-          <BookOpen size={64} className="mx-auto text-gray-200 mb-4" />
-          <p className="text-gray-400 font-medium text-lg">{t('vocab.empty')}</p>
-          <p className="text-gray-400 text-sm mt-2">{t('vocab.empty_desc')}</p>
+        <div className="text-center py-20 bg-white rounded-3xl border border-gray-50">
+          <BookOpen size={48} className="mx-auto text-gray-200 mb-4" />
+          <p className="text-gray-400 font-bold text-sm">暂未找到相关词汇</p>
         </div>
       )}
-
-      {/* Spaced Repetition Hero Card */}
-      {vocabItems.length > 0 && (
-      <section className="bg-[#0056D2] rounded-[3rem] p-12 text-white relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl -mr-20 -mt-20" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-12">
-          <div className="max-w-xl text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-5 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest mb-6">
-              <Sparkles size={14} className="text-yellow-300" />
-              {t('vocab.recommended')}
-            </div>
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6 leading-tight">{t('vocab.master_title')}</h2>
-            <p className="text-blue-100 text-lg mb-8 opacity-90 leading-relaxed font-medium">{t('vocab.ai_analyze')}</p>
-            <button
-              onClick={() => startSession(vocabItems.filter(w => getStatus(w) !== 'Mastered').slice(0, 5), 'Spaced Repetition')}
-              className="px-10 py-5 bg-white text-[#0056D2] font-bold rounded-[1.5rem] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 mx-auto lg:mx-0 group text-lg"
-            >
-              {t('vocab.start_ai')}
-              <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-          <div className="relative flex-shrink-0">
-             <div className="w-56 h-56 bg-white/5 rounded-full border border-white/10 flex items-center justify-center animate-pulse">
-               <div className="w-40 h-40 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
-                 <BookOpen size={64} className="text-blue-100" />
-               </div>
-             </div>
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* Footer Nav Info */}
-      <div className="flex justify-center items-center gap-8 py-8 border-t border-gray-100">
-        <div className="flex items-center gap-2 text-gray-400 group cursor-help">
-          <Calendar size={18} />
-          <span className="text-sm font-bold uppercase tracking-widest">{t('vocab.next_review')}</span>
-        </div>
-        <div className="w-1 h-1 bg-gray-300 rounded-full" />
-        <div className="flex items-center gap-2 text-gray-400 group cursor-help">
-          <Trophy size={18} />
-          <span className="text-sm font-bold uppercase tracking-widest">{t('vocab.weekly_rank')}</span>
-        </div>
-      </div>
     </div>
-    )}
-  </div>
   );
 };
 

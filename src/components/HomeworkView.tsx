@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X,
   Star,
@@ -270,7 +270,7 @@ const PathNode = (props: { group: LessonGroup; index: number; onSelect: (g: Less
   );
 };
 
-const HomeworkSidebar = () => {
+const HomeworkSidebar = ({ onViewGraph }: { onViewGraph?: () => void }) => {
   const { t } = useLanguage();
   return (
     <div className="w-80 space-y-6 hidden lg:block sticky top-8 h-fit">
@@ -296,6 +296,30 @@ const HomeworkSidebar = () => {
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={onViewGraph}
+        className="w-full text-left bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 group hover:border-purple-200 transition-all cursor-pointer"
+      >
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Network size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-gray-900">{t('homework.stats.graph')}</h3>
+            <p className="text-xs text-gray-400 font-bold mt-1">Tone 4 · zh/ch/sh · 拼音依赖</p>
+          </div>
+          <ChevronRight size={20} className="ml-auto text-gray-300 group-hover:text-purple-600 transition-colors" />
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {['Tone 3', 'Tone 4', 'Finals'].map((node) => (
+            <span key={node} className="rounded-xl bg-gray-50 px-2 py-2 text-[10px] font-black text-gray-500">
+              {node}
+            </span>
+          ))}
+        </div>
+      </button>
+
       {/* Main Feature Blocks */}
       <div className="grid grid-cols-1 gap-4">
         <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 group hover:border-blue-200 transition-all cursor-pointer">
@@ -313,16 +337,6 @@ const HomeworkSidebar = () => {
               <span>{t('homework.progress')}</span>
               <span>66%</span>
             </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-gray-100 group hover:border-purple-200 transition-all cursor-pointer">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Network size={24} />
-            </div>
-            <h3 className="font-bold text-lg text-gray-900">{t('homework.stats.mindmap')}</h3>
-            <ChevronRight size={20} className="ml-auto text-gray-300 group-hover:text-purple-600 transition-colors" />
           </div>
         </div>
       </div>
@@ -385,14 +399,16 @@ interface StoredRecordingSlot {
 }
 
 interface HomeworkViewProps {
+  onNavigate?: (target: string) => void;
   lessonNodeId?: string;
   courseId?: string;
 }
 
-const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNodeId, courseId: propCourseId }) => {
+const HomeworkView: React.FC<HomeworkViewProps> = ({ onNavigate, lessonNodeId: propLessonNodeId, courseId: propCourseId }) => {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [view, setView] = useState<'path' | 'task'>('path');
+  const [homeworkTab, setHomeworkTab] = useState<'homework' | 'ai-path'>('homework');
   const [selectedGroup, setSelectedGroup] = useState<LessonGroup | null>(null);
   const [groups, setGroups] = useState<LessonGroup[]>([]);
   const [allTasks, setAllTasks] = useState<LearningTask[]>([]);
@@ -411,6 +427,23 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
   const [pendingRecording, setPendingRecording] = useState<PendingRecording | null>(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  const aiRecommendedGroups = useMemo(() => {
+    const t4Tasks: LearningTask[] = [
+      { id: 'ai-t4-1', courseId: selectedCourseId, taskId: 'ai-t4-1', taskType: 'pronunciation', unit: 1, lesson: 1, lessonTitle: 'AI 专项：去声(Tone 4)', pageNumber: 1, zhText: '再见', pinyin: 'zàijiàn', translationRu: 'До свидания', translationKk: '', prompt: '', answer: '', initial: '', final: '', tone: '4', rhymeGroup: '', difficulty: 2, dueAt: '', publishToHomework: true, publishToVocab: true, sortOrder: 1, sourceFileId: 'ai-path' },
+      { id: 'ai-t4-2', courseId: selectedCourseId, taskId: 'ai-t4-2', taskType: 'pronunciation', unit: 1, lesson: 1, lessonTitle: 'AI 专项：去声(Tone 4)', pageNumber: 2, zhText: '电话', pinyin: 'diànhuà', translationRu: 'Телефон', translationKk: '', prompt: '', answer: '', initial: '', final: '', tone: '4', rhymeGroup: '', difficulty: 2, dueAt: '', publishToHomework: true, publishToVocab: true, sortOrder: 2, sourceFileId: 'ai-path' },
+      { id: 'ai-t4-3', courseId: selectedCourseId, taskId: 'ai-t4-3', taskType: 'pronunciation', unit: 1, lesson: 1, lessonTitle: 'AI 专项：去声(Tone 4)', pageNumber: 3, zhText: '天气', pinyin: 'tiānqì', translationRu: 'Погода', translationKk: '', prompt: '', answer: '', initial: '', final: '', tone: '4', rhymeGroup: '', difficulty: 2, dueAt: '', publishToHomework: true, publishToVocab: true, sortOrder: 3, sourceFileId: 'ai-path' }
+    ];
+    const shTasks: LearningTask[] = [
+      { id: 'ai-sh-1', courseId: selectedCourseId, taskId: 'ai-sh-1', taskType: 'pronunciation', unit: 1, lesson: 2, lessonTitle: 'AI 专项：翘舌音 zh/ch/sh', pageNumber: 1, zhText: '中文', pinyin: 'zhōngwén', translationRu: 'Китайский язык', translationKk: '', prompt: '', answer: '', initial: 'zh', final: '', tone: '', rhymeGroup: '', difficulty: 2, dueAt: '', publishToHomework: true, publishToVocab: true, sortOrder: 1, sourceFileId: 'ai-path' },
+      { id: 'ai-sh-2', courseId: selectedCourseId, taskId: 'ai-sh-2', taskType: 'pronunciation', unit: 1, lesson: 2, lessonTitle: 'AI 专项：翘舌音 zh/ch/sh', pageNumber: 2, zhText: '老师', pinyin: 'lǎoshī', translationRu: 'Учитель', translationKk: '', prompt: '', answer: '', initial: 'sh', final: '', tone: '', rhymeGroup: '', difficulty: 2, dueAt: '', publishToHomework: true, publishToVocab: true, sortOrder: 2, sourceFileId: 'ai-path' }
+    ];
+    return [
+      { unit: 1, lesson: 1, lessonTitle: 'AI 专项：去声(Tone 4)纠错', tasks: t4Tasks, completedCount: t4Tasks.filter(t => learningRecords.some(r => r.taskId === t.taskId && r.status === 'completed')).length, totalCount: t4Tasks.length },
+      { unit: 1, lesson: 2, lessonTitle: 'AI 专项：翘舌音 zh/ch/sh 辨析', tasks: shTasks, completedCount: shTasks.filter(t => learningRecords.some(r => r.taskId === t.taskId && r.status === 'completed')).length, totalCount: shTasks.length }
+    ];
+  }, [selectedCourseId, learningRecords]);
+
   const [uploadingRecording, setUploadingRecording] = useState(false);
   const [savingRecord, setSavingRecord] = useState(false);
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
@@ -691,6 +724,9 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
 
   const allCurrentDone = groups.every(g => g.completedCount === g.totalCount);
   const currentGroupIndex = groups.findIndex(g => g.completedCount < g.totalCount);
+  const aiPathIndex = aiRecommendedGroups.findIndex(g => g.completedCount < g.totalCount);
+  const displayGroups = homeworkTab === 'homework' ? groups : aiRecommendedGroups;
+  const displayGroupIndex = homeworkTab === 'homework' ? currentGroupIndex : (aiPathIndex === -1 ? aiRecommendedGroups.length : aiPathIndex);
 
   const saveServerDraft = useCallback(async (override?: Record<string, any>) => {
     const assignmentNodeId = currentTask?.assignmentNodeId;
@@ -942,23 +978,43 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-xl shadow-sm border border-gray-100">
-        <BookOpen size={18} className="text-gray-400" />
-        <select
-          value={selectedCourseId}
-          onChange={(e) => {
-            const cid = e.target.value;
-            setSelectedCourseId(cid);
-            setActiveLessonNodeId(undefined);
-            localStorage.setItem('lingobridge_courseId', cid);
-          }}
-          className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-700 cursor-pointer"
-        >
-          {courses.length === 0 && <option value={selectedCourseId}>{t('schedule.no_classes')}</option>}
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>{c.title}</option>
-          ))}
-        </select>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto animate-pulse-subtle">
+          <button
+            onClick={() => setHomeworkTab('homework')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+              homeworkTab === 'homework' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-900'
+            }`}
+          >
+            课后作业
+          </button>
+          <button
+            onClick={() => setHomeworkTab('ai-path')}
+            className={`px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+              homeworkTab === 'ai-path' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-900'
+            }`}
+          >
+            我的学习路径
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 w-full sm:w-auto">
+          <BookOpen size={14} className="text-gray-400" />
+          <select
+            value={selectedCourseId}
+            onChange={(e) => {
+              const cid = e.target.value;
+              setSelectedCourseId(cid);
+              setActiveLessonNodeId(undefined);
+              localStorage.setItem('lingobridge_courseId', cid);
+            }}
+            className="bg-transparent border-none outline-none font-bold text-gray-700 cursor-pointer"
+          >
+            {courses.length === 0 && <option value={selectedCourseId}>{t('schedule.no_classes')}</option>}
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
 
@@ -993,26 +1049,32 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
           {/* Main Pathway Column */}
           <div className="flex-1">
             <div className="text-center mb-16">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">{t('homework.path_title')}</h1>
-              <p className="text-gray-500 max-w-md mx-auto text-lg leading-relaxed">{t('homework.path_desc')}</p>
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                {homeworkTab === 'homework' ? t('homework.path_title') : 'AI 自学引导学习路径'}
+              </h1>
+              <p className="text-gray-500 max-w-md mx-auto text-lg leading-relaxed">
+                {homeworkTab === 'homework'
+                  ? t('homework.path_desc')
+                  : 'AI 根据您的发音薄弱点与声调历史数据动态规划推荐的学习路径节点。'}
+              </p>
             </div>
 
             <div className="flex justify-center pb-32 relative">
               <div className="flex flex-col items-center w-full max-w-md">
-                {groups.map((g, i) => {
-                  const isCompleted = i < currentGroupIndex;
-                  const isCurrent = i === currentGroupIndex;
+                {displayGroups.map((g, i) => {
+                  const isCompleted = i < displayGroupIndex;
+                  const isCurrent = i === displayGroupIndex;
                   const status = isCompleted ? 'completed' : isCurrent ? 'current' : 'locked';
                   return (
                     <div key={`${g.unit}-${g.lesson}-${g.lessonTitle}`} className="relative flex flex-col items-center">
-                      <PathNode group={g} index={i} onSelect={(grp) => setSelectedGroup(grp)} allCompleted={i < currentGroupIndex} isLast={i === groups.length - 1} />
-                      {i < groups.length - 1 && <PathArrow index={i} status={status} />}
+                      <PathNode group={g} index={i} onSelect={(grp) => setSelectedGroup(grp)} allCompleted={i < displayGroupIndex} isLast={i === displayGroups.length - 1} />
+                      {i < displayGroups.length - 1 && <PathArrow index={i} status={status} />}
                     </div>
                   );
                 })}
 
                 {/* Visual End Indicator */}
-                {groups.length > 0 && (
+                {displayGroups.length > 0 && (
                   <div className="relative flex flex-col items-center mt-12">
                      <div className="w-20 h-20 rounded-3xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300">
                        <ArrowBigDown size={40} />
@@ -1025,7 +1087,7 @@ const HomeworkView: React.FC<HomeworkViewProps> = ({ lessonNodeId: propLessonNod
           </div>
 
           {/* Stats Sidebar */}
-          <HomeworkSidebar />
+          <HomeworkSidebar onViewGraph={() => onNavigate?.('knowledge-graph')} />
         </div>
 
         {/* Selected Lesson Task List (Modal/Panel) */}
